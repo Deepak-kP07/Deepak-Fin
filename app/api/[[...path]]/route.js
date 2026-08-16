@@ -60,6 +60,10 @@ const safeFields = {
   lend_borrow: ['person_name', 'type', 'amount', 'date', 'due_date', 'from_account_id', 'reason', 'status', 'notes'],
   lend_repayments: ['lend_borrow_id', 'amount', 'date', 'account_id', 'linked_transaction_id', 'notes'],
   profiles: ['full_name', 'age', 'avatar_url', 'theme', 'currency'],
+  credit_cards: ['name', 'bank', 'last4', 'credit_limit', 'billing_date', 'due_date_offset', 'current_outstanding', 'color'],
+  credit_card_transactions: ['credit_card_id', 'amount', 'description', 'category_id', 'date', 'time', 'status', 'linked_transaction_id'],
+  scholarships: ['name', 'total_amount', 'academic_year', 'source', 'status', 'received_date', 'due_date', 'received_to_account_id', 'amount_paid_to_college', 'notes'],
+  scholarship_payments: ['scholarship_id', 'amount', 'paid_to', 'payment_date', 'account_id', 'notes'],
 }
 
 function pickFields(table, source) {
@@ -152,7 +156,7 @@ async function handleRoute(request, { params }) {
         const response = await fetch(`${supabaseUrl()}/rest/v1/${table}?user_id=eq.${user.id}&select=*${extraQuery}`, { headers, cache: 'no-store' })
         return response.ok ? response.json() : []
       }
-      const [accounts, categories, transactions, budgets, portfolios, holdings, sips, loans, loan_payments, bucket_list, lend_borrow, lend_repayments, profile] = await Promise.all([
+      const [accounts, categories, transactions, budgets, portfolios, holdings, sips, loans, loan_payments, bucket_list, lend_borrow, lend_repayments, credit_cards, credit_card_transactions, scholarships, scholarship_payments, profile] = await Promise.all([
         read('accounts', '&order=created_at.asc'),
         read('categories', '&order=type.asc,name.asc'),
         read('transactions', '&order=date.desc,time.desc.nullslast,created_at.desc'),
@@ -165,6 +169,10 @@ async function handleRoute(request, { params }) {
         read('bucket_list', '&order=created_at.desc'),
         read('lend_borrow', '&order=date.desc'),
         read('lend_repayments', '&order=date.desc'),
+        read('credit_cards', '&order=created_at.asc'),
+        read('credit_card_transactions', '&order=date.desc,time.desc.nullslast,created_at.desc'),
+        read('scholarships', '&order=created_at.desc'),
+        read('scholarship_payments', '&order=payment_date.desc'),
         (async () => {
           const r = await fetch(`${supabaseUrl()}/rest/v1/profiles?id=eq.${user.id}&select=*`, { headers, cache: 'no-store' })
           if (!r.ok) return null
@@ -172,7 +180,153 @@ async function handleRoute(request, { params }) {
           return arr[0] || null
         })(),
       ])
-      return handleCORS(NextResponse.json({ accounts, categories, transactions, budgets, portfolios, holdings, sips, loans, loan_payments, bucket_list, lend_borrow, lend_repayments, profile }))
+      return handleCORS(NextResponse.json({ accounts, categories, transactions, budgets, portfolios, holdings, sips, loans, loan_payments, bucket_list, lend_borrow, lend_repayments, credit_cards, credit_card_transactions, scholarships, scholarship_payments, profile }))
+    }
+
+    // ---- PRICES: Yahoo Finance fallback (public); Kite when creds set ----
+    if (route === '/finance/prices' && method === 'POST') {
+      const user = await currentUser(request)
+      if (!user) return handleCORS(NextResponse.json({ error: 'Not authenticated' }, { status: 401 }))
+      const { symbols = [] } = await request.json() // [{ symbol: 'RELIANCE', exchange: 'NSE' }]
+      const kiteKey = process.env.KITE_API_KEY, kiteToken = process.env.KITE_ACCESS_TOKEN
+      const out = {}
+      // Try Kite first if configured
+      if (kiteKey && kiteToken && symbols.length > 0) {
+        try {
+          const params = symbols.map((s) => `i=${encodeURIComponent(s.exchange + ':' + s.symbol)}`).join('&')
+          const kr = await fetch(`https://api.kite.trade/quote/ltp?${params}`, { headers: { 'X-Kite-Version': '3', Authorization: `token ${kiteKey}:${kiteToken}` }, cache: 'no-store' })
+          if (kr.ok) {
+            const kd = await kr.json()
+            for (const s of symbols) {
+              const key = `${s.exchange}:${s.symbol}`
+              if (kd.data?.[key]?.last_price) out[s.symbol] = { price: Number(kd.data[key].last_price), source: 'kite' }
+            }
+          }
+        } catch (e) { /* fall through */ }
+      }
+      // Yahoo Finance fallback for symbols not resolved
+      await Promise.all(symbols.map(async (s) => {
+        if (out[s.symbol]) return
+        const suffix = s.exchange === 'BSE' ? '.BO' : '.NS'
+        try {
+          const yr = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(s.symbol + suffix)}?interval=1d&range=1d`, { headers: { 'User-Agent': 'Mozilla/5.0' }, cache: 'no-store' })
+          if (yr.ok) {
+            const yd = await yr.json()
+            const p = yd?.chart?.result?.[0]?.meta?.regularMarketPrice
+            if (p) out[s.symbol] = { price: Number(p), source: 'yahoo' }
+          }
+        } catch (e) { /* skip */ }
+      }))
+      // Update holdings server-side
+      const nowIso = new Date().toISOString()
+      for (const s of symbols) {
+        if (!out[s.symbol]) continue
+        await fetch(`${supabaseUrl()}/rest/v1/holdings?user_id=eq.${user.id}&symbol=eq.${encodeURIComponent(s.symbol)}&exchange=eq.${s.exchange}`, {
+          method: 'PATCH', headers: serviceHeaders({ Prefer: 'return=minimal' }), body: JSON.stringify({ current_price: out[s.symbol].price, last_price_updated_at: nowIso }), cache: 'no-store',
+        })
+      }
+      return handleCORS(NextResponse.json({ prices: out, updated_at: nowIso, kite_configured: !!(kiteKey && kiteToken) }))
+    }
+
+    // ---- KITE OAuth callback (receives request_token) ----
+    if (route === '/kite/callback' && method === 'GET') {
+      const url = new URL(request.url)
+      const requestToken = url.searchParams.get('request_token')
+      const status = url.searchParams.get('status')
+      const html = `<!doctype html><html><head><title>Kite login</title><style>body{background:#080b12;color:#e2e8f0;font-family:system-ui;padding:40px;text-align:center}code{background:#1e293b;padding:6px 10px;border-radius:6px;color:#67e8f9}</style></head><body><h1>${status === 'success' ? '\u2705 Kite login successful' : '\u26a0\ufe0f Kite login'}</h1><p>request_token:</p><p><code>${requestToken || 'missing'}</code></p><p style="color:#94a3b8;font-size:13px">Use this request_token with your API secret to generate an access token, then set <code>KITE_ACCESS_TOKEN</code> in .env.</p><p><a style="color:#67e8f9" href="/">Back to Deepak Finance</a></p></body></html>`
+      return new NextResponse(html, { status: 200, headers: { 'Content-Type': 'text/html' } })
+    }
+    if (route === '/kite/postback' && (method === 'POST' || method === 'GET')) {
+      // Kite posts order updates here; log and 200 OK
+      try { const body = method === 'POST' ? await request.json().catch(() => null) : null; console.log('[kite/postback]', body) } catch {}
+      return handleCORS(NextResponse.json({ ok: true }))
+    }
+
+    // ---- CREDIT CARD spend ----
+    if (route === '/finance/credit_card_transactions' && method === 'POST') {
+      const user = await currentUser(request)
+      if (!user) return handleCORS(NextResponse.json({ error: 'Not authenticated' }, { status: 401 }))
+      const body = await request.json()
+      const cardId = body.credit_card_id, amount = Number(body.amount)
+      if (!cardId || !(amount > 0)) return handleCORS(NextResponse.json({ error: 'credit_card_id and amount required' }, { status: 400 }))
+      // Fetch card
+      const cr = await fetch(`${supabaseUrl()}/rest/v1/credit_cards?id=eq.${cardId}&user_id=eq.${user.id}&select=*`, { headers: serviceHeaders(), cache: 'no-store' })
+      const card = (cr.ok ? await cr.json() : [])[0]
+      if (!card) return handleCORS(NextResponse.json({ error: 'Card not found' }, { status: 404 }))
+      const payload = { ...pickFields('credit_card_transactions', body), user_id: user.id }
+      if (!payload.time) payload.time = new Date().toTimeString().slice(0, 5)
+      if (!payload.date) payload.date = new Date().toISOString().slice(0, 10)
+      const result = await restRequest('credit_card_transactions', 'POST', '', payload)
+      const created = Array.isArray(result.data) ? result.data[0] : result.data
+      // Bump card outstanding
+      await restRequest('credit_cards', 'PATCH', `?id=eq.${cardId}&user_id=eq.${user.id}`, { current_outstanding: Number(card.current_outstanding || 0) + amount })
+      return handleCORS(NextResponse.json(created, { status: result.response.status }))
+    }
+    if (route.startsWith('/finance/credit_card_transactions/') && method === 'DELETE') {
+      const user = await currentUser(request)
+      if (!user) return handleCORS(NextResponse.json({ error: 'Not authenticated' }, { status: 401 }))
+      const id = route.split('/').pop()
+      const cr = await fetch(`${supabaseUrl()}/rest/v1/credit_card_transactions?id=eq.${id}&user_id=eq.${user.id}&select=*`, { headers: serviceHeaders(), cache: 'no-store' })
+      const cct = (cr.ok ? await cr.json() : [])[0]
+      if (cct) {
+        const ccr = await fetch(`${supabaseUrl()}/rest/v1/credit_cards?id=eq.${cct.credit_card_id}&user_id=eq.${user.id}&select=*`, { headers: serviceHeaders(), cache: 'no-store' })
+        const card = (ccr.ok ? await ccr.json() : [])[0]
+        if (card && cct.status !== 'paid') {
+          await restRequest('credit_cards', 'PATCH', `?id=eq.${card.id}&user_id=eq.${user.id}`, { current_outstanding: Math.max(0, Number(card.current_outstanding || 0) - Number(cct.amount)) })
+        }
+      }
+      const result = await restRequest('credit_card_transactions', 'DELETE', `?id=eq.${id}&user_id=eq.${user.id}`)
+      return handleCORS(NextResponse.json({ ok: result.response.ok }))
+    }
+
+    // ---- CREDIT CARD bill payment ----
+    if (route.match(/^\/finance\/credit_cards\/([^/]+)\/pay_bill$/) && method === 'POST') {
+      const user = await currentUser(request)
+      if (!user) return handleCORS(NextResponse.json({ error: 'Not authenticated' }, { status: 401 }))
+      const cardId = route.match(/^\/finance\/credit_cards\/([^/]+)\/pay_bill$/)[1]
+      const body = await request.json()
+      const amount = Number(body.amount)
+      if (!body.account_id || !(amount > 0)) return handleCORS(NextResponse.json({ error: 'account_id and amount required' }, { status: 400 }))
+      const cr = await fetch(`${supabaseUrl()}/rest/v1/credit_cards?id=eq.${cardId}&user_id=eq.${user.id}&select=*`, { headers: serviceHeaders(), cache: 'no-store' })
+      const card = (cr.ok ? await cr.json() : [])[0]
+      if (!card) return handleCORS(NextResponse.json({ error: 'Card not found' }, { status: 404 }))
+      // Create expense from bank account
+      const now = new Date()
+      const txPayload = { user_id: user.id, account_id: body.account_id, amount, type: 'expense', description: `Credit card bill · ${card.name}`, date: body.date || now.toISOString().slice(0, 10), time: now.toTimeString().slice(0, 5), notes: body.notes || null }
+      const txRes = await restRequest('transactions', 'POST', '', txPayload)
+      const tx = Array.isArray(txRes.data) ? txRes.data[0] : txRes.data
+      // Reduce card outstanding
+      const newOutstanding = Math.max(0, Number(card.current_outstanding || 0) - amount)
+      await restRequest('credit_cards', 'PATCH', `?id=eq.${cardId}&user_id=eq.${user.id}`, { current_outstanding: newOutstanding })
+      // Mark all pending cct <= amount paid (simple bulk approach)
+      await restRequest('credit_card_transactions', 'PATCH', `?credit_card_id=eq.${cardId}&user_id=eq.${user.id}&status=eq.pending`, { status: 'paid' })
+      return handleCORS(NextResponse.json({ new_outstanding: newOutstanding, transaction_id: tx?.id }))
+    }
+
+    // ---- SCHOLARSHIP payment to college ----
+    if (route === '/finance/scholarship_payments' && method === 'POST') {
+      const user = await currentUser(request)
+      if (!user) return handleCORS(NextResponse.json({ error: 'Not authenticated' }, { status: 401 }))
+      const body = await request.json()
+      const amount = Number(body.amount)
+      if (!body.scholarship_id || !(amount > 0)) return handleCORS(NextResponse.json({ error: 'scholarship_id and amount required' }, { status: 400 }))
+      const sr = await fetch(`${supabaseUrl()}/rest/v1/scholarships?id=eq.${body.scholarship_id}&user_id=eq.${user.id}&select=*`, { headers: serviceHeaders(), cache: 'no-store' })
+      const s = (sr.ok ? await sr.json() : [])[0]
+      if (!s) return handleCORS(NextResponse.json({ error: 'Scholarship not found' }, { status: 404 }))
+      let linkedTxId = null
+      if (body.account_id) {
+        const now = new Date()
+        const txPayload = { user_id: user.id, account_id: body.account_id, amount, type: 'expense', description: `${s.name} \u2192 ${body.paid_to || 'College'}`, date: body.payment_date || now.toISOString().slice(0, 10), time: now.toTimeString().slice(0, 5), notes: body.notes || null, linked_module: 'scholarship', linked_module_id: s.id }
+        const txRes = await restRequest('transactions', 'POST', '', txPayload)
+        const tx = Array.isArray(txRes.data) ? txRes.data[0] : txRes.data
+        if (tx?.id) linkedTxId = tx.id
+      }
+      const paymentPayload = { user_id: user.id, scholarship_id: body.scholarship_id, amount, paid_to: body.paid_to || 'College', payment_date: body.payment_date || new Date().toISOString().slice(0, 10), account_id: body.account_id || null, linked_transaction_id: linkedTxId, notes: body.notes || null }
+      const pRes = await restRequest('scholarship_payments', 'POST', '', paymentPayload)
+      const newPaid = Number(s.amount_paid_to_college || 0) + amount
+      const newStatus = newPaid >= Number(s.total_amount) ? 'paid' : s.status
+      await restRequest('scholarships', 'PATCH', `?id=eq.${s.id}&user_id=eq.${user.id}`, { amount_paid_to_college: newPaid, status: newStatus })
+      return handleCORS(NextResponse.json({ payment: Array.isArray(pRes.data) ? pRes.data[0] : pRes.data, new_paid: newPaid }))
     }
 
     // ---- PROFILE ----
@@ -316,8 +470,8 @@ async function handleRoute(request, { params }) {
       return handleCORS(NextResponse.json({ ok: true }))
     }
 
-    // ---- FINANCE CRUD (accounts, categories, transactions, budgets, portfolios, holdings, sips, loans, loan_payments, bucket_list, lend_borrow, lend_repayments) ----
-    const collectionMatch = route.match(/^\/finance\/(accounts|categories|transactions|budgets|portfolios|holdings|sips|loans|loan_payments|bucket_list|lend_borrow|lend_repayments)(?:\/([^/]+))?$/)
+    // ---- FINANCE CRUD (accounts, categories, transactions, budgets, portfolios, holdings, sips, loans, loan_payments, bucket_list, lend_borrow, lend_repayments, credit_cards, credit_card_transactions, scholarships, scholarship_payments) ----
+    const collectionMatch = route.match(/^\/finance\/(accounts|categories|transactions|budgets|portfolios|holdings|sips|loans|loan_payments|bucket_list|lend_borrow|lend_repayments|credit_cards|credit_card_transactions|scholarships|scholarship_payments)(?:\/([^/]+))?$/)
     if (collectionMatch) {
       const [, table, id] = collectionMatch
       const user = await currentUser(request)
@@ -396,6 +550,15 @@ async function handleRoute(request, { params }) {
           const txRes = await restRequest('transactions', 'POST', '', txPayload)
           const tx = Array.isArray(txRes.data) ? txRes.data[0] : txRes.data
           if (tx?.id) await restRequest('lend_borrow', 'PATCH', `?id=eq.${created.id}&user_id=eq.${user.id}`, { linked_transaction_id: tx.id })
+        }
+
+        // Side-effect: scholarship marked as received with an account → income transaction
+        if (table === 'scholarships' && created?.id && payload.status === 'received' && payload.received_to_account_id) {
+          const now = new Date()
+          const txPayload = { user_id: user.id, account_id: payload.received_to_account_id, amount: Number(payload.total_amount), type: 'income', description: `${payload.name} received`, date: payload.received_date || now.toISOString().slice(0, 10), time: now.toTimeString().slice(0, 5), linked_module: 'scholarship', linked_module_id: created.id, notes: payload.notes || null }
+          const txRes = await restRequest('transactions', 'POST', '', txPayload)
+          const tx = Array.isArray(txRes.data) ? txRes.data[0] : txRes.data
+          if (tx?.id) await restRequest('scholarships', 'PATCH', `?id=eq.${created.id}&user_id=eq.${user.id}`, { linked_transaction_id: tx.id })
         }
 
         return handleCORS(NextResponse.json(created, { status: result.response.status }))

@@ -751,7 +751,7 @@ function HoldingForm({ open, onClose, onSaved, editing, portfolios, defaultPortf
 }
 
 /* ---------------- Investments View ---------------- */
-function InvestmentsView({ data, onAddPortfolio, onAddHolding, onEditPortfolio, onEditHolding, onDeletePortfolio, onDeleteHolding, onRefreshPrice, onAddFunds, showMoney }) {
+function InvestmentsView({ data, onAddPortfolio, onAddHolding, onEditPortfolio, onEditHolding, onDeletePortfolio, onDeleteHolding, onRefreshPrice, onRefreshAll, pricesLoading, onAddFunds, showMoney }) {
   const { portfolios, holdings } = data
   const holdingsByPortfolio = (id) => holdings.filter((h) => h.portfolio_id === id)
   const totalInvested = holdings.reduce((s, h) => s + Number(h.qty) * Number(h.avg_buy_price), 0)
@@ -767,6 +767,7 @@ function InvestmentsView({ data, onAddPortfolio, onAddHolding, onEditPortfolio, 
           <h1 className="text-3xl font-semibold tracking-tight text-white">Investments</h1>
         </div>
         <div className="flex gap-2">
+          <button onClick={onRefreshAll} disabled={pricesLoading || data.holdings.length === 0} className="flex items-center gap-2 rounded-xl border border-emerald-400/25 bg-emerald-400/10 px-4 py-2.5 text-sm font-medium text-emerald-200 hover:bg-emerald-400/20 disabled:opacity-50"><RefreshCw size={14} className={pricesLoading ? 'animate-spin' : ''} />{pricesLoading ? 'Fetching…' : 'Refresh prices'}</button>
           <button onClick={onAddPortfolio} className="rounded-xl border border-white/10 px-4 py-2.5 text-sm text-slate-300 hover:bg-white/5">New portfolio</button>
           <button onClick={() => onAddHolding()} className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 px-4 py-2.5 text-sm font-semibold text-[#07101c]"><Plus size={15} />Add holding</button>
         </div>
@@ -790,8 +791,8 @@ function InvestmentsView({ data, onAddPortfolio, onAddHolding, onEditPortfolio, 
             </div>
           </div>
         </div>
-        <div className="mt-4 flex items-center gap-2 rounded-xl border border-amber-300/20 bg-amber-300/5 px-4 py-2.5 text-xs text-amber-200">
-          <Sparkles size={13} /> Add <code className="rounded bg-white/10 px-1.5 py-0.5">KITE_API_KEY</code> in .env for live prices. Manual entry works meanwhile.
+        <div className="mt-4 flex items-center gap-2 rounded-xl border border-cyan-300/20 bg-cyan-300/5 px-4 py-2.5 text-xs text-cyan-200">
+          <Sparkles size={13} /> Live prices via Yahoo Finance (free). Add <code className="rounded bg-white/10 px-1.5 py-0.5">KITE_API_KEY</code> + <code className="rounded bg-white/10 px-1.5 py-0.5">KITE_ACCESS_TOKEN</code> in .env to use Kite instead.
         </div>
       </div>
 
@@ -1554,6 +1555,475 @@ function ProfileView({ data, user, theme, onThemeChange, onSaveProfile, onAddCat
   )
 }
 
+/* ---------------- Credit Card Form ---------------- */
+function CreditCardForm({ open, onClose, onSaved, editing, toast }) {
+  const initial = editing
+    ? { ...editing, credit_limit: String(editing.credit_limit), billing_date: String(editing.billing_date), due_date_offset: String(editing.due_date_offset) }
+    : { name: '', bank: '', last4: '', credit_limit: '', billing_date: '1', due_date_offset: '15', color: '#a78bfa' }
+  const [form, setForm] = useState(initial)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => { setForm(initial) }, [editing, open])
+  if (!open) return null
+  const save = async (e) => {
+    e.preventDefault(); setBusy(true)
+    try {
+      const endpoint = editing ? `/api/finance/credit_cards/${editing.id}` : '/api/finance/credit_cards'
+      const payload = { ...form, credit_limit: Number(form.credit_limit), billing_date: Number(form.billing_date), due_date_offset: Number(form.due_date_offset) }
+      const response = await fetch(endpoint, { method: editing ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || data.message || 'Could not save')
+      toast.push(editing ? 'Card updated' : 'Card added'); onSaved()
+    } catch (err) { toast.push(err.message, 'error') } finally { setBusy(false) }
+  }
+  const palette = ['#a78bfa', '#22d3ee', '#f472b6', '#f59e0b', '#34d399', '#60a5fa']
+  return (
+    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center" onClick={onClose}>
+      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-lg rounded-3xl border border-white/10 bg-[#141a28] p-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-white">{editing ? 'Edit card' : 'Add credit card'}</h2>
+          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-white/5"><X size={18} /></button>
+        </div>
+        <div className="mt-5 grid gap-4 sm:grid-cols-2">
+          <label className="text-sm text-slate-300 sm:col-span-2">Name
+            <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="HDFC MoneyBack" />
+          </label>
+          <label className="text-sm text-slate-300">Bank
+            <input value={form.bank || ''} onChange={(e) => setForm({ ...form, bank: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="HDFC Bank" />
+          </label>
+          <label className="text-sm text-slate-300">Last 4 digits
+            <input maxLength={4} value={form.last4 || ''} onChange={(e) => setForm({ ...form, last4: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="1234" />
+          </label>
+          <label className="text-sm text-slate-300">Credit limit
+            <input required type="number" step="1" min="0" value={form.credit_limit} onChange={(e) => setForm({ ...form, credit_limit: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="200000" />
+          </label>
+          <label className="text-sm text-slate-300">Billing day (1-28)
+            <input required type="number" min="1" max="28" value={form.billing_date} onChange={(e) => setForm({ ...form, billing_date: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
+          </label>
+          <label className="text-sm text-slate-300">Due date offset (days)
+            <input required type="number" min="1" max="30" value={form.due_date_offset} onChange={(e) => setForm({ ...form, due_date_offset: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
+          </label>
+          <div className="text-sm text-slate-300 sm:col-span-2">Colour
+            <div className="mt-2 flex flex-wrap gap-2">
+              {palette.map((c) => (<button key={c} type="button" onClick={() => setForm({ ...form, color: c })} className={`h-8 w-8 rounded-full border-2 transition ${form.color === c ? 'border-white' : 'border-transparent'}`} style={{ background: c }} />))}
+            </div>
+          </div>
+        </div>
+        <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : editing ? 'Update card' : 'Save card'}</button>
+      </form>
+    </div>
+  )
+}
+
+/* ---------------- Credit Card Spend Form ---------------- */
+function CardSpendForm({ open, onClose, onSaved, card, categories, toast }) {
+  const initial = { amount: '', description: '', category_id: '', date: todayISO(), time: new Date().toTimeString().slice(0, 5), notes: '' }
+  const [form, setForm] = useState(initial)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => { if (open) setForm(initial) }, [open])
+  if (!open || !card) return null
+  const save = async (e) => {
+    e.preventDefault(); setBusy(true)
+    try {
+      const response = await fetch('/api/finance/credit_card_transactions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ credit_card_id: card.id, ...form, amount: Number(form.amount) }) })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Could not save')
+      toast.push('Spend logged'); onSaved()
+    } catch (err) { toast.push(err.message, 'error') } finally { setBusy(false) }
+  }
+  const expenseCats = categories.filter((c) => c.type === 'expense')
+  return (
+    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center" onClick={onClose}>
+      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-3xl border border-white/10 bg-[#141a28] p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-white">Log spend</h2>
+            <p className="mt-1 text-xs text-slate-500">{card.name} · outstanding {money(card.current_outstanding)}</p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-white/5"><X size={18} /></button>
+        </div>
+        <div className="mt-5 grid gap-4">
+          <label className="text-sm text-slate-300">Amount
+            <input required type="number" step="0.01" min="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
+          </label>
+          <label className="text-sm text-slate-300">Description
+            <input required value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="Swiggy order" />
+          </label>
+          <label className="text-sm text-slate-300">Category
+            <select value={form.category_id} onChange={(e) => setForm({ ...form, category_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
+              <option value="">No category</option>
+              {expenseCats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </label>
+          <div className="grid grid-cols-[1fr_auto] gap-2">
+            <label className="text-sm text-slate-300">Date
+              <input required type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
+            </label>
+            <label className="text-sm text-slate-300">Time
+              <input type="time" value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })} className="mt-2 w-[110px] rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
+            </label>
+          </div>
+        </div>
+        <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : 'Log spend'}</button>
+      </form>
+    </div>
+  )
+}
+
+/* ---------------- Card Bill Payment ---------------- */
+function CardPayForm({ open, onClose, onSaved, card, accounts, toast }) {
+  const [form, setForm] = useState({ amount: '', account_id: accounts[0]?.id || '', date: todayISO(), notes: '' })
+  const [busy, setBusy] = useState(false)
+  useEffect(() => { if (open && card) setForm({ amount: String(card.current_outstanding || ''), account_id: accounts[0]?.id || '', date: todayISO(), notes: '' }) }, [open, card, accounts])
+  if (!open || !card) return null
+  const save = async (e) => {
+    e.preventDefault(); setBusy(true)
+    try {
+      const response = await fetch(`/api/finance/credit_cards/${card.id}/pay_bill`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, amount: Number(form.amount) }) })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Could not pay')
+      toast.push('Bill paid'); onSaved()
+    } catch (err) { toast.push(err.message, 'error') } finally { setBusy(false) }
+  }
+  return (
+    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center" onClick={onClose}>
+      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-3xl border border-white/10 bg-[#141a28] p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-white">Pay bill</h2>
+            <p className="mt-1 text-xs text-slate-500">{card.name} · outstanding {money(card.current_outstanding)}</p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-white/5"><X size={18} /></button>
+        </div>
+        <div className="mt-5 grid gap-4">
+          <label className="text-sm text-slate-300">Amount
+            <input required type="number" step="0.01" min="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
+          </label>
+          <label className="text-sm text-slate-300">Pay from account
+            <select required value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
+              <option value="">Choose account…</option>
+              {accounts.filter((a) => a.type !== 'credit_card').map((a) => <option key={a.id} value={a.id}>{a.name} · {money(a.current_balance)}</option>)}
+            </select>
+          </label>
+          <label className="text-sm text-slate-300">Date
+            <input required type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
+          </label>
+        </div>
+        <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Paying…' : 'Pay bill'}</button>
+      </form>
+    </div>
+  )
+}
+
+/* ---------------- Credit Cards View ---------------- */
+function CreditCardsView({ data, onAdd, onEdit, onDelete, onSpend, onPay, onDeleteSpend, showMoney }) {
+  const { credit_cards, credit_card_transactions, categories } = data
+  const totalOutstanding = credit_cards.reduce((s, c) => s + Number(c.current_outstanding || 0), 0)
+  const totalLimit = credit_cards.reduce((s, c) => s + Number(c.credit_limit || 0), 0)
+  const overallUtil = totalLimit > 0 ? Math.round((totalOutstanding / totalLimit) * 100) : 0
+
+  const nextDueLabel = (card) => {
+    const now = new Date(); const bd = Number(card.billing_date), offset = Number(card.due_date_offset)
+    let billing = new Date(now.getFullYear(), now.getMonth(), bd)
+    if (now > billing) billing = new Date(now.getFullYear(), now.getMonth() + 1, bd)
+    const due = new Date(billing); due.setDate(due.getDate() + offset)
+    const days = Math.ceil((due - now) / (1000 * 60 * 60 * 24))
+    return { due, days }
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-end justify-between">
+        <div>
+          <div className="mb-2 text-xs uppercase tracking-widest text-cyan-200/70">Plastic tracker</div>
+          <h1 className="text-3xl font-semibold tracking-tight text-white">Credit cards</h1>
+        </div>
+        <button onClick={onAdd} className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 px-4 py-2.5 text-sm font-semibold text-[#07101c]"><Plus size={15} />Add card</button>
+      </div>
+
+      {credit_cards.length > 0 && (
+        <div className="grid gap-4 sm:grid-cols-3">
+          <StatCard label="Total outstanding" value={showMoney ? money(totalOutstanding) : '••••••'} icon={CreditCard} accent="bg-rose-400/15 text-rose-200" tone="text-rose-300" sub={<span className="text-rose-300">{credit_cards.length} card{credit_cards.length === 1 ? '' : 's'}</span>} />
+          <StatCard label="Total limit" value={showMoney ? money(totalLimit) : '••••••'} icon={Landmark} accent="bg-cyan-300/15 text-cyan-200" sub={<span>Combined limit</span>} />
+          <StatCard label="Overall utilisation" value={`${overallUtil}%`} icon={Target} accent="bg-violet-400/15 text-violet-200" sub={<span className={overallUtil <= 30 ? 'text-emerald-300' : overallUtil <= 60 ? 'text-amber-300' : 'text-rose-300'}>{overallUtil <= 30 ? 'Healthy' : overallUtil <= 60 ? 'Rising' : 'High'}</span>} tone={overallUtil <= 30 ? 'text-emerald-300' : 'text-amber-300'} />
+        </div>
+      )}
+
+      {credit_cards.length === 0 ? (
+        <div className="rounded-2xl border border-white/10 bg-white/[.035]">
+          <EmptyState icon={CreditCard} title="No credit cards yet" message="Track credit card spends, utilisation and pay bills without leaving the app." cta="Add first card" onCta={onAdd} />
+        </div>
+      ) : (
+        <div className="grid gap-6 xl:grid-cols-2">
+          {credit_cards.map((card) => {
+            const util = Number(card.credit_limit) > 0 ? Math.min(100, Math.round((Number(card.current_outstanding) / Number(card.credit_limit)) * 100)) : 0
+            const tone = util >= 80 ? 'bg-rose-400' : util >= 50 ? 'bg-amber-400' : 'bg-emerald-400'
+            const txns = credit_card_transactions.filter((t) => t.credit_card_id === card.id).slice(0, 5)
+            const nd = nextDueLabel(card)
+            return (
+              <div key={card.id} className="rounded-2xl border border-white/10 bg-white/[.035]">
+                <div className="rounded-t-2xl p-5" style={{ background: `linear-gradient(135deg, ${card.color}22, transparent)` }}>
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-2xl" style={{ background: `${card.color}33`, color: card.color }}><CreditCard size={20} /></div>
+                      <div>
+                        <div className="text-base font-semibold text-white">{card.name}</div>
+                        <div className="text-xs text-slate-500">{card.bank || 'Bank'}{card.last4 ? ` · •${card.last4}` : ''} · Bill on {card.billing_date} · Due in {nd.days > 0 ? `${nd.days} day${nd.days === 1 ? '' : 's'}` : 'overdue'}</div>
+                      </div>
+                    </div>
+                    <div className="flex gap-1">
+                      <button onClick={() => onEdit(card)} className="rounded-lg p-1.5 text-slate-500 hover:bg-white/5 hover:text-white"><Pencil size={14} /></button>
+                      <button onClick={() => onDelete(card)} className="rounded-lg p-1.5 text-rose-300/70 hover:bg-rose-300/10"><Trash2 size={14} /></button>
+                    </div>
+                  </div>
+                  <div className="mt-5 flex items-baseline justify-between">
+                    <div>
+                      <div className="text-xs text-slate-500">Outstanding</div>
+                      <div className="text-2xl font-semibold text-white">{showMoney ? money(card.current_outstanding) : '••••'}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-xs text-slate-500">Limit</div>
+                      <div className="text-sm text-slate-300">{showMoney ? money(card.credit_limit) : '••••'}</div>
+                    </div>
+                  </div>
+                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/5"><div className={`h-full rounded-full ${tone} transition-all`} style={{ width: `${util}%` }} /></div>
+                  <div className="mt-2 flex items-center justify-between text-xs">
+                    <span className={util >= 80 ? 'text-rose-300' : util >= 50 ? 'text-amber-300' : 'text-emerald-300'}>{util}% used</span>
+                    <span className="text-slate-500">₹{new Intl.NumberFormat('en-IN').format(Math.max(0, Number(card.credit_limit) - Number(card.current_outstanding)))} available</span>
+                  </div>
+                  <div className="mt-4 flex gap-2">
+                    <button onClick={() => onSpend(card)} className="flex-1 rounded-xl bg-white/[.06] py-2 text-xs font-semibold text-white hover:bg-white/[.1]">+ Log spend</button>
+                    <button onClick={() => onPay(card)} disabled={Number(card.current_outstanding) <= 0} className="flex-1 rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 py-2 text-xs font-semibold text-[#07101c] disabled:opacity-50">Pay bill</button>
+                  </div>
+                </div>
+                {txns.length > 0 && (
+                  <div className="divide-y divide-white/5 border-t border-white/10">
+                    {txns.map((t) => {
+                      const cat = categories.find((c) => c.id === t.category_id)
+                      return (
+                        <div key={t.id} className="flex items-center justify-between px-5 py-3 text-sm">
+                          <div>
+                            <div className="text-white">{t.description}</div>
+                            <div className="text-[11px] text-slate-500">{cat?.name || 'Uncategorised'} · {formatDateTime(t.date, t.time)}</div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <div className="text-right">
+                              <div className="font-semibold text-rose-300">-{money(t.amount)}</div>
+                              <div className="text-[10px] uppercase tracking-widest text-slate-500">{t.status}</div>
+                            </div>
+                            <button onClick={() => onDeleteSpend(t)} className="rounded-lg p-1.5 text-rose-300/70 hover:bg-rose-300/10"><Trash2 size={13} /></button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ---------------- Scholarship Form ---------------- */
+function ScholarshipForm({ open, onClose, onSaved, editing, accounts, toast }) {
+  const initial = editing
+    ? { ...editing, total_amount: String(editing.total_amount) }
+    : { name: '', total_amount: '', academic_year: '', source: '', status: 'pending', received_date: '', due_date: '', received_to_account_id: '', notes: '' }
+  const [form, setForm] = useState(initial)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => { setForm(initial) }, [editing, open])
+  if (!open) return null
+  const save = async (e) => {
+    e.preventDefault(); setBusy(true)
+    try {
+      const endpoint = editing ? `/api/finance/scholarships/${editing.id}` : '/api/finance/scholarships'
+      const payload = { ...form, total_amount: Number(form.total_amount), received_date: form.received_date || null, due_date: form.due_date || null, received_to_account_id: form.received_to_account_id || null }
+      const response = await fetch(endpoint, { method: editing ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || data.message || 'Could not save')
+      toast.push(editing ? 'Updated' : 'Scholarship added'); onSaved()
+    } catch (err) { toast.push(err.message, 'error') } finally { setBusy(false) }
+  }
+  return (
+    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center" onClick={onClose}>
+      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-xl rounded-3xl border border-white/10 bg-[#141a28] p-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-white">{editing ? 'Edit scholarship' : 'Add scholarship'}</h2>
+          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-white/5"><X size={18} /></button>
+        </div>
+        <div className="mt-5 grid gap-4 sm:grid-cols-2">
+          <label className="text-sm text-slate-300 sm:col-span-2">Name
+            <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="Merit scholarship Q1" />
+          </label>
+          <label className="text-sm text-slate-300">Total amount
+            <input required type="number" step="0.01" min="0" value={form.total_amount} onChange={(e) => setForm({ ...form, total_amount: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
+          </label>
+          <label className="text-sm text-slate-300">Academic year
+            <input value={form.academic_year || ''} onChange={(e) => setForm({ ...form, academic_year: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="2025-26" />
+          </label>
+          <label className="text-sm text-slate-300">Source
+            <input value={form.source || ''} onChange={(e) => setForm({ ...form, source: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="Govt / Foundation / College" />
+          </label>
+          <label className="text-sm text-slate-300">Status
+            <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
+              <option value="pending">Pending</option><option value="received">Received</option><option value="paid">Paid to college</option>
+            </select>
+          </label>
+          <label className="text-sm text-slate-300">Received date
+            <input type="date" value={form.received_date || ''} onChange={(e) => setForm({ ...form, received_date: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
+          </label>
+          <label className="text-sm text-slate-300">Due date (to college)
+            <input type="date" value={form.due_date || ''} onChange={(e) => setForm({ ...form, due_date: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
+          </label>
+          <label className="text-sm text-slate-300 sm:col-span-2">Received into account (when marked received)
+            <select value={form.received_to_account_id || ''} onChange={(e) => setForm({ ...form, received_to_account_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
+              <option value="">None</option>
+              {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+          </label>
+          <label className="text-sm text-slate-300 sm:col-span-2">Notes
+            <input value={form.notes || ''} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
+          </label>
+        </div>
+        <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : editing ? 'Update' : 'Save'}</button>
+      </form>
+    </div>
+  )
+}
+
+/* ---------------- Scholarship Pay Form ---------------- */
+function ScholarshipPayForm({ open, onClose, onSaved, scholarship, accounts, toast }) {
+  const initial = { amount: '', paid_to: 'College', payment_date: todayISO(), account_id: scholarship?.received_to_account_id || accounts[0]?.id || '', notes: '' }
+  const [form, setForm] = useState(initial)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => { if (open) setForm({ ...initial, account_id: scholarship?.received_to_account_id || accounts[0]?.id || '' }) }, [open, scholarship, accounts])
+  if (!open || !scholarship) return null
+  const pending = Number(scholarship.total_amount) - Number(scholarship.amount_paid_to_college || 0)
+  const save = async (e) => {
+    e.preventDefault(); setBusy(true)
+    try {
+      const response = await fetch('/api/finance/scholarship_payments', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scholarship_id: scholarship.id, ...form, amount: Number(form.amount) }) })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Could not pay')
+      toast.push('Payment logged'); onSaved()
+    } catch (err) { toast.push(err.message, 'error') } finally { setBusy(false) }
+  }
+  return (
+    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center" onClick={onClose}>
+      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-3xl border border-white/10 bg-[#141a28] p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-white">Pay to college</h2>
+            <p className="mt-1 text-xs text-slate-500">{scholarship.name} · pending {money(pending)}</p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-white/5"><X size={18} /></button>
+        </div>
+        <div className="mt-5 grid gap-4">
+          <label className="text-sm text-slate-300">Amount
+            <input required type="number" step="0.01" min="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
+          </label>
+          <label className="text-sm text-slate-300">Paid to
+            <input value={form.paid_to} onChange={(e) => setForm({ ...form, paid_to: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="College name / bursar" />
+          </label>
+          <label className="text-sm text-slate-300">Date
+            <input required type="date" value={form.payment_date} onChange={(e) => setForm({ ...form, payment_date: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
+          </label>
+          <label className="text-sm text-slate-300">From account
+            <select required value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
+              <option value="">Choose account…</option>
+              {accounts.map((a) => <option key={a.id} value={a.id}>{a.name} · {money(a.current_balance)}</option>)}
+            </select>
+          </label>
+        </div>
+        <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Paying…' : 'Log payment'}</button>
+      </form>
+    </div>
+  )
+}
+
+/* ---------------- Scholarships View ---------------- */
+function ScholarshipsView({ data, onAdd, onEdit, onDelete, onPay, showMoney }) {
+  const { scholarships, scholarship_payments, transactions, categories, accounts } = data
+  const totalReceived = scholarships.filter((s) => s.status !== 'pending').reduce((s, x) => s + Number(x.total_amount || 0), 0)
+  const totalPaidCollege = scholarships.reduce((s, x) => s + Number(x.amount_paid_to_college || 0), 0)
+  const pendingToCollege = totalReceived - totalPaidCollege
+
+  // Misuse detection: for each scholarship, look at transactions from its received_to_account after received_date,
+  // any non-scholarship expense counted as potentially misused
+  const misuseWarn = (s) => {
+    if (!s.received_to_account_id || !s.received_date) return null
+    const misused = transactions.filter((t) => t.account_id === s.received_to_account_id && t.type === 'expense' && new Date(t.date) >= new Date(s.received_date) && t.linked_module !== 'scholarship' && t.linked_module !== 'investment')
+    const amount = misused.reduce((a, t) => a + Number(t.amount || 0), 0)
+    return amount > 0 ? { amount, count: misused.length } : null
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-end justify-between">
+        <div>
+          <div className="mb-2 text-xs uppercase tracking-widest text-cyan-200/70">Scholarship trail</div>
+          <h1 className="text-3xl font-semibold tracking-tight text-white">Scholarships &amp; fees</h1>
+        </div>
+        <button onClick={onAdd} className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 px-4 py-2.5 text-sm font-semibold text-[#07101c]"><Plus size={15} />Add scholarship</button>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        <StatCard label="Received" value={showMoney ? money(totalReceived) : '••••'} icon={ArrowUpRight} accent="bg-emerald-400/15 text-emerald-200" sub={<span>{scholarships.filter((s) => s.status !== 'pending').length} batch(es)</span>} />
+        <StatCard label="Paid to college" value={showMoney ? money(totalPaidCollege) : '••••'} icon={ArrowDownRight} accent="bg-cyan-400/15 text-cyan-200" sub={<span>{scholarship_payments.length} payment(s)</span>} />
+        <StatCard label="Pending to college" value={showMoney ? money(pendingToCollege) : '••••'} icon={Target} accent="bg-amber-400/15 text-amber-200" tone={pendingToCollege > 0 ? 'text-amber-300' : 'text-emerald-300'} sub={<span className={pendingToCollege > 0 ? 'text-amber-300' : 'text-emerald-300'}>{pendingToCollege > 0 ? 'Due to college' : 'All paid'}</span>} />
+      </div>
+
+      {scholarships.length === 0 ? (
+        <div className="rounded-2xl border border-white/10 bg-white/[.035]">
+          <EmptyState icon={ShieldCheck} title="No scholarships yet" message="Log received batches and payments to college, and we'll warn if funds are misused." cta="Add first batch" onCta={onAdd} />
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {scholarships.map((s) => {
+            const paid = Number(s.amount_paid_to_college || 0)
+            const total = Number(s.total_amount || 0)
+            const pct = total > 0 ? Math.min(100, Math.round((paid / total) * 100)) : 0
+            const pending = Math.max(0, total - paid)
+            const acc = accounts.find((a) => a.id === s.received_to_account_id)
+            const warn = misuseWarn(s)
+            return (
+              <div key={s.id} className="group rounded-2xl border border-white/10 bg-white/[.035] p-5">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <div className="text-base font-semibold text-white">{s.name}</div>
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-widest ${s.status === 'paid' ? 'bg-emerald-400/15 text-emerald-200' : s.status === 'received' ? 'bg-cyan-400/15 text-cyan-200' : 'bg-slate-500/15 text-slate-300'}`}>{s.status}</span>
+                    </div>
+                    <div className="mt-1 text-xs text-slate-500">{s.source || '—'} · {s.academic_year || '—'}{acc ? ` · into ${acc.name}` : ''}{s.received_date ? ` · received ${formatDate(s.received_date)}` : ''}{s.due_date ? ` · due ${formatDate(s.due_date)}` : ''}</div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => onPay(s)} disabled={pending <= 0} className="rounded-lg bg-gradient-to-r from-cyan-300 to-blue-500 px-3 py-1.5 text-xs font-semibold text-[#07101c] disabled:opacity-50">Pay to college</button>
+                    <button onClick={() => onEdit(s)} className="rounded-lg border border-white/10 p-1.5 text-slate-500 hover:bg-white/5 hover:text-white"><Pencil size={13} /></button>
+                    <button onClick={() => onDelete(s)} className="rounded-lg border border-white/10 p-1.5 text-rose-300/70 hover:bg-rose-300/10"><Trash2 size={13} /></button>
+                  </div>
+                </div>
+                <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                  <div><div className="text-xs text-slate-500">Total</div><div className="mt-1 text-lg font-semibold text-white">{money(total)}</div></div>
+                  <div><div className="text-xs text-slate-500">Paid to college</div><div className="mt-1 text-lg font-semibold text-emerald-300">{money(paid)}</div></div>
+                  <div><div className="text-xs text-slate-500">Pending</div><div className="mt-1 text-lg font-semibold text-amber-300">{money(pending)}</div></div>
+                </div>
+                <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/5"><div className="h-full rounded-full bg-emerald-400 transition-all" style={{ width: `${pct}%` }} /></div>
+                {warn && (
+                  <div className="mt-4 flex items-center gap-2 rounded-xl border border-amber-300/25 bg-amber-300/5 px-4 py-2.5 text-xs text-amber-200">
+                    <Sparkles size={13} /> Warning: {money(warn.amount)} across {warn.count} non-scholarship expenses from the receiving account since money arrived. Consider paying college first.
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 /* ---------------- Views ---------------- */
 function DashboardView({ data, showMoney, onOpenTxForm, setView }) {
   const { accounts, transactions, categories, holdings = [], loans = [], bucket_list = [] } = data
@@ -2008,7 +2478,7 @@ function InsightsView({ data }) {
 function Shell({ user, onLogout }) {
   const [view, setView] = useState('dashboard')
   const [showMoney, setShowMoney] = useState(true)
-  const [data, setData] = useState({ accounts: [], categories: [], transactions: [], budgets: [], portfolios: [], holdings: [], sips: [], loans: [], loan_payments: [], bucket_list: [], lend_borrow: [], lend_repayments: [], profile: null })
+  const [data, setData] = useState({ accounts: [], categories: [], transactions: [], budgets: [], portfolios: [], holdings: [], sips: [], loans: [], loan_payments: [], bucket_list: [], lend_borrow: [], lend_repayments: [], credit_cards: [], credit_card_transactions: [], scholarships: [], scholarship_payments: [], profile: null })
   const [loading, setLoading] = useState(true)
 
   const toast = useToast()
@@ -2038,6 +2508,17 @@ function Shell({ user, onLogout }) {
   const [fundsFormOpen, setFundsFormOpen] = useState(false)
   const [fundsPortfolio, setFundsPortfolio] = useState(null)
   const [theme, setTheme] = useState('dark')
+  const [cardFormOpen, setCardFormOpen] = useState(false)
+  const [cardEditing, setCardEditing] = useState(null)
+  const [cardSpendOpen, setCardSpendOpen] = useState(false)
+  const [cardSpendTarget, setCardSpendTarget] = useState(null)
+  const [cardPayOpen, setCardPayOpen] = useState(false)
+  const [cardPayTarget, setCardPayTarget] = useState(null)
+  const [scholarshipFormOpen, setScholarshipFormOpen] = useState(false)
+  const [scholarshipEditing, setScholarshipEditing] = useState(null)
+  const [scholarshipPayOpen, setScholarshipPayOpen] = useState(false)
+  const [scholarshipPayTarget, setScholarshipPayTarget] = useState(null)
+  const [pricesLoading, setPricesLoading] = useState(false)
 
   const refresh = async () => {
     try {
@@ -2048,7 +2529,10 @@ function Shell({ user, onLogout }) {
         accounts: result.accounts || [], categories: result.categories || [], transactions: result.transactions || [], budgets: result.budgets || [],
         portfolios: result.portfolios || [], holdings: result.holdings || [], sips: result.sips || [],
         loans: result.loans || [], loan_payments: result.loan_payments || [], bucket_list: result.bucket_list || [],
-        lend_borrow: result.lend_borrow || [], lend_repayments: result.lend_repayments || [], profile: result.profile || null,
+        lend_borrow: result.lend_borrow || [], lend_repayments: result.lend_repayments || [],
+        credit_cards: result.credit_cards || [], credit_card_transactions: result.credit_card_transactions || [],
+        scholarships: result.scholarships || [], scholarship_payments: result.scholarship_payments || [],
+        profile: result.profile || null,
       })
     } catch (e) {
       toast.push(e.message || 'Could not load data', 'error')
@@ -2154,6 +2638,54 @@ function Shell({ user, onLogout }) {
   useEffect(() => { if (data.profile?.theme) setTheme(data.profile.theme) }, [data.profile])
   const onThemeChange = async (t) => { setTheme(t); await fetch('/api/finance/profile', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ theme: t }) }); toast.push(`Theme: ${t}`, 'info') }
 
+  // Credit cards
+  const openCardForm = (c = null) => { setCardEditing(c); setCardFormOpen(true) }
+  const closeCardForm = () => { setCardFormOpen(false); setCardEditing(null) }
+  const onCardSaved = async () => { closeCardForm(); await refresh() }
+  const deleteCard = async (c) => {
+    if (!window.confirm(`Delete card "${c.name}"? All linked spends will be removed.`)) return
+    const response = await fetch(`/api/finance/credit_cards/${c.id}`, { method: 'DELETE' })
+    if (response.ok) { toast.push('Card deleted'); await refresh() } else { toast.push('Delete failed', 'error') }
+  }
+  const openCardSpend = (c) => { setCardSpendTarget(c); setCardSpendOpen(true) }
+  const closeCardSpend = () => { setCardSpendOpen(false); setCardSpendTarget(null) }
+  const onCardSpendSaved = async () => { closeCardSpend(); await refresh() }
+  const openCardPay = (c) => { setCardPayTarget(c); setCardPayOpen(true) }
+  const closeCardPay = () => { setCardPayOpen(false); setCardPayTarget(null) }
+  const onCardPaid = async () => { closeCardPay(); await refresh() }
+  const deleteCardSpend = async (t) => {
+    if (!window.confirm('Delete this spend?')) return
+    const response = await fetch(`/api/finance/credit_card_transactions/${t.id}`, { method: 'DELETE' })
+    if (response.ok) { toast.push('Spend removed'); await refresh() } else { toast.push('Delete failed', 'error') }
+  }
+
+  // Scholarships
+  const openScholarshipForm = (s = null) => { setScholarshipEditing(s); setScholarshipFormOpen(true) }
+  const closeScholarshipForm = () => { setScholarshipFormOpen(false); setScholarshipEditing(null) }
+  const onScholarshipSaved = async () => { closeScholarshipForm(); await refresh() }
+  const deleteScholarship = async (s) => {
+    if (!window.confirm(`Delete "${s.name}"? Linked payments will be removed.`)) return
+    const response = await fetch(`/api/finance/scholarships/${s.id}`, { method: 'DELETE' })
+    if (response.ok) { toast.push('Deleted'); await refresh() } else { toast.push('Delete failed', 'error') }
+  }
+  const openScholarshipPay = (s) => { setScholarshipPayTarget(s); setScholarshipPayOpen(true) }
+  const closeScholarshipPay = () => { setScholarshipPayOpen(false); setScholarshipPayTarget(null) }
+  const onScholarshipPaid = async () => { closeScholarshipPay(); await refresh() }
+
+  // Live prices refresh
+  const refreshAllPrices = async () => {
+    if (data.holdings.length === 0) return
+    setPricesLoading(true)
+    try {
+      const symbols = data.holdings.map((h) => ({ symbol: h.symbol, exchange: h.exchange }))
+      const response = await fetch('/api/finance/prices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ symbols }) })
+      const result = await response.json()
+      const updated = Object.keys(result.prices || {}).length
+      toast.push(`Refreshed ${updated} price${updated === 1 ? '' : 's'}${result.kite_configured ? ' via Kite' : ' via Yahoo'}`, updated ? 'success' : 'info')
+      await refresh()
+    } catch (e) { toast.push('Price fetch failed', 'error') } finally { setPricesLoading(false) }
+  }
+
   const deleteTx = async (t) => {
     if (!window.confirm('Delete this transaction? Balances will be recomputed.')) return
     const response = await fetch(`/api/finance/transactions/${t.id}`, { method: 'DELETE' })
@@ -2176,19 +2708,21 @@ function Shell({ user, onLogout }) {
     { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { key: 'transactions', label: 'Transactions', icon: BarChart3 },
     { key: 'accounts', label: 'Accounts', icon: Landmark },
+    { key: 'cards', label: 'Credit cards', icon: CreditCard },
     { key: 'investments', label: 'Investments', icon: TrendingUp },
     { key: 'loans', label: 'Loans', icon: Briefcase },
     { key: 'lend', label: 'Lend / Borrow', icon: Heart },
+    { key: 'scholarships', label: 'Scholarships', icon: ShieldCheck },
     { key: 'budgets', label: 'Budgets', icon: Target },
     { key: 'bucket', label: 'Bucket list', icon: Mountain },
     { key: 'insights', label: 'Insights', icon: LineChart },
-    { key: 'profile', label: 'Profile', icon: ShieldCheck },
+    { key: 'profile', label: 'Profile', icon: Sparkles },
   ]
   const bottomNav = [
     { key: 'dashboard', label: 'Home', icon: LayoutDashboard },
     { key: 'transactions', label: 'Ledger', icon: BarChart3 },
     { key: 'investments', label: 'Invest', icon: TrendingUp },
-    { key: 'profile', label: 'You', icon: ShieldCheck },
+    { key: 'profile', label: 'You', icon: Sparkles },
   ]
 
   return (
@@ -2242,7 +2776,9 @@ function Shell({ user, onLogout }) {
               {view === 'categories' && <CategoriesView data={data} onAdd={() => openCatForm()} onEdit={openCatForm} onDelete={deleteCategory} />}
               {view === 'categories' && <CategoriesView data={data} onAdd={() => openCatForm()} onEdit={openCatForm} onDelete={deleteCategory} />}
               {view === 'budgets' && <BudgetsView data={data} onAdd={() => openBudgetForm()} onEdit={openBudgetForm} onDelete={deleteBudget} />}
-              {view === 'investments' && <InvestmentsView data={data} onAddPortfolio={() => openPortfolioForm()} onEditPortfolio={openPortfolioForm} onDeletePortfolio={deletePortfolio} onAddHolding={openHoldingForm} onEditHolding={openHoldingEdit} onDeleteHolding={deleteHolding} onRefreshPrice={refreshHoldingPrice} onAddFunds={openFundsForm} showMoney={showMoney} />}
+              {view === 'investments' && <InvestmentsView data={data} onAddPortfolio={() => openPortfolioForm()} onEditPortfolio={openPortfolioForm} onDeletePortfolio={deletePortfolio} onAddHolding={openHoldingForm} onEditHolding={openHoldingEdit} onDeleteHolding={deleteHolding} onRefreshPrice={refreshHoldingPrice} onRefreshAll={refreshAllPrices} pricesLoading={pricesLoading} onAddFunds={openFundsForm} showMoney={showMoney} />}
+              {view === 'cards' && <CreditCardsView data={data} onAdd={() => openCardForm()} onEdit={openCardForm} onDelete={deleteCard} onSpend={openCardSpend} onPay={openCardPay} onDeleteSpend={deleteCardSpend} showMoney={showMoney} />}
+              {view === 'scholarships' && <ScholarshipsView data={data} onAdd={() => openScholarshipForm()} onEdit={openScholarshipForm} onDelete={deleteScholarship} onPay={openScholarshipPay} showMoney={showMoney} />}
               {view === 'loans' && <LoansView data={data} onAdd={() => openLoanForm()} onEdit={openLoanForm} onDelete={deleteLoan} onPay={openLoanPay} onDeletePayment={deleteLoanPayment} showMoney={showMoney} />}
               {view === 'lend' && <LendBorrowView data={data} onAdd={() => openLendForm()} onEdit={openLendForm} onDelete={deleteLend} showMoney={showMoney} />}
               {view === 'bucket' && <BucketListView data={data} onAdd={() => openBucketForm()} onEdit={openBucketForm} onDelete={deleteBucket} />}
@@ -2282,6 +2818,11 @@ function Shell({ user, onLogout }) {
       <BucketForm open={bucketFormOpen} onClose={closeBucketForm} onSaved={onBucketSaved} editing={bucketEditing} toast={toast} />
       <LendForm open={lendFormOpen} onClose={closeLendForm} onSaved={onLendSaved} editing={lendEditing} accounts={data.accounts} toast={toast} />
       <PortfolioFundsForm open={fundsFormOpen} onClose={closeFundsForm} onSaved={onFundsSaved} portfolio={fundsPortfolio} accounts={data.accounts} toast={toast} />
+      <CreditCardForm open={cardFormOpen} onClose={closeCardForm} onSaved={onCardSaved} editing={cardEditing} toast={toast} />
+      <CardSpendForm open={cardSpendOpen} onClose={closeCardSpend} onSaved={onCardSpendSaved} card={cardSpendTarget} categories={data.categories} toast={toast} />
+      <CardPayForm open={cardPayOpen} onClose={closeCardPay} onSaved={onCardPaid} card={cardPayTarget} accounts={data.accounts} toast={toast} />
+      <ScholarshipForm open={scholarshipFormOpen} onClose={closeScholarshipForm} onSaved={onScholarshipSaved} editing={scholarshipEditing} accounts={data.accounts} toast={toast} />
+      <ScholarshipPayForm open={scholarshipPayOpen} onClose={closeScholarshipPay} onSaved={onScholarshipPaid} scholarship={scholarshipPayTarget} accounts={data.accounts} toast={toast} />
     </div>
   )
 }
