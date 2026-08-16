@@ -5,9 +5,10 @@ import {
   Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend,
 } from 'recharts'
 import {
-  ArrowDownRight, ArrowLeftRight, ArrowUpRight, BarChart3, ChevronRight, CircleDollarSign, CreditCard,
-  Eye, EyeOff, Landmark, LayoutDashboard, LogOut, Menu, PiggyBank, Plus, Search, ShieldCheck, Sparkles,
-  Tag, Target, TrendingDown, TrendingUp, Wallet, X, Zap, Trash2, Pencil, LineChart, ListChecks,
+  ArrowDownRight, ArrowLeftRight, ArrowUpRight, BarChart3, Briefcase, ChevronRight, CircleDollarSign, CreditCard,
+  Eye, EyeOff, Heart, Landmark, LayoutDashboard, LineChart, ListChecks, LogOut, Menu, Mountain, PiggyBank, Plus,
+  RefreshCw, Rocket, Search, ShieldCheck, Sparkles, Star, Tag, Target, TrendingDown, TrendingUp, Trash2, Pencil,
+  Wallet, X, Zap,
 } from 'lucide-react'
 
 /* ---------------- Formatters ---------------- */
@@ -22,6 +23,14 @@ const formatDate = (d) => {
   if (!d) return ''
   const dt = new Date(d)
   return `${String(dt.getDate()).padStart(2, '0')}-${dt.toLocaleString('en-IN', { month: 'short' })}-${dt.getFullYear()}`
+}
+const formatDateTime = (d, t) => {
+  const base = formatDate(d)
+  if (!t) return base
+  const [h, m] = String(t).slice(0, 5).split(':')
+  if (!h || !m) return base
+  const hn = parseInt(h, 10); const ampm = hn >= 12 ? 'PM' : 'AM'; const h12 = ((hn + 11) % 12) + 1
+  return `${base} (${h12}:${m} ${ampm})`
 }
 const todayISO = () => new Date().toISOString().slice(0, 10)
 
@@ -165,11 +174,12 @@ function EmptyState({ icon: Icon, title, message, cta, onCta }) {
 function Skeleton({ className = '' }) { return <div className={`animate-pulse rounded-xl bg-white/5 ${className}`} /> }
 
 /* ---------------- Transaction Form ---------------- */
-function TransactionForm({ open, onClose, onSaved, editing, accounts, categories, toast }) {
+function TransactionForm({ open, onClose, onSaved, editing, accounts, categories, lendBorrow = [], onAddAccount, toast }) {
   const now = todayISO()
+  const nowTime = new Date().toTimeString().slice(0, 5)
   const initial = useMemo(() => {
-    if (editing) return { ...editing, amount: String(editing.amount), to_account_id: '' }
-    return { type: 'expense', amount: '', description: '', date: now, account_id: accounts[0]?.id || '', to_account_id: '', category_id: '', notes: '' }
+    if (editing) return { ...editing, amount: String(editing.amount), time: editing.time?.slice(0, 5) || nowTime, to_account_id: '' }
+    return { type: 'expense', amount: '', description: '', date: now, time: nowTime, account_id: accounts[0]?.id || '', to_account_id: '', category_id: '', notes: '', linked_module: '', linked_module_id: '' }
   }, [editing, open])
   const [form, setForm] = useState(initial)
   const [busy, setBusy] = useState(false)
@@ -177,6 +187,7 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
 
   if (!open) return null
   const catsForType = categories.filter((c) => c.type === (form.type === 'income' ? 'income' : 'expense'))
+  const openLends = lendBorrow.filter((l) => l.type === 'lent' && l.status !== 'returned')
 
   const save = async (event) => {
     event.preventDefault(); setBusy(true)
@@ -184,6 +195,7 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
       const endpoint = editing ? `/api/finance/transactions/${editing.id}` : '/api/finance/transactions'
       const payload = { ...form, amount: Number(form.amount) }
       if (payload.type !== 'transfer') delete payload.to_account_id
+      if (!payload.linked_module_id) { delete payload.linked_module; delete payload.linked_module_id }
       const response = await fetch(endpoint, { method: editing ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || data.message || 'Could not save')
@@ -205,20 +217,32 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
 
         <div className="mt-5 grid grid-cols-3 gap-2">
           {[{ v: 'expense', l: 'Expense', c: 'bg-rose-400/15 text-rose-200 border-rose-400/30' }, { v: 'income', l: 'Income', c: 'bg-emerald-400/15 text-emerald-200 border-emerald-400/30' }, { v: 'transfer', l: 'Transfer', c: 'bg-cyan-400/15 text-cyan-200 border-cyan-400/30' }].map((t) => (
-            <button key={t.v} type="button" onClick={() => setForm({ ...form, type: t.v, category_id: t.v === 'transfer' ? '' : (categories.find((c) => c.type === (t.v === 'income' ? 'income' : 'expense'))?.id || '') })} className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${form.type === t.v ? t.c : 'border-white/10 text-slate-400 hover:bg-white/5'}`}>{t.l}</button>
+            <button key={t.v} type="button" onClick={() => setForm({ ...form, type: t.v, category_id: t.v === 'transfer' ? '' : (categories.find((c) => c.type === (t.v === 'income' ? 'income' : 'expense'))?.id || ''), linked_module: '', linked_module_id: '' })} className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${form.type === t.v ? t.c : 'border-white/10 text-slate-400 hover:bg-white/5'}`}>{t.l}</button>
           ))}
         </div>
+
+        {accounts.length === 0 && (
+          <div className="mt-5 rounded-xl border border-amber-300/25 bg-amber-300/5 px-4 py-3 text-sm text-amber-200">
+            <div className="flex items-center gap-2"><Landmark size={14} /> You don&apos;t have any accounts yet.</div>
+            <button type="button" onClick={onAddAccount} className="mt-2 rounded-lg bg-amber-300/20 px-3 py-1.5 text-xs font-semibold text-amber-100 hover:bg-amber-300/30">+ Add your first account</button>
+          </div>
+        )}
 
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
           <label className="text-sm text-slate-300">Amount
             <input required min="0.01" step="0.01" type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="0.00" />
           </label>
-          <label className="text-sm text-slate-300">Date
-            <input required type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
-          </label>
+          <div className="grid grid-cols-[1fr_auto] gap-2">
+            <label className="text-sm text-slate-300">Date
+              <input required type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
+            </label>
+            <label className="text-sm text-slate-300">Time
+              <input type="time" value={form.time || ''} onChange={(e) => setForm({ ...form, time: e.target.value })} className="mt-2 w-[110px] rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
+            </label>
+          </div>
 
           <label className="text-sm text-slate-300">{form.type === 'transfer' ? 'From account' : 'Account'}
-            <select required value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none focus:border-cyan-300/50">
+            <select required={accounts.length > 0} value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none focus:border-cyan-300/50">
               <option value="">Choose account…</option>
               {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
@@ -240,15 +264,25 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
             </label>
           )}
 
+          {form.type === 'income' && openLends.length > 0 && (
+            <label className="text-sm text-slate-300 sm:col-span-2">Repayment from
+              <select value={form.linked_module === 'lend' ? form.linked_module_id : ''} onChange={(e) => setForm({ ...form, linked_module: e.target.value ? 'lend' : '', linked_module_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none focus:border-cyan-300/50">
+                <option value="">— Not linked —</option>
+                {openLends.map((l) => <option key={l.id} value={l.id}>{l.person_name} · pending {money(Number(l.amount) - Number(l.amount_repaid))}</option>)}
+              </select>
+              <div className="mt-1 text-[11px] text-slate-500">Selecting a person will auto-mark the loan as partially/fully repaid.</div>
+            </label>
+          )}
+
           <label className="text-sm text-slate-300 sm:col-span-2">Description
-            <input required value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder={form.type === 'income' ? 'e.g. Salary credit' : form.type === 'transfer' ? 'e.g. Moved to savings' : 'e.g. Groceries at BigBazaar'} />
+            <input required value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder={form.type === 'income' ? 'e.g. Salary, stipend, refund' : form.type === 'transfer' ? 'e.g. Moved to savings' : 'e.g. Groceries at BigBazaar'} />
           </label>
           <label className="text-sm text-slate-300 sm:col-span-2">Notes
             <input value={form.notes || ''} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="Optional context" />
           </label>
         </div>
 
-        <button disabled={busy} className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">
+        <button disabled={busy || accounts.length === 0} className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">
           {busy ? 'Saving…' : editing ? 'Update transaction' : 'Save transaction'} <ChevronRight size={16} />
         </button>
       </form>
@@ -608,10 +642,927 @@ function BudgetsView({ data, onAdd, onEdit, onDelete }) {
   )
 }
 
+/* ---------------- Portfolio Form ---------------- */
+function PortfolioForm({ open, onClose, onSaved, editing, accounts, toast }) {
+  const initial = editing ? { ...editing } : { name: '', broker: 'other', demat_account_id: '' }
+  const [form, setForm] = useState(initial)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => { setForm(initial) }, [editing, open])
+  if (!open) return null
+  const save = async (e) => {
+    e.preventDefault(); setBusy(true)
+    try {
+      const endpoint = editing ? `/api/finance/portfolios/${editing.id}` : '/api/finance/portfolios'
+      const payload = { ...form, demat_account_id: form.demat_account_id || null }
+      const response = await fetch(endpoint, { method: editing ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || data.message || 'Could not save')
+      toast.push(editing ? 'Portfolio updated' : 'Portfolio added'); onSaved()
+    } catch (err) { toast.push(err.message, 'error') } finally { setBusy(false) }
+  }
+  return (
+    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center" onClick={onClose}>
+      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-3xl border border-white/10 bg-[#141a28] p-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-white">{editing ? 'Edit portfolio' : 'Add portfolio'}</h2>
+          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-white/5"><X size={18} /></button>
+        </div>
+        <div className="mt-5 grid gap-4">
+          <label className="text-sm text-slate-300">Name
+            <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="Zerodha Demat A" />
+          </label>
+          <label className="text-sm text-slate-300">Broker
+            <select value={form.broker} onChange={(e) => setForm({ ...form, broker: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
+              <option value="zerodha">Zerodha</option><option value="angel_one">Angel One</option><option value="other">Other</option>
+            </select>
+          </label>
+          <label className="text-sm text-slate-300">Linked account (optional)
+            <select value={form.demat_account_id || ''} onChange={(e) => setForm({ ...form, demat_account_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
+              <option value="">None</option>
+              {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+          </label>
+        </div>
+        <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : editing ? 'Update' : 'Save portfolio'}</button>
+      </form>
+    </div>
+  )
+}
+
+/* ---------------- Holding Form ---------------- */
+function HoldingForm({ open, onClose, onSaved, editing, portfolios, defaultPortfolioId, toast }) {
+  const initial = editing
+    ? { ...editing, qty: String(editing.qty), avg_buy_price: String(editing.avg_buy_price), current_price: String(editing.current_price) }
+    : { portfolio_id: defaultPortfolioId || portfolios[0]?.id || '', symbol: '', exchange: 'NSE', company_name: '', qty: '', avg_buy_price: '', current_price: '' }
+  const [form, setForm] = useState(initial)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => { setForm(initial) }, [editing, open, defaultPortfolioId])
+  if (!open) return null
+  const save = async (e) => {
+    e.preventDefault(); setBusy(true)
+    try {
+      const endpoint = editing ? `/api/finance/holdings/${editing.id}` : '/api/finance/holdings'
+      const payload = { ...form, symbol: form.symbol.toUpperCase(), qty: Number(form.qty), avg_buy_price: Number(form.avg_buy_price), current_price: Number(form.current_price || form.avg_buy_price), last_price_updated_at: new Date().toISOString() }
+      const response = await fetch(endpoint, { method: editing ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || data.message || 'Could not save')
+      toast.push(editing ? 'Holding updated' : 'Holding added'); onSaved()
+    } catch (err) { toast.push(err.message, 'error') } finally { setBusy(false) }
+  }
+  return (
+    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center" onClick={onClose}>
+      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-xl rounded-3xl border border-white/10 bg-[#141a28] p-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-white">{editing ? 'Edit holding' : 'Add holding'}</h2>
+          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-white/5"><X size={18} /></button>
+        </div>
+        <div className="mt-5 grid gap-4 sm:grid-cols-2">
+          <label className="text-sm text-slate-300 sm:col-span-2">Portfolio
+            <select required value={form.portfolio_id} onChange={(e) => setForm({ ...form, portfolio_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
+              <option value="">Choose portfolio…</option>
+              {portfolios.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </label>
+          <label className="text-sm text-slate-300">Symbol
+            <input required value={form.symbol} onChange={(e) => setForm({ ...form, symbol: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 uppercase text-white outline-none focus:border-cyan-300/50" placeholder="RELIANCE" />
+          </label>
+          <label className="text-sm text-slate-300">Exchange
+            <select value={form.exchange} onChange={(e) => setForm({ ...form, exchange: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
+              <option value="NSE">NSE</option><option value="BSE">BSE</option>
+            </select>
+          </label>
+          <label className="text-sm text-slate-300 sm:col-span-2">Company name
+            <input value={form.company_name || ''} onChange={(e) => setForm({ ...form, company_name: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="Reliance Industries" />
+          </label>
+          <label className="text-sm text-slate-300">Quantity
+            <input required type="number" step="0.0001" min="0" value={form.qty} onChange={(e) => setForm({ ...form, qty: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
+          </label>
+          <label className="text-sm text-slate-300">Avg buy price
+            <input required type="number" step="0.01" min="0" value={form.avg_buy_price} onChange={(e) => setForm({ ...form, avg_buy_price: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
+          </label>
+          <label className="text-sm text-slate-300 sm:col-span-2">Current price <span className="text-xs text-slate-500">(manual — Kite live prices coming soon)</span>
+            <input type="number" step="0.01" min="0" value={form.current_price} onChange={(e) => setForm({ ...form, current_price: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="Same as avg if blank" />
+          </label>
+        </div>
+        <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : editing ? 'Update holding' : 'Save holding'}</button>
+      </form>
+    </div>
+  )
+}
+
+/* ---------------- Investments View ---------------- */
+function InvestmentsView({ data, onAddPortfolio, onAddHolding, onEditPortfolio, onEditHolding, onDeletePortfolio, onDeleteHolding, onRefreshPrice, onAddFunds, showMoney }) {
+  const { portfolios, holdings } = data
+  const holdingsByPortfolio = (id) => holdings.filter((h) => h.portfolio_id === id)
+  const totalInvested = holdings.reduce((s, h) => s + Number(h.qty) * Number(h.avg_buy_price), 0)
+  const totalCurrent = holdings.reduce((s, h) => s + Number(h.qty) * Number(h.current_price || h.avg_buy_price), 0)
+  const totalPnl = totalCurrent - totalInvested
+  const totalPnlPct = totalInvested > 0 ? (totalPnl / totalInvested) * 100 : 0
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-end justify-between">
+        <div>
+          <div className="mb-2 text-xs uppercase tracking-widest text-cyan-200/70">Wealth builders</div>
+          <h1 className="text-3xl font-semibold tracking-tight text-white">Investments</h1>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={onAddPortfolio} className="rounded-xl border border-white/10 px-4 py-2.5 text-sm text-slate-300 hover:bg-white/5">New portfolio</button>
+          <button onClick={() => onAddHolding()} className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 px-4 py-2.5 text-sm font-semibold text-[#07101c]"><Plus size={15} />Add holding</button>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-cyan-500/5 via-transparent to-violet-500/5 p-5">
+        <div className="grid gap-6 sm:grid-cols-3">
+          <div>
+            <div className="text-xs text-slate-400">Invested value</div>
+            <div className="mt-2 text-2xl font-semibold tracking-tight text-white">{showMoney ? money(totalInvested) : '••••••'}</div>
+          </div>
+          <div>
+            <div className="text-xs text-slate-400">Current value</div>
+            <div className="mt-2 text-2xl font-semibold tracking-tight text-white">{showMoney ? money(totalCurrent) : '••••••'}</div>
+          </div>
+          <div>
+            <div className="text-xs text-slate-400">Overall P&amp;L</div>
+            <div className={`mt-2 flex items-baseline gap-2 text-2xl font-semibold tracking-tight ${totalPnl >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+              {showMoney ? (totalPnl >= 0 ? '+' : '−') + money(totalPnl).replace('-', '') : '••••'}
+              <span className="text-xs">({totalPnl >= 0 ? '+' : ''}{totalPnlPct.toFixed(2)}%)</span>
+            </div>
+          </div>
+        </div>
+        <div className="mt-4 flex items-center gap-2 rounded-xl border border-amber-300/20 bg-amber-300/5 px-4 py-2.5 text-xs text-amber-200">
+          <Sparkles size={13} /> Add <code className="rounded bg-white/10 px-1.5 py-0.5">KITE_API_KEY</code> in .env for live prices. Manual entry works meanwhile.
+        </div>
+      </div>
+
+      {portfolios.length === 0 ? (
+        <div className="rounded-2xl border border-white/10 bg-white/[.035]">
+          <EmptyState icon={TrendingUp} title="No portfolios yet" message="Create a portfolio like ‘Zerodha Demat A’ to group your holdings." cta="Create portfolio" onCta={onAddPortfolio} />
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {portfolios.map((p) => {
+            const items = holdingsByPortfolio(p.id)
+            const invested = items.reduce((s, h) => s + Number(h.qty) * Number(h.avg_buy_price), 0)
+            const current = items.reduce((s, h) => s + Number(h.qty) * Number(h.current_price || h.avg_buy_price), 0)
+            const pnl = current - invested
+            const pct = invested > 0 ? (pnl / invested) * 100 : 0
+            return (
+              <div key={p.id} className="rounded-2xl border border-white/10 bg-white/[.035]">
+                <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
+                  <div>
+                    <div className="text-sm font-semibold text-white">{p.name}</div>
+                    <div className="text-xs capitalize text-slate-500">{p.broker.replace('_', ' ')} · {items.length} holding{items.length === 1 ? '' : 's'} · Cash {money(p.cash_balance || 0)}</div>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="text-right">
+                      <div className="text-xs text-slate-500">Value</div>
+                      <div className="text-sm font-semibold text-white">{showMoney ? money(current + Number(p.cash_balance || 0)) : '••••'}</div>
+                    </div>
+                    <div className={`text-right ${pnl >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                      <div className="text-xs opacity-70">P&amp;L</div>
+                      <div className="text-sm font-semibold">{showMoney ? (pnl >= 0 ? '+' : '−') + money(pnl).replace('-', '') : '••••'} <span className="text-[10px]">({pct.toFixed(1)}%)</span></div>
+                    </div>
+                    <button onClick={() => onAddFunds(p)} className="rounded-lg bg-emerald-400/15 px-3 py-1.5 text-xs font-semibold text-emerald-200 hover:bg-emerald-400/25">+ Funds</button>
+                    <button onClick={() => onAddHolding(p.id)} className="rounded-lg bg-white/10 px-3 py-1.5 text-xs text-white hover:bg-white/15">+ Holding</button>
+                    <button onClick={() => onEditPortfolio(p)} className="rounded-lg p-1.5 text-slate-500 hover:bg-white/5 hover:text-white"><Pencil size={14} /></button>
+                    <button onClick={() => onDeletePortfolio(p)} className="rounded-lg p-1.5 text-rose-300/70 hover:bg-rose-300/10"><Trash2 size={14} /></button>
+                  </div>
+                </div>
+                {items.length === 0 ? (
+                  <div className="p-10 text-center text-sm text-slate-500">No holdings in this portfolio yet.</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-white/[.02] text-[10px] uppercase tracking-widest text-slate-500">
+                        <tr>
+                          <th className="px-5 py-3 text-left">Symbol</th>
+                          <th className="px-3 py-3 text-right">Qty</th>
+                          <th className="px-3 py-3 text-right">Avg Buy</th>
+                          <th className="px-3 py-3 text-right">LTP</th>
+                          <th className="px-3 py-3 text-right">Value</th>
+                          <th className="px-3 py-3 text-right">P&amp;L</th>
+                          <th className="px-3 py-3 text-right">%</th>
+                          <th className="px-5 py-3" />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {items.map((h) => {
+                          const inv = Number(h.qty) * Number(h.avg_buy_price)
+                          const cur = Number(h.qty) * Number(h.current_price || h.avg_buy_price)
+                          const p = cur - inv
+                          const pp = inv > 0 ? (p / inv) * 100 : 0
+                          return (
+                            <tr key={h.id} className="border-t border-white/5 text-slate-300">
+                              <td className="px-5 py-3">
+                                <div className="text-sm font-semibold text-white">{h.symbol}</div>
+                                <div className="text-[11px] text-slate-500">{h.exchange}{h.company_name ? ` · ${h.company_name}` : ''}</div>
+                              </td>
+                              <td className="px-3 py-3 text-right">{Number(h.qty)}</td>
+                              <td className="px-3 py-3 text-right">{money2(h.avg_buy_price)}</td>
+                              <td className="px-3 py-3 text-right">
+                                <button onClick={() => onRefreshPrice(h)} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-slate-300 hover:bg-white/5">
+                                  {money2(h.current_price || h.avg_buy_price)} <RefreshCw size={11} className="text-slate-500" />
+                                </button>
+                              </td>
+                              <td className="px-3 py-3 text-right text-white">{showMoney ? money(cur) : '••••'}</td>
+                              <td className={`px-3 py-3 text-right font-semibold ${p >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>{showMoney ? (p >= 0 ? '+' : '−') + money(p).replace('-', '') : '••••'}</td>
+                              <td className={`px-3 py-3 text-right ${p >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>{pp >= 0 ? '+' : ''}{pp.toFixed(2)}%</td>
+                              <td className="px-5 py-3">
+                                <div className="flex justify-end gap-1">
+                                  <button onClick={() => onEditHolding(h)} className="rounded-lg p-1.5 text-slate-500 hover:bg-white/5 hover:text-white"><Pencil size={14} /></button>
+                                  <button onClick={() => onDeleteHolding(h)} className="rounded-lg p-1.5 text-rose-300/70 hover:bg-rose-300/10"><Trash2 size={14} /></button>
+                                </div>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ---------------- Loan Form ---------------- */
+function LoanForm({ open, onClose, onSaved, editing, accounts, toast }) {
+  const initial = editing
+    ? { ...editing, principal: String(editing.principal), interest_rate: String(editing.interest_rate), tenure_months: String(editing.tenure_months), emi_amount: String(editing.emi_amount) }
+    : { name: '', lender: '', principal: '', interest_rate: '', tenure_months: '', emi_amount: '', start_date: todayISO(), paid_from_account_id: accounts[0]?.id || '' }
+  const [form, setForm] = useState(initial)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => { setForm(initial) }, [editing, open])
+  if (!open) return null
+
+  // Auto-calc EMI if principal/rate/tenure known and emi is empty
+  const suggestEmi = () => {
+    const P = Number(form.principal), r = Number(form.interest_rate) / 12 / 100, n = Number(form.tenure_months)
+    if (P > 0 && r >= 0 && n > 0) {
+      const emi = r === 0 ? P / n : (P * r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1)
+      setForm({ ...form, emi_amount: emi.toFixed(2) })
+    }
+  }
+
+  const save = async (e) => {
+    e.preventDefault(); setBusy(true)
+    try {
+      const endpoint = editing ? `/api/finance/loans/${editing.id}` : '/api/finance/loans'
+      const payload = { ...form, principal: Number(form.principal), interest_rate: Number(form.interest_rate), tenure_months: Number(form.tenure_months), emi_amount: Number(form.emi_amount) }
+      const response = await fetch(endpoint, { method: editing ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || data.message || 'Could not save')
+      toast.push(editing ? 'Loan updated' : 'Loan added'); onSaved()
+    } catch (err) { toast.push(err.message, 'error') } finally { setBusy(false) }
+  }
+  return (
+    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center" onClick={onClose}>
+      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-xl rounded-3xl border border-white/10 bg-[#141a28] p-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-white">{editing ? 'Edit loan' : 'Add loan'}</h2>
+          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-white/5"><X size={18} /></button>
+        </div>
+        <div className="mt-5 grid gap-4 sm:grid-cols-2">
+          <label className="text-sm text-slate-300">Name
+            <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="Home loan" />
+          </label>
+          <label className="text-sm text-slate-300">Lender
+            <input value={form.lender || ''} onChange={(e) => setForm({ ...form, lender: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="HDFC Bank" />
+          </label>
+          <label className="text-sm text-slate-300">Principal
+            <input required type="number" step="0.01" min="0" value={form.principal} onChange={(e) => setForm({ ...form, principal: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
+          </label>
+          <label className="text-sm text-slate-300">Interest rate % p.a.
+            <input required type="number" step="0.01" min="0" value={form.interest_rate} onChange={(e) => setForm({ ...form, interest_rate: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
+          </label>
+          <label className="text-sm text-slate-300">Tenure (months)
+            <input required type="number" min="1" value={form.tenure_months} onChange={(e) => setForm({ ...form, tenure_months: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
+          </label>
+          <label className="text-sm text-slate-300">EMI amount
+            <div className="mt-2 flex gap-2">
+              <input required type="number" step="0.01" min="0" value={form.emi_amount} onChange={(e) => setForm({ ...form, emi_amount: e.target.value })} className="w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
+              <button type="button" onClick={suggestEmi} className="rounded-xl border border-white/10 px-3 text-xs text-cyan-200 hover:bg-white/5">Calc</button>
+            </div>
+          </label>
+          <label className="text-sm text-slate-300">Start date
+            <input required type="date" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
+          </label>
+          <label className="text-sm text-slate-300">Pay from account
+            <select value={form.paid_from_account_id || ''} onChange={(e) => setForm({ ...form, paid_from_account_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
+              <option value="">None</option>
+              {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+          </label>
+        </div>
+        <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : editing ? 'Update loan' : 'Save loan'}</button>
+      </form>
+    </div>
+  )
+}
+
+/* ---------------- Loan Payment Form ---------------- */
+function LoanPaymentForm({ open, onClose, onSaved, loan, accounts, toast }) {
+  const initial = { amount: '', type: 'emi', payment_date: todayISO(), account_id: loan?.paid_from_account_id || accounts[0]?.id || '', notes: '' }
+  const [form, setForm] = useState(initial)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => { setForm({ ...initial, amount: loan?.emi_amount ? String(loan.emi_amount) : '', account_id: loan?.paid_from_account_id || accounts[0]?.id || '' }) }, [loan, open, accounts])
+  if (!open || !loan) return null
+
+  const save = async (e) => {
+    e.preventDefault(); setBusy(true)
+    try {
+      const response = await fetch('/api/finance/loan_payments', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ loan_id: loan.id, ...form, amount: Number(form.amount) }) })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || data.message || 'Could not save')
+      const msg = data.interest_saved > 0 ? `Payment logged · Interest saved ${money(data.interest_saved)}` : 'Payment logged'
+      toast.push(msg)
+      onSaved()
+    } catch (err) { toast.push(err.message, 'error') } finally { setBusy(false) }
+  }
+  return (
+    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center" onClick={onClose}>
+      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-3xl border border-white/10 bg-[#141a28] p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-white">Log payment</h2>
+            <p className="mt-1 text-xs text-slate-500">{loan.name} · outstanding {money(loan.outstanding)}</p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-white/5"><X size={18} /></button>
+        </div>
+        <div className="mt-5 grid gap-4">
+          <div className="grid grid-cols-2 gap-2">
+            {[{ v: 'emi', l: 'EMI' }, { v: 'prepayment', l: 'Prepayment' }].map((t) => (
+              <button key={t.v} type="button" onClick={() => setForm({ ...form, type: t.v })} className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${form.type === t.v ? 'border-cyan-400/30 bg-cyan-400/15 text-cyan-200' : 'border-white/10 text-slate-400 hover:bg-white/5'}`}>{t.l}</button>
+            ))}
+          </div>
+          <label className="text-sm text-slate-300">Amount
+            <input required type="number" step="0.01" min="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
+          </label>
+          <label className="text-sm text-slate-300">Payment date
+            <input required type="date" value={form.payment_date} onChange={(e) => setForm({ ...form, payment_date: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
+          </label>
+          <label className="text-sm text-slate-300">Pay from account
+            <select required value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
+              <option value="">Choose account…</option>
+              {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+          </label>
+          <label className="text-sm text-slate-300">Notes
+            <input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="Optional" />
+          </label>
+        </div>
+        <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : 'Log payment'}</button>
+      </form>
+    </div>
+  )
+}
+
+/* ---------------- Loans View ---------------- */
+function LoansView({ data, onAdd, onEdit, onDelete, onPay, onDeletePayment, showMoney }) {
+  const { loans, loan_payments, accounts } = data
+  return (
+    <div className="space-y-5">
+      <div className="flex items-end justify-between">
+        <div>
+          <div className="mb-2 text-xs uppercase tracking-widest text-cyan-200/70">Debt clarity</div>
+          <h1 className="text-3xl font-semibold tracking-tight text-white">Loans</h1>
+        </div>
+        <button onClick={onAdd} className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 px-4 py-2.5 text-sm font-semibold text-[#07101c]"><Plus size={15} />Add loan</button>
+      </div>
+      {loans.length === 0 ? (
+        <div className="rounded-2xl border border-white/10 bg-white/[.035]">
+          <EmptyState icon={Landmark} title="No loans yet" message="Log home, car or personal loans and track EMIs + prepayments." cta="Add loan" onCta={onAdd} />
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {loans.map((loan) => {
+            const payments = loan_payments.filter((p) => p.loan_id === loan.id)
+            const totalPaid = payments.reduce((s, p) => s + Number(p.amount || 0), 0)
+            const principal = Number(loan.principal || 0)
+            const outstanding = Number(loan.outstanding || 0)
+            const cleared = principal > 0 ? Math.min(100, Math.round(((principal - outstanding) / principal) * 100)) : 0
+            const account = accounts.find((a) => a.id === loan.paid_from_account_id)
+            return (
+              <div key={loan.id} className="rounded-2xl border border-white/10 bg-white/[.035]">
+                <div className="grid gap-5 border-b border-white/10 px-5 py-5 sm:grid-cols-[1.4fr_1fr_1fr_auto]">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <div className="text-base font-semibold text-white">{loan.name}</div>
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-widest ${loan.status === 'closed' ? 'bg-emerald-400/15 text-emerald-200' : 'bg-cyan-400/15 text-cyan-200'}`}>{loan.status}</span>
+                    </div>
+                    <div className="mt-1 text-xs text-slate-500">{loan.lender || 'Lender'} · EMI {money(loan.emi_amount)} · {loan.interest_rate}% p.a. · {loan.tenure_months} mo</div>
+                    {account && <div className="mt-1 text-[11px] text-slate-500">Paying from {account.name}</div>}
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500">Outstanding</div>
+                    <div className="text-xl font-semibold text-white">{showMoney ? money(outstanding) : '••••'}</div>
+                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/5">
+                      <div className="h-full rounded-full bg-emerald-400" style={{ width: `${cleared}%` }} />
+                    </div>
+                    <div className="mt-1 text-[11px] text-emerald-300">{cleared}% cleared</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500">Total paid</div>
+                    <div className="text-xl font-semibold text-white">{showMoney ? money(totalPaid) : '••••'}</div>
+                    {Number(loan.interest_saved || 0) > 0 && <div className="mt-2 text-[11px] text-emerald-300">Interest saved {money(loan.interest_saved)}</div>}
+                  </div>
+                  <div className="flex flex-col gap-2 self-start">
+                    <button onClick={() => onPay(loan)} disabled={loan.status === 'closed'} className="rounded-lg bg-gradient-to-r from-cyan-300 to-blue-500 px-3 py-2 text-xs font-semibold text-[#07101c] disabled:opacity-50">Log payment</button>
+                    <div className="flex gap-1">
+                      <button onClick={() => onEdit(loan)} className="rounded-lg border border-white/10 p-2 text-slate-500 hover:bg-white/5 hover:text-white"><Pencil size={13} /></button>
+                      <button onClick={() => onDelete(loan)} className="rounded-lg border border-white/10 p-2 text-rose-300/70 hover:bg-rose-300/10"><Trash2 size={13} /></button>
+                    </div>
+                  </div>
+                </div>
+                {payments.length > 0 && (
+                  <div className="divide-y divide-white/5">
+                    {payments.slice(0, 5).map((p) => {
+                      const acc = accounts.find((a) => a.id === p.account_id)
+                      return (
+                        <div key={p.id} className="grid grid-cols-[1fr_1fr_1fr_auto] items-center gap-3 px-5 py-3 text-sm">
+                          <div className="capitalize text-slate-300">{p.type === 'emi' ? 'EMI' : 'Prepayment'}</div>
+                          <div className="text-slate-500">{formatDate(p.payment_date)}{acc ? ` · ${acc.name}` : ''}</div>
+                          <div className="text-right font-medium text-white">{showMoney ? money(p.amount) : '••••'}</div>
+                          <button onClick={() => onDeletePayment(p)} className="rounded-lg p-1.5 text-rose-300/70 hover:bg-rose-300/10"><Trash2 size={13} /></button>
+                        </div>
+                      )
+                    })}
+                    {payments.length > 5 && <div className="px-5 py-2 text-xs text-slate-500">+ {payments.length - 5} more payments</div>}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ---------------- Bucket List Form ---------------- */
+function BucketForm({ open, onClose, onSaved, editing, toast }) {
+  const initial = editing ? { ...editing, estimated_cost: String(editing.estimated_cost) } : { title: '', estimated_cost: '', priority: 'medium', target_date: '', status: 'wishlist', notes: '' }
+  const [form, setForm] = useState(initial)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => { setForm(initial) }, [editing, open])
+  if (!open) return null
+  const save = async (e) => {
+    e.preventDefault(); setBusy(true)
+    try {
+      const endpoint = editing ? `/api/finance/bucket_list/${editing.id}` : '/api/finance/bucket_list'
+      const payload = { ...form, estimated_cost: Number(form.estimated_cost), target_date: form.target_date || null }
+      const response = await fetch(endpoint, { method: editing ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || data.message || 'Could not save')
+      toast.push(editing ? 'Updated' : 'Added to bucket list'); onSaved()
+    } catch (err) { toast.push(err.message, 'error') } finally { setBusy(false) }
+  }
+  return (
+    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center" onClick={onClose}>
+      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-3xl border border-white/10 bg-[#141a28] p-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-white">{editing ? 'Edit dream' : 'Add to bucket list'}</h2>
+          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-white/5"><X size={18} /></button>
+        </div>
+        <div className="mt-5 grid gap-4">
+          <label className="text-sm text-slate-300">Title
+            <input required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="Trip to Iceland" />
+          </label>
+          <label className="text-sm text-slate-300">Estimated cost
+            <input required type="number" step="0.01" min="0" value={form.estimated_cost} onChange={(e) => setForm({ ...form, estimated_cost: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="250000" />
+          </label>
+          <div className="grid grid-cols-4 gap-2">
+            {[{ v: 'low', l: 'Low' }, { v: 'medium', l: 'Medium' }, { v: 'high', l: 'High' }, { v: 'dream', l: 'Dream' }].map((p) => (
+              <button key={p.v} type="button" onClick={() => setForm({ ...form, priority: p.v })} className={`rounded-xl border px-2 py-2 text-xs font-medium transition ${form.priority === p.v ? 'border-cyan-400/30 bg-cyan-400/15 text-cyan-200' : 'border-white/10 text-slate-400 hover:bg-white/5'}`}>{p.l}</button>
+            ))}
+          </div>
+          <label className="text-sm text-slate-300">Target date
+            <input type="date" value={form.target_date || ''} onChange={(e) => setForm({ ...form, target_date: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
+          </label>
+          <label className="text-sm text-slate-300">Status
+            <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
+              <option value="wishlist">Wishlist</option><option value="saving">Saving</option><option value="achieved">Achieved</option>
+            </select>
+          </label>
+          <label className="text-sm text-slate-300">Notes
+            <input value={form.notes || ''} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="Why this matters" />
+          </label>
+        </div>
+        <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : editing ? 'Update' : 'Add to list'}</button>
+      </form>
+    </div>
+  )
+}
+
+/* ---------------- Bucket List View ---------------- */
+function BucketListView({ data, onAdd, onEdit, onDelete }) {
+  const { bucket_list, transactions } = data
+  // avg monthly savings from last 6 months
+  const now = new Date()
+  const months = new Set()
+  let incomeTotal = 0, expenseTotal = 0
+  for (let i = 0; i < 6; i++) { const d = new Date(now.getFullYear(), now.getMonth() - i, 1); months.add(`${d.getFullYear()}-${d.getMonth()}`) }
+  transactions.forEach((t) => {
+    if (t.type === 'transfer') return
+    const d = new Date(t.date); const key = `${d.getFullYear()}-${d.getMonth()}`
+    if (!months.has(key)) return
+    if (t.type === 'income') incomeTotal += Number(t.amount || 0)
+    if (t.type === 'expense') expenseTotal += Number(t.amount || 0)
+  })
+  const avgMonthlySavings = Math.max(0, (incomeTotal - expenseTotal) / months.size)
+
+  const priorityMeta = {
+    dream: { c: 'bg-violet-400/15 text-violet-200 border-violet-400/30', i: Star },
+    high: { c: 'bg-rose-400/15 text-rose-200 border-rose-400/30', i: Rocket },
+    medium: { c: 'bg-cyan-400/15 text-cyan-200 border-cyan-400/30', i: Target },
+    low: { c: 'bg-slate-400/15 text-slate-300 border-slate-400/30', i: Heart },
+  }
+  const statusMeta = {
+    wishlist: 'bg-slate-500/15 text-slate-300',
+    saving: 'bg-cyan-400/15 text-cyan-200',
+    achieved: 'bg-emerald-400/15 text-emerald-200',
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-end justify-between">
+        <div>
+          <div className="mb-2 text-xs uppercase tracking-widest text-cyan-200/70">Dreams with a plan</div>
+          <h1 className="text-3xl font-semibold tracking-tight text-white">Bucket list</h1>
+        </div>
+        <button onClick={onAdd} className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 px-4 py-2.5 text-sm font-semibold text-[#07101c]"><Plus size={15} />Add</button>
+      </div>
+
+      <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-cyan-500/5 to-transparent p-5">
+        <div className="flex items-center gap-3 text-sm">
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-cyan-300/15 text-cyan-200"><PiggyBank size={18} /></div>
+          <div>
+            <div className="text-white">Avg monthly savings (last 6 months)</div>
+            <div className="text-xs text-slate-500">Used to estimate months-to-goal for each dream</div>
+          </div>
+          <div className="ml-auto text-right">
+            <div className="text-xl font-semibold text-white">{money(avgMonthlySavings)}</div>
+            <div className="text-[11px] text-slate-500">per month</div>
+          </div>
+        </div>
+      </div>
+
+      {bucket_list.length === 0 ? (
+        <div className="rounded-2xl border border-white/10 bg-white/[.035]">
+          <EmptyState icon={Mountain} title="Your list is empty" message="Add the dreams you're building towards — trip, gadget, business, home." cta="Add first dream" onCta={onAdd} />
+        </div>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {bucket_list.map((b) => {
+            const meta = priorityMeta[b.priority] || priorityMeta.medium
+            const cost = Number(b.estimated_cost || 0)
+            const months = avgMonthlySavings > 0 ? Math.ceil(cost / avgMonthlySavings) : null
+            const years = months ? Math.floor(months / 12) : null
+            const monthsRem = months ? months % 12 : null
+            const timeLabel = months == null ? 'Log income first to estimate' : years > 0 ? `${years}y ${monthsRem}m at current pace` : `${months} month${months === 1 ? '' : 's'} at current pace`
+            return (
+              <div key={b.id} className="group rounded-2xl border border-white/10 bg-white/[.035] p-5">
+                <div className="flex items-start justify-between">
+                  <div className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-widest ${meta.c}`}>
+                    <meta.i size={11} /> {b.priority}
+                  </div>
+                  <div className="flex gap-1 opacity-0 transition group-hover:opacity-100">
+                    <button onClick={() => onEdit(b)} className="rounded-lg p-1.5 text-slate-500 hover:bg-white/5 hover:text-white"><Pencil size={14} /></button>
+                    <button onClick={() => onDelete(b)} className="rounded-lg p-1.5 text-rose-300/70 hover:bg-rose-300/10"><Trash2 size={14} /></button>
+                  </div>
+                </div>
+                <div className="mt-4 text-lg font-semibold text-white">{b.title}</div>
+                <div className="mt-1 text-2xl font-semibold tracking-tight text-white">{money(cost)}</div>
+                <div className="mt-3 flex items-center justify-between">
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-widest ${statusMeta[b.status]}`}>{b.status}</span>
+                  {b.target_date && <span className="text-[11px] text-slate-500">by {formatDate(b.target_date)}</span>}
+                </div>
+                <div className="mt-4 rounded-xl bg-black/20 px-3 py-2 text-xs text-slate-300">
+                  <div className="flex items-center gap-2"><Rocket size={13} className="text-cyan-300" />{timeLabel}</div>
+                </div>
+                {b.notes && <div className="mt-2 text-[11px] text-slate-500">{b.notes}</div>}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ---------------- Add Portfolio Funds ---------------- */
+function PortfolioFundsForm({ open, onClose, onSaved, portfolio, accounts, toast }) {
+  const [form, setForm] = useState({ amount: '', account_id: accounts[0]?.id || '', notes: '' })
+  const [busy, setBusy] = useState(false)
+  useEffect(() => { if (open) setForm({ amount: '', account_id: accounts[0]?.id || '', notes: '' }) }, [open, accounts])
+  if (!open || !portfolio) return null
+  const save = async (e) => {
+    e.preventDefault(); setBusy(true)
+    try {
+      const response = await fetch(`/api/finance/portfolios/${portfolio.id}/add_funds`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, amount: Number(form.amount) }) })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Could not add funds')
+      toast.push('Funds added to ' + portfolio.name); onSaved()
+    } catch (err) { toast.push(err.message, 'error') } finally { setBusy(false) }
+  }
+  return (
+    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center" onClick={onClose}>
+      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-3xl border border-white/10 bg-[#141a28] p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-white">Add funds</h2>
+            <p className="mt-1 text-xs text-slate-500">{portfolio.name} · current cash {money(portfolio.cash_balance || 0)}</p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-white/5"><X size={18} /></button>
+        </div>
+        <div className="mt-5 grid gap-4">
+          <label className="text-sm text-slate-300">Amount
+            <input required type="number" step="0.01" min="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="1000" />
+          </label>
+          <label className="text-sm text-slate-300">From account
+            <select required value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
+              <option value="">Choose account…</option>
+              {accounts.map((a) => <option key={a.id} value={a.id}>{a.name} · {money(a.current_balance)}</option>)}
+            </select>
+          </label>
+          <label className="text-sm text-slate-300">Notes
+            <input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="Optional" />
+          </label>
+        </div>
+        <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Adding…' : 'Add funds'}</button>
+      </form>
+    </div>
+  )
+}
+
+/* ---------------- Lend / Borrow Form ---------------- */
+function LendForm({ open, onClose, onSaved, editing, accounts, toast }) {
+  const initial = editing
+    ? { ...editing, amount: String(editing.amount) }
+    : { person_name: '', type: 'lent', amount: '', date: todayISO(), due_date: '', from_account_id: accounts[0]?.id || '', reason: '', notes: '' }
+  const [form, setForm] = useState(initial)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => { setForm(initial) }, [editing, open])
+  if (!open) return null
+  const save = async (e) => {
+    e.preventDefault(); setBusy(true)
+    try {
+      const endpoint = editing ? `/api/finance/lend_borrow/${editing.id}` : '/api/finance/lend_borrow'
+      const payload = { ...form, amount: Number(form.amount), due_date: form.due_date || null }
+      const response = await fetch(endpoint, { method: editing ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || data.message || 'Could not save')
+      toast.push(editing ? 'Updated' : 'Recorded'); onSaved()
+    } catch (err) { toast.push(err.message, 'error') } finally { setBusy(false) }
+  }
+  return (
+    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center" onClick={onClose}>
+      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-xl rounded-3xl border border-white/10 bg-[#141a28] p-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-white">{editing ? 'Edit record' : 'Log lend or borrow'}</h2>
+          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-white/5"><X size={18} /></button>
+        </div>
+        <div className="mt-5 grid grid-cols-2 gap-2">
+          {[{ v: 'lent', l: 'I lent' }, { v: 'borrowed', l: 'I borrowed' }].map((t) => (
+            <button key={t.v} type="button" onClick={() => setForm({ ...form, type: t.v })} className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${form.type === t.v ? 'border-cyan-400/30 bg-cyan-400/15 text-cyan-200' : 'border-white/10 text-slate-400 hover:bg-white/5'}`}>{t.l}</button>
+          ))}
+        </div>
+        <div className="mt-5 grid gap-4 sm:grid-cols-2">
+          <label className="text-sm text-slate-300 sm:col-span-2">Person name
+            <input required value={form.person_name} onChange={(e) => setForm({ ...form, person_name: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="Rohan" />
+          </label>
+          <label className="text-sm text-slate-300">Amount
+            <input required type="number" step="0.01" min="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
+          </label>
+          <label className="text-sm text-slate-300">Date
+            <input required type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
+          </label>
+          <label className="text-sm text-slate-300">{form.type === 'lent' ? 'From account' : 'To account'}
+            <select value={form.from_account_id || ''} onChange={(e) => setForm({ ...form, from_account_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
+              <option value="">None (skip account impact)</option>
+              {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+          </label>
+          <label className="text-sm text-slate-300">Due date (optional)
+            <input type="date" value={form.due_date || ''} onChange={(e) => setForm({ ...form, due_date: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
+          </label>
+          <label className="text-sm text-slate-300 sm:col-span-2">Reason
+            <input value={form.reason || ''} onChange={(e) => setForm({ ...form, reason: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="Rent help, exam fees…" />
+          </label>
+          <label className="text-sm text-slate-300 sm:col-span-2">Notes
+            <input value={form.notes || ''} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
+          </label>
+        </div>
+        <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : editing ? 'Update' : 'Save'}</button>
+      </form>
+    </div>
+  )
+}
+
+/* ---------------- Lend / Borrow View ---------------- */
+function LendBorrowView({ data, onAdd, onEdit, onDelete, showMoney }) {
+  const { lend_borrow, lend_repayments, accounts } = data
+  const now = new Date()
+  const lent = lend_borrow.filter((l) => l.type === 'lent')
+  const borrowed = lend_borrow.filter((l) => l.type === 'borrowed')
+  const lentPending = lent.reduce((s, l) => s + Math.max(0, Number(l.amount) - Number(l.amount_repaid || 0)), 0)
+  const borrowedPending = borrowed.reduce((s, l) => s + Math.max(0, Number(l.amount) - Number(l.amount_repaid || 0)), 0)
+
+  const card = (l) => {
+    const repaid = Number(l.amount_repaid || 0)
+    const pending = Math.max(0, Number(l.amount) - repaid)
+    const pct = Number(l.amount) > 0 ? Math.min(100, Math.round((repaid / Number(l.amount)) * 100)) : 0
+    const overdue = l.due_date && l.status !== 'returned' && new Date(l.due_date) < now
+    const acc = accounts.find((a) => a.id === l.from_account_id)
+    const paymentsForThis = lend_repayments.filter((r) => r.lend_borrow_id === l.id)
+    return (
+      <div key={l.id} className="group rounded-2xl border border-white/10 bg-white/[.035] p-5">
+        <div className="flex items-start justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <div className="text-base font-semibold text-white">{l.person_name}</div>
+              <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-widest ${l.status === 'returned' ? 'bg-emerald-400/15 text-emerald-200' : l.status === 'partial' ? 'bg-amber-400/15 text-amber-200' : 'bg-cyan-400/15 text-cyan-200'}`}>{l.status}</span>
+              {overdue && <span className="rounded-full bg-rose-400/15 px-2 py-0.5 text-[10px] uppercase tracking-widest text-rose-200">overdue</span>}
+            </div>
+            <div className="mt-1 text-xs text-slate-500">{l.reason || (l.type === 'lent' ? 'Lent' : 'Borrowed')} · {formatDate(l.date)}{acc ? ` · ${acc.name}` : ''}{l.due_date ? ` · due ${formatDate(l.due_date)}` : ''}</div>
+          </div>
+          <div className="flex gap-1 opacity-0 transition group-hover:opacity-100">
+            <button onClick={() => onEdit(l)} className="rounded-lg p-1.5 text-slate-500 hover:bg-white/5 hover:text-white"><Pencil size={14} /></button>
+            <button onClick={() => onDelete(l)} className="rounded-lg p-1.5 text-rose-300/70 hover:bg-rose-300/10"><Trash2 size={14} /></button>
+          </div>
+        </div>
+        <div className="mt-4 flex items-baseline justify-between">
+          <div>
+            <div className="text-xs text-slate-500">Pending</div>
+            <div className="text-2xl font-semibold text-white">{showMoney ? money(pending) : '••••'}</div>
+          </div>
+          <div className="text-right">
+            <div className="text-xs text-slate-500">of {showMoney ? money(l.amount) : '••••'}</div>
+            <div className="text-[11px] text-emerald-300">{money(repaid)} repaid</div>
+          </div>
+        </div>
+        <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/5">
+          <div className="h-full rounded-full bg-emerald-400 transition-all" style={{ width: `${pct}%` }} />
+        </div>
+        {paymentsForThis.length > 0 && (
+          <div className="mt-4 space-y-1 border-t border-white/5 pt-3 text-xs">
+            <div className="text-[10px] uppercase tracking-widest text-slate-500">Repayments</div>
+            {paymentsForThis.slice(0, 3).map((r) => (
+              <div key={r.id} className="flex items-center justify-between text-slate-400">
+                <span>{formatDate(r.date)}</span><span className="font-medium text-emerald-300">+{money(r.amount)}</span>
+              </div>
+            ))}
+            {paymentsForThis.length > 3 && <div className="text-slate-500">+ {paymentsForThis.length - 3} more</div>}
+          </div>
+        )}
+        <div className="mt-3 text-[11px] text-slate-500">
+          {l.type === 'lent' ? '💡 To record a repayment, add an Income transaction and link it to this person.' : '💡 To repay, add an Expense transaction from any account.'}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-end justify-between">
+        <div>
+          <div className="mb-2 text-xs uppercase tracking-widest text-cyan-200/70">Money between people</div>
+          <h1 className="text-3xl font-semibold tracking-tight text-white">Lend &amp; borrow</h1>
+        </div>
+        <button onClick={onAdd} className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 px-4 py-2.5 text-sm font-semibold text-[#07101c]"><Plus size={15} />Log</button>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="rounded-2xl border border-white/10 bg-emerald-500/5 p-5">
+          <div className="text-xs text-slate-400">Total lent (pending)</div>
+          <div className="mt-2 text-2xl font-semibold text-white">{showMoney ? money(lentPending) : '••••••'}</div>
+          <div className="mt-1 text-xs text-emerald-300">{lent.length} people</div>
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-rose-500/5 p-5">
+          <div className="text-xs text-slate-400">Total borrowed (pending)</div>
+          <div className="mt-2 text-2xl font-semibold text-white">{showMoney ? money(borrowedPending) : '••••••'}</div>
+          <div className="mt-1 text-xs text-rose-300">{borrowed.length} people</div>
+        </div>
+      </div>
+      {lend_borrow.length === 0 ? (
+        <div className="rounded-2xl border border-white/10 bg-white/[.035]">
+          <EmptyState icon={Heart} title="Nothing to track" message="Log money you've lent to friends or borrowed from someone." cta="Add first record" onCta={onAdd} />
+        </div>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{lend_borrow.map(card)}</div>
+      )}
+    </div>
+  )
+}
+
+/* ---------------- Profile View ---------------- */
+function ProfileView({ data, user, theme, onThemeChange, onSaveProfile, onAddCategory, onEditCategory, onDeleteCategory }) {
+  const { profile, categories } = data
+  const [form, setForm] = useState({ full_name: '', age: '', avatar_url: '' })
+  const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    if (profile) setForm({ full_name: profile.full_name || '', age: profile.age ?? '', avatar_url: profile.avatar_url || '' })
+  }, [profile])
+  const save = async () => {
+    setBusy(true)
+    try { await onSaveProfile({ ...form, age: form.age === '' ? null : Number(form.age) }) } finally { setBusy(false) }
+  }
+  const grouped = { income: categories.filter((c) => c.type === 'income'), expense: categories.filter((c) => c.type === 'expense') }
+  const initials = (form.full_name || user?.email || 'D').slice(0, 1).toUpperCase()
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <div className="mb-2 text-xs uppercase tracking-widest text-cyan-200/70">Your space</div>
+        <h1 className="text-3xl font-semibold tracking-tight text-white">Profile &amp; settings</h1>
+      </div>
+
+      <div className="rounded-2xl border border-white/10 bg-white/[.035] p-6">
+        <div className="flex flex-col items-start gap-6 sm:flex-row sm:items-center">
+          <div className="relative">
+            {form.avatar_url ? (
+              <img src={form.avatar_url} alt="" className="h-20 w-20 rounded-2xl border border-white/10 object-cover" onError={(e) => { e.currentTarget.style.display = 'none' }} />
+            ) : (
+              <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-300 to-blue-600 text-3xl font-semibold text-[#07101c]">{initials}</div>
+            )}
+          </div>
+          <div className="grid flex-1 gap-4 sm:grid-cols-2">
+            <label className="text-sm text-slate-300">Full name
+              <input value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="Deepak Perumal" />
+            </label>
+            <label className="text-sm text-slate-300">Age
+              <input type="number" min="1" max="150" value={form.age} onChange={(e) => setForm({ ...form, age: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
+            </label>
+            <label className="text-sm text-slate-300 sm:col-span-2">Avatar URL
+              <input value={form.avatar_url} onChange={(e) => setForm({ ...form, avatar_url: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="https://…" />
+            </label>
+            <div className="text-sm text-slate-300 sm:col-span-2">
+              <div className="text-xs text-slate-500">Email</div>
+              <div className="mt-1 text-white">{user?.email}</div>
+            </div>
+          </div>
+        </div>
+        <button onClick={save} disabled={busy} className="mt-6 rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 px-6 py-2.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : 'Save profile'}</button>
+      </div>
+
+      <div className="rounded-2xl border border-white/10 bg-white/[.035] p-6">
+        <div className="text-sm font-semibold text-white">Theme</div>
+        <div className="mt-3 grid grid-cols-3 gap-3">
+          {[{ v: 'dark', l: 'Dark', c: 'from-slate-900 to-slate-700' }, { v: 'midnight', l: 'Midnight', c: 'from-[#0b1220] to-[#1e2a44]' }, { v: 'ocean', l: 'Ocean', c: 'from-cyan-900 to-blue-950' }].map((t) => (
+            <button key={t.v} onClick={() => onThemeChange(t.v)} className={`rounded-2xl border p-4 text-left transition ${theme === t.v ? 'border-cyan-300/50 bg-cyan-400/10' : 'border-white/10 hover:bg-white/[.04]'}`}>
+              <div className={`h-16 rounded-lg bg-gradient-to-br ${t.c}`} />
+              <div className="mt-3 text-sm font-medium text-white">{t.l}</div>
+              {theme === t.v && <div className="text-[11px] text-cyan-300">Active</div>}
+            </button>
+          ))}
+        </div>
+        <div className="mt-3 text-[11px] text-slate-500">Currently only dark themes; light mode coming soon.</div>
+      </div>
+
+      <div className="rounded-2xl border border-white/10 bg-white/[.035] p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-sm font-semibold text-white">Categories</div>
+            <div className="text-xs text-slate-500">Group your income and expenses your way</div>
+          </div>
+          <button onClick={onAddCategory} className="flex items-center gap-1 rounded-xl bg-white/[.06] px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/[.1]"><Plus size={13} />Add</button>
+        </div>
+        <div className="mt-4 grid gap-6 md:grid-cols-2">
+          {['income', 'expense'].map((k) => (
+            <div key={k}>
+              <div className="mb-2 text-[10px] uppercase tracking-widest text-slate-500">{k}</div>
+              <div className="space-y-1.5">
+                {grouped[k].length === 0 ? <div className="text-sm text-slate-500">No categories</div> : grouped[k].map((c) => (
+                  <div key={c.id} className="group flex items-center justify-between rounded-xl bg-black/20 px-3 py-2">
+                    <div className="flex items-center gap-3"><div className="h-6 w-6 rounded-md" style={{ background: `${c.color || '#94a3b8'}33`, color: c.color }} /><span className="text-sm text-white">{c.name}</span></div>
+                    <div className="flex gap-1 opacity-0 transition group-hover:opacity-100">
+                      <button onClick={() => onEditCategory(c)} className="rounded-lg p-1.5 text-slate-500 hover:bg-white/5 hover:text-white"><Pencil size={13} /></button>
+                      <button onClick={() => onDeleteCategory(c)} className="rounded-lg p-1.5 text-rose-300/70 hover:bg-rose-300/10"><Trash2 size={13} /></button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /* ---------------- Views ---------------- */
 function DashboardView({ data, showMoney, onOpenTxForm, setView }) {
-  const { accounts, transactions, categories } = data
+  const { accounts, transactions, categories, holdings = [], loans = [], bucket_list = [] } = data
   const totalBalance = accounts.reduce((s, a) => s + Number(a.current_balance || 0), 0)
+  const invested = holdings.reduce((s, h) => s + Number(h.qty) * Number(h.avg_buy_price), 0)
+  const currentInv = holdings.reduce((s, h) => s + Number(h.qty) * Number(h.current_price || h.avg_buy_price), 0)
+  const pnl = currentInv - invested
+  const totalOutstanding = loans.filter((l) => l.status !== 'closed').reduce((s, l) => s + Number(l.outstanding || 0), 0)
+  const netWorth = totalBalance + currentInv - totalOutstanding
   // Monthly aggregation for last 6 months
   const now = new Date()
   const months = []
@@ -629,11 +1580,46 @@ function DashboardView({ data, showMoney, onOpenTxForm, setView }) {
   return (
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Net worth" value={showMoney ? money(totalBalance) : '••••••'} sub={<span className="flex items-center gap-1"><ArrowUpRight size={13} />Across {accounts.length} account{accounts.length === 1 ? '' : 's'}</span>} icon={PiggyBank} accent="bg-gradient-to-br from-cyan-300 to-blue-500 text-[#07101c]" />
+        <StatCard label="Net worth" value={showMoney ? money(netWorth) : '••••••'} sub={<span className="flex items-center gap-1"><ArrowUpRight size={13} />Cash + Investments − Debt</span>} icon={PiggyBank} accent="bg-gradient-to-br from-cyan-300 to-blue-500 text-[#07101c]" />
         <StatCard label={`Income · ${thisMonth?.label || ''}`} value={showMoney ? money(thisMonth?.income || 0) : '••••'} sub={<span className="flex items-center gap-1"><ArrowUpRight size={13} />This month</span>} icon={TrendingUp} accent="bg-emerald-400/15 text-emerald-200" />
         <StatCard label={`Expense · ${thisMonth?.label || ''}`} value={showMoney ? money(thisMonth?.expense || 0) : '••••'} sub={<span className="flex items-center gap-1 text-rose-300"><ArrowDownRight size={13} />This month</span>} icon={TrendingDown} accent="bg-rose-400/15 text-rose-200" tone="text-rose-300" />
         <StatCard label="Savings rate" value={`${savingsRate}%`} sub={<span className={savingsRate >= 20 ? 'text-emerald-300' : 'text-amber-300'}>{savingsRate >= 20 ? 'Great pace' : 'Aim for 20%+'}</span>} icon={Target} accent="bg-violet-400/15 text-violet-200" tone={savingsRate >= 20 ? 'text-emerald-300' : 'text-amber-300'} />
       </div>
+
+      {(holdings.length > 0 || loans.length > 0 || bucket_list.length > 0) && (
+        <div className="grid gap-4 sm:grid-cols-3">
+          {holdings.length > 0 && (
+            <button onClick={() => setView('investments')} className="rounded-2xl border border-white/10 bg-white/[.035] p-5 text-left transition hover:bg-white/[.06]">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-400">Portfolio</span>
+                <TrendingUp size={16} className="text-violet-300" />
+              </div>
+              <div className="mt-3 text-2xl font-semibold text-white">{showMoney ? money(currentInv) : '••••'}</div>
+              <div className={`mt-1 text-xs ${pnl >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>{pnl >= 0 ? '+' : '−'}{money(pnl).replace('-', '')} P&amp;L</div>
+            </button>
+          )}
+          {loans.length > 0 && (
+            <button onClick={() => setView('loans')} className="rounded-2xl border border-white/10 bg-white/[.035] p-5 text-left transition hover:bg-white/[.06]">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-400">Loans outstanding</span>
+                <Briefcase size={16} className="text-amber-300" />
+              </div>
+              <div className="mt-3 text-2xl font-semibold text-white">{showMoney ? money(totalOutstanding) : '••••'}</div>
+              <div className="mt-1 text-xs text-slate-500">{loans.filter((l) => l.status !== 'closed').length} active loan{loans.filter((l) => l.status !== 'closed').length === 1 ? '' : 's'}</div>
+            </button>
+          )}
+          {bucket_list.length > 0 && (
+            <button onClick={() => setView('bucket')} className="rounded-2xl border border-white/10 bg-white/[.035] p-5 text-left transition hover:bg-white/[.06]">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-400">Bucket list</span>
+                <Mountain size={16} className="text-cyan-300" />
+              </div>
+              <div className="mt-3 text-2xl font-semibold text-white">{bucket_list.length} dream{bucket_list.length === 1 ? '' : 's'}</div>
+              <div className="mt-1 text-xs text-slate-500">{bucket_list.filter((b) => b.status === 'saving').length} being saved for</div>
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
         <div className="rounded-2xl border border-white/10 bg-white/[.035] p-5">
@@ -718,7 +1704,7 @@ function DashboardView({ data, showMoney, onOpenTxForm, setView }) {
                       <div className="text-[11px] text-slate-500">{cat?.name || (t.type === 'transfer' ? 'Transfer' : 'Uncategorised')}{acc ? ` · ${acc.name}` : ''}</div>
                     </div>
                   </div>
-                  <div className="text-xs text-slate-500">{formatDate(t.date)}</div>
+                  <div className="text-xs text-slate-500">{formatDateTime(t.date, t.time)}</div>
                   <div className={`text-right text-sm font-semibold ${color}`}>{showMoney ? `${sign}${money(t.amount).replace('-', '')}` : '••••'}</div>
                 </div>
               )
@@ -813,7 +1799,7 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onImport, 
                     <span className="inline-block rounded-md bg-white/[.05] px-2 py-0.5" style={{ color: cat?.color || '#94a3b8' }}>{cat?.name || (isTransfer ? (t.transfer_direction === 'in' ? 'Transfer in' : 'Transfer out') : 'Uncategorised')}</span>
                     {acc && <span className="ml-2">{acc.name}</span>}
                   </div>
-                  <div className="text-xs text-slate-500">{formatDate(t.date)}</div>
+                  <div className="text-xs text-slate-500">{formatDateTime(t.date, t.time)}</div>
                   <div className={`text-sm font-semibold sm:text-right ${color}`}>{showMoney ? `${sign}${money(t.amount).replace('-', '')}` : '••••'}</div>
                   <div className="flex gap-1 sm:justify-end">
                     <button onClick={() => onEditTx(t)} className="rounded-lg p-1.5 text-slate-500 hover:bg-white/5 hover:text-white"><Pencil size={14} /></button>
@@ -1022,7 +2008,7 @@ function InsightsView({ data }) {
 function Shell({ user, onLogout }) {
   const [view, setView] = useState('dashboard')
   const [showMoney, setShowMoney] = useState(true)
-  const [data, setData] = useState({ accounts: [], categories: [], transactions: [], budgets: [] })
+  const [data, setData] = useState({ accounts: [], categories: [], transactions: [], budgets: [], portfolios: [], holdings: [], sips: [], loans: [], loan_payments: [], bucket_list: [], lend_borrow: [], lend_repayments: [], profile: null })
   const [loading, setLoading] = useState(true)
 
   const toast = useToast()
@@ -1036,13 +2022,34 @@ function Shell({ user, onLogout }) {
   const [budgetFormOpen, setBudgetFormOpen] = useState(false)
   const [budgetEditing, setBudgetEditing] = useState(null)
   const [csvOpen, setCsvOpen] = useState(false)
+  const [portfolioFormOpen, setPortfolioFormOpen] = useState(false)
+  const [portfolioEditing, setPortfolioEditing] = useState(null)
+  const [holdingFormOpen, setHoldingFormOpen] = useState(false)
+  const [holdingEditing, setHoldingEditing] = useState(null)
+  const [holdingDefaultPortfolio, setHoldingDefaultPortfolio] = useState('')
+  const [loanFormOpen, setLoanFormOpen] = useState(false)
+  const [loanEditing, setLoanEditing] = useState(null)
+  const [loanPayOpen, setLoanPayOpen] = useState(false)
+  const [loanPayLoan, setLoanPayLoan] = useState(null)
+  const [bucketFormOpen, setBucketFormOpen] = useState(false)
+  const [bucketEditing, setBucketEditing] = useState(null)
+  const [lendFormOpen, setLendFormOpen] = useState(false)
+  const [lendEditing, setLendEditing] = useState(null)
+  const [fundsFormOpen, setFundsFormOpen] = useState(false)
+  const [fundsPortfolio, setFundsPortfolio] = useState(null)
+  const [theme, setTheme] = useState('dark')
 
   const refresh = async () => {
     try {
       const response = await fetch('/api/finance/summary')
       if (!response.ok) throw new Error('Failed to load')
       const result = await response.json()
-      setData({ accounts: result.accounts || [], categories: result.categories || [], transactions: result.transactions || [], budgets: result.budgets || [] })
+      setData({
+        accounts: result.accounts || [], categories: result.categories || [], transactions: result.transactions || [], budgets: result.budgets || [],
+        portfolios: result.portfolios || [], holdings: result.holdings || [], sips: result.sips || [],
+        loans: result.loans || [], loan_payments: result.loan_payments || [], bucket_list: result.bucket_list || [],
+        lend_borrow: result.lend_borrow || [], lend_repayments: result.lend_repayments || [], profile: result.profile || null,
+      })
     } catch (e) {
       toast.push(e.message || 'Could not load data', 'error')
     } finally { setLoading(false) }
@@ -1071,6 +2078,82 @@ function Shell({ user, onLogout }) {
     if (response.ok) { toast.push('Budget deleted'); await refresh() } else { toast.push('Delete failed', 'error') }
   }
 
+  // Investments
+  const openPortfolioForm = (p = null) => { setPortfolioEditing(p); setPortfolioFormOpen(true) }
+  const closePortfolioForm = () => { setPortfolioFormOpen(false); setPortfolioEditing(null) }
+  const onPortfolioSaved = async () => { closePortfolioForm(); await refresh() }
+  const openHoldingForm = (portfolioId = '') => { setHoldingEditing(null); setHoldingDefaultPortfolio(portfolioId); setHoldingFormOpen(true) }
+  const openHoldingEdit = (h) => { setHoldingEditing(h); setHoldingFormOpen(true) }
+  const closeHoldingForm = () => { setHoldingFormOpen(false); setHoldingEditing(null) }
+  const onHoldingSaved = async () => { closeHoldingForm(); await refresh() }
+  const deletePortfolio = async (p) => {
+    if (!window.confirm(`Delete portfolio "${p.name}"? Its holdings will be removed too.`)) return
+    const response = await fetch(`/api/finance/portfolios/${p.id}`, { method: 'DELETE' })
+    if (response.ok) { toast.push('Portfolio deleted'); await refresh() } else { toast.push('Delete failed', 'error') }
+  }
+  const deleteHolding = async (h) => {
+    if (!window.confirm(`Remove ${h.symbol}?`)) return
+    const response = await fetch(`/api/finance/holdings/${h.id}`, { method: 'DELETE' })
+    if (response.ok) { toast.push('Holding removed'); await refresh() } else { toast.push('Delete failed', 'error') }
+  }
+  const refreshHoldingPrice = async (h) => {
+    const price = window.prompt(`Update current price for ${h.symbol}`, String(h.current_price || h.avg_buy_price))
+    if (!price) return
+    const response = await fetch(`/api/finance/holdings/${h.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ current_price: Number(price), last_price_updated_at: new Date().toISOString() }) })
+    if (response.ok) { toast.push(`${h.symbol} updated`); await refresh() } else { toast.push('Update failed', 'error') }
+  }
+
+  // Loans
+  const openLoanForm = (l = null) => { setLoanEditing(l); setLoanFormOpen(true) }
+  const closeLoanForm = () => { setLoanFormOpen(false); setLoanEditing(null) }
+  const onLoanSaved = async () => { closeLoanForm(); await refresh() }
+  const openLoanPay = (loan) => { setLoanPayLoan(loan); setLoanPayOpen(true) }
+  const closeLoanPay = () => { setLoanPayOpen(false); setLoanPayLoan(null) }
+  const onLoanPaid = async () => { closeLoanPay(); await refresh() }
+  const deleteLoan = async (l) => {
+    if (!window.confirm(`Delete loan "${l.name}"? All payment records will be removed.`)) return
+    const response = await fetch(`/api/finance/loans/${l.id}`, { method: 'DELETE' })
+    if (response.ok) { toast.push('Loan deleted'); await refresh() } else { toast.push('Delete failed', 'error') }
+  }
+  const deleteLoanPayment = async (p) => {
+    if (!window.confirm('Reverse this payment? The linked transaction and outstanding will restore.')) return
+    const response = await fetch(`/api/finance/loan_payments/${p.id}`, { method: 'DELETE' })
+    if (response.ok) { toast.push('Payment reversed'); await refresh() } else { toast.push('Delete failed', 'error') }
+  }
+
+  // Bucket list
+  const openBucketForm = (b = null) => { setBucketEditing(b); setBucketFormOpen(true) }
+  const closeBucketForm = () => { setBucketFormOpen(false); setBucketEditing(null) }
+  const onBucketSaved = async () => { closeBucketForm(); await refresh() }
+  const deleteBucket = async (b) => {
+    if (!window.confirm(`Remove "${b.title}" from bucket list?`)) return
+    const response = await fetch(`/api/finance/bucket_list/${b.id}`, { method: 'DELETE' })
+    if (response.ok) { toast.push('Removed'); await refresh() } else { toast.push('Delete failed', 'error') }
+  }
+
+  // Lend/Borrow
+  const openLendForm = (l = null) => { setLendEditing(l); setLendFormOpen(true) }
+  const closeLendForm = () => { setLendFormOpen(false); setLendEditing(null) }
+  const onLendSaved = async () => { closeLendForm(); await refresh() }
+  const deleteLend = async (l) => {
+    if (!window.confirm(`Delete record for ${l.person_name}? Linked transaction (if any) will be removed too.`)) return
+    const response = await fetch(`/api/finance/lend_borrow/${l.id}`, { method: 'DELETE' })
+    if (response.ok) { toast.push('Deleted'); await refresh() } else { toast.push('Delete failed', 'error') }
+  }
+
+  // Portfolio funds
+  const openFundsForm = (p) => { setFundsPortfolio(p); setFundsFormOpen(true) }
+  const closeFundsForm = () => { setFundsFormOpen(false); setFundsPortfolio(null) }
+  const onFundsSaved = async () => { closeFundsForm(); await refresh() }
+
+  // Profile
+  const onSaveProfile = async (payload) => {
+    const response = await fetch('/api/finance/profile', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+    if (response.ok) { toast.push('Profile saved'); await refresh() } else { toast.push('Could not save', 'error') }
+  }
+  useEffect(() => { if (data.profile?.theme) setTheme(data.profile.theme) }, [data.profile])
+  const onThemeChange = async (t) => { setTheme(t); await fetch('/api/finance/profile', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ theme: t }) }); toast.push(`Theme: ${t}`, 'info') }
+
   const deleteTx = async (t) => {
     if (!window.confirm('Delete this transaction? Balances will be recomputed.')) return
     const response = await fetch(`/api/finance/transactions/${t.id}`, { method: 'DELETE' })
@@ -1093,15 +2176,19 @@ function Shell({ user, onLogout }) {
     { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { key: 'transactions', label: 'Transactions', icon: BarChart3 },
     { key: 'accounts', label: 'Accounts', icon: Landmark },
-    { key: 'categories', label: 'Categories', icon: Tag },
+    { key: 'investments', label: 'Investments', icon: TrendingUp },
+    { key: 'loans', label: 'Loans', icon: Briefcase },
+    { key: 'lend', label: 'Lend / Borrow', icon: Heart },
     { key: 'budgets', label: 'Budgets', icon: Target },
+    { key: 'bucket', label: 'Bucket list', icon: Mountain },
     { key: 'insights', label: 'Insights', icon: LineChart },
+    { key: 'profile', label: 'Profile', icon: ShieldCheck },
   ]
   const bottomNav = [
     { key: 'dashboard', label: 'Home', icon: LayoutDashboard },
     { key: 'transactions', label: 'Ledger', icon: BarChart3 },
-    { key: 'insights', label: 'Insights', icon: LineChart },
-    { key: 'accounts', label: 'Accounts', icon: Landmark },
+    { key: 'investments', label: 'Invest', icon: TrendingUp },
+    { key: 'profile', label: 'You', icon: ShieldCheck },
   ]
 
   return (
@@ -1153,8 +2240,14 @@ function Shell({ user, onLogout }) {
               {view === 'transactions' && <TransactionsView data={data} onOpenTxForm={() => openTxForm()} onEditTx={openTxForm} onDeleteTx={deleteTx} onImport={() => setCsvOpen(true)} showMoney={showMoney} />}
               {view === 'accounts' && <AccountsView data={data} onAdd={() => openAccForm()} onEdit={openAccForm} onDelete={deleteAccount} showMoney={showMoney} />}
               {view === 'categories' && <CategoriesView data={data} onAdd={() => openCatForm()} onEdit={openCatForm} onDelete={deleteCategory} />}
+              {view === 'categories' && <CategoriesView data={data} onAdd={() => openCatForm()} onEdit={openCatForm} onDelete={deleteCategory} />}
               {view === 'budgets' && <BudgetsView data={data} onAdd={() => openBudgetForm()} onEdit={openBudgetForm} onDelete={deleteBudget} />}
+              {view === 'investments' && <InvestmentsView data={data} onAddPortfolio={() => openPortfolioForm()} onEditPortfolio={openPortfolioForm} onDeletePortfolio={deletePortfolio} onAddHolding={openHoldingForm} onEditHolding={openHoldingEdit} onDeleteHolding={deleteHolding} onRefreshPrice={refreshHoldingPrice} onAddFunds={openFundsForm} showMoney={showMoney} />}
+              {view === 'loans' && <LoansView data={data} onAdd={() => openLoanForm()} onEdit={openLoanForm} onDelete={deleteLoan} onPay={openLoanPay} onDeletePayment={deleteLoanPayment} showMoney={showMoney} />}
+              {view === 'lend' && <LendBorrowView data={data} onAdd={() => openLendForm()} onEdit={openLendForm} onDelete={deleteLend} showMoney={showMoney} />}
+              {view === 'bucket' && <BucketListView data={data} onAdd={() => openBucketForm()} onEdit={openBucketForm} onDelete={deleteBucket} />}
               {view === 'insights' && <InsightsView data={data} />}
+              {view === 'profile' && <ProfileView data={data} user={user} theme={theme} onThemeChange={onThemeChange} onSaveProfile={onSaveProfile} onAddCategory={() => openCatForm()} onEditCategory={openCatForm} onDeleteCategory={deleteCategory} />}
             </>
           )}
         </main>
@@ -1177,11 +2270,18 @@ function Shell({ user, onLogout }) {
       </nav>
 
       {/* Modals */}
-      <TransactionForm open={txFormOpen} onClose={closeTxForm} onSaved={onTxSaved} editing={txEditing} accounts={data.accounts} categories={data.categories} toast={toast} />
+      <TransactionForm open={txFormOpen} onClose={closeTxForm} onSaved={onTxSaved} editing={txEditing} accounts={data.accounts} categories={data.categories} lendBorrow={data.lend_borrow} onAddAccount={() => { closeTxForm(); openAccForm() }} toast={toast} />
       <AccountForm open={accFormOpen} onClose={closeAccForm} onSaved={onAccSaved} editing={accEditing} toast={toast} />
       <CategoryForm open={catFormOpen} onClose={closeCatForm} onSaved={onCatSaved} editing={catEditing} toast={toast} />
       <BudgetForm open={budgetFormOpen} onClose={closeBudgetForm} onSaved={onBudgetSaved} editing={budgetEditing} categories={data.categories} toast={toast} />
       <CsvImport open={csvOpen} onClose={() => setCsvOpen(false)} onImported={async () => { setCsvOpen(false); await refresh() }} accounts={data.accounts} categories={data.categories} toast={toast} />
+      <PortfolioForm open={portfolioFormOpen} onClose={closePortfolioForm} onSaved={onPortfolioSaved} editing={portfolioEditing} accounts={data.accounts} toast={toast} />
+      <HoldingForm open={holdingFormOpen} onClose={closeHoldingForm} onSaved={onHoldingSaved} editing={holdingEditing} portfolios={data.portfolios} defaultPortfolioId={holdingDefaultPortfolio} toast={toast} />
+      <LoanForm open={loanFormOpen} onClose={closeLoanForm} onSaved={onLoanSaved} editing={loanEditing} accounts={data.accounts} toast={toast} />
+      <LoanPaymentForm open={loanPayOpen} onClose={closeLoanPay} onSaved={onLoanPaid} loan={loanPayLoan} accounts={data.accounts} toast={toast} />
+      <BucketForm open={bucketFormOpen} onClose={closeBucketForm} onSaved={onBucketSaved} editing={bucketEditing} toast={toast} />
+      <LendForm open={lendFormOpen} onClose={closeLendForm} onSaved={onLendSaved} editing={lendEditing} accounts={data.accounts} toast={toast} />
+      <PortfolioFundsForm open={fundsFormOpen} onClose={closeFundsForm} onSaved={onFundsSaved} portfolio={fundsPortfolio} accounts={data.accounts} toast={toast} />
     </div>
   )
 }
