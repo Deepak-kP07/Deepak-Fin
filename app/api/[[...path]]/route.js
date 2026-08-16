@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import crypto from 'crypto'
 
 const supabaseUrl = () => process.env.NEXT_PUBLIC_SUPABASE_URL
 const anonKey = () => process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -59,11 +60,13 @@ const safeFields = {
   bucket_list: ['title', 'estimated_cost', 'priority', 'target_date', 'status', 'notes'],
   lend_borrow: ['person_name', 'type', 'amount', 'date', 'due_date', 'from_account_id', 'reason', 'status', 'notes'],
   lend_repayments: ['lend_borrow_id', 'amount', 'date', 'account_id', 'linked_transaction_id', 'notes'],
-  profiles: ['full_name', 'age', 'avatar_url', 'theme', 'currency'],
+  profiles: ['full_name', 'age', 'avatar_url', 'theme', 'currency', 'kite_access_token', 'kite_access_token_at'],
   credit_cards: ['name', 'bank', 'last4', 'credit_limit', 'billing_date', 'due_date_offset', 'current_outstanding', 'color'],
   credit_card_transactions: ['credit_card_id', 'amount', 'description', 'category_id', 'date', 'time', 'status', 'linked_transaction_id'],
   scholarships: ['name', 'total_amount', 'academic_year', 'source', 'status', 'received_date', 'due_date', 'received_to_account_id', 'amount_paid_to_college', 'notes'],
   scholarship_payments: ['scholarship_id', 'amount', 'paid_to', 'payment_date', 'account_id', 'notes'],
+  zopkit_transactions: ['type', 'amount', 'description', 'category', 'date', 'time', 'added_by', 'notes'],
+  money_rules: ['rule_text', 'icon', 'order_index', 'is_active'],
 }
 
 function pickFields(table, source) {
@@ -156,7 +159,7 @@ async function handleRoute(request, { params }) {
         const response = await fetch(`${supabaseUrl()}/rest/v1/${table}?user_id=eq.${user.id}&select=*${extraQuery}`, { headers, cache: 'no-store' })
         return response.ok ? response.json() : []
       }
-      const [accounts, categories, transactions, budgets, portfolios, holdings, sips, loans, loan_payments, bucket_list, lend_borrow, lend_repayments, credit_cards, credit_card_transactions, scholarships, scholarship_payments, profile] = await Promise.all([
+      const [accounts, categories, transactions, budgets, portfolios, holdings, sips, loans, loan_payments, bucket_list, lend_borrow, lend_repayments, credit_cards, credit_card_transactions, scholarships, scholarship_payments, zopkit_transactions, money_rules, profile] = await Promise.all([
         read('accounts', '&order=created_at.asc'),
         read('categories', '&order=type.asc,name.asc'),
         read('transactions', '&order=date.desc,time.desc.nullslast,created_at.desc'),
@@ -173,6 +176,8 @@ async function handleRoute(request, { params }) {
         read('credit_card_transactions', '&order=date.desc,time.desc.nullslast,created_at.desc'),
         read('scholarships', '&order=created_at.desc'),
         read('scholarship_payments', '&order=payment_date.desc'),
+        read('zopkit_transactions', '&order=date.desc,time.desc.nullslast,created_at.desc'),
+        read('money_rules', '&order=order_index.asc,created_at.asc'),
         (async () => {
           const r = await fetch(`${supabaseUrl()}/rest/v1/profiles?id=eq.${user.id}&select=*`, { headers, cache: 'no-store' })
           if (!r.ok) return null
@@ -180,17 +185,29 @@ async function handleRoute(request, { params }) {
           return arr[0] || null
         })(),
       ])
-      return handleCORS(NextResponse.json({ accounts, categories, transactions, budgets, portfolios, holdings, sips, loans, loan_payments, bucket_list, lend_borrow, lend_repayments, credit_cards, credit_card_transactions, scholarships, scholarship_payments, profile }))
+      return handleCORS(NextResponse.json({ accounts, categories, transactions, budgets, portfolios, holdings, sips, loans, loan_payments, bucket_list, lend_borrow, lend_repayments, credit_cards, credit_card_transactions, scholarships, scholarship_payments, zopkit_transactions, money_rules, profile }))
     }
 
     // ---- PRICES: Yahoo Finance fallback (public); Kite when creds set ----
     if (route === '/finance/prices' && method === 'POST') {
       const user = await currentUser(request)
       if (!user) return handleCORS(NextResponse.json({ error: 'Not authenticated' }, { status: 401 }))
-      const { symbols = [] } = await request.json() // [{ symbol: 'RELIANCE', exchange: 'NSE' }]
-      const kiteKey = process.env.KITE_API_KEY, kiteToken = process.env.KITE_ACCESS_TOKEN
+      const { symbols = [] } = await request.json()
+      const kiteKey = process.env.KITE_API_KEY
+      // Prefer per-user stored token, fallback to env
+      let kiteToken = process.env.KITE_ACCESS_TOKEN
+      let kiteSource = 'env'
+      const pr = await fetch(`${supabaseUrl()}/rest/v1/profiles?id=eq.${user.id}&select=kite_access_token,kite_access_token_at`, { headers: serviceHeaders(), cache: 'no-store' })
+      const profile = (pr.ok ? await pr.json() : [])[0]
+      if (profile?.kite_access_token) {
+        // Kite tokens expire at ~6 AM IST daily. Use if issued today
+        const issuedAt = profile.kite_access_token_at ? new Date(profile.kite_access_token_at) : null
+        const now = new Date()
+        const stillFresh = issuedAt && (now.getTime() - issuedAt.getTime() < 20 * 60 * 60 * 1000)
+        if (stillFresh) { kiteToken = profile.kite_access_token; kiteSource = 'user' }
+      }
       const out = {}
-      // Try Kite first if configured
+      let usedKite = false
       if (kiteKey && kiteToken && symbols.length > 0) {
         try {
           const params = symbols.map((s) => `i=${encodeURIComponent(s.exchange + ':' + s.symbol)}`).join('&')
@@ -199,12 +216,12 @@ async function handleRoute(request, { params }) {
             const kd = await kr.json()
             for (const s of symbols) {
               const key = `${s.exchange}:${s.symbol}`
-              if (kd.data?.[key]?.last_price) out[s.symbol] = { price: Number(kd.data[key].last_price), source: 'kite' }
+              if (kd.data?.[key]?.last_price) { out[s.symbol] = { price: Number(kd.data[key].last_price), source: 'kite' }; usedKite = true }
             }
           }
-        } catch (e) { /* fall through */ }
+        } catch (e) { /* fall through to yahoo */ }
       }
-      // Yahoo Finance fallback for symbols not resolved
+      // Yahoo fallback for anything not resolved
       await Promise.all(symbols.map(async (s) => {
         if (out[s.symbol]) return
         const suffix = s.exchange === 'BSE' ? '.BO' : '.NS'
@@ -215,9 +232,8 @@ async function handleRoute(request, { params }) {
             const p = yd?.chart?.result?.[0]?.meta?.regularMarketPrice
             if (p) out[s.symbol] = { price: Number(p), source: 'yahoo' }
           }
-        } catch (e) { /* skip */ }
+        } catch (e) {}
       }))
-      // Update holdings server-side
       const nowIso = new Date().toISOString()
       for (const s of symbols) {
         if (!out[s.symbol]) continue
@@ -225,15 +241,43 @@ async function handleRoute(request, { params }) {
           method: 'PATCH', headers: serviceHeaders({ Prefer: 'return=minimal' }), body: JSON.stringify({ current_price: out[s.symbol].price, last_price_updated_at: nowIso }), cache: 'no-store',
         })
       }
-      return handleCORS(NextResponse.json({ prices: out, updated_at: nowIso, kite_configured: !!(kiteKey && kiteToken) }))
+      return handleCORS(NextResponse.json({ prices: out, updated_at: nowIso, kite_active: usedKite, kite_source: usedKite ? kiteSource : null }))
     }
 
-    // ---- KITE OAuth callback (receives request_token) ----
+    // ---- KITE OAuth: login redirect ----
+    if (route === '/kite/login' && method === 'GET') {
+      const kiteKey = process.env.KITE_API_KEY
+      if (!kiteKey) return handleCORS(NextResponse.json({ error: 'KITE_API_KEY not set' }, { status: 400 }))
+      return NextResponse.redirect(`https://kite.zerodha.com/connect/login?api_key=${kiteKey}&v=3`, 302)
+    }
+
+    // ---- KITE OAuth: callback (exchanges request_token for access_token) ----
     if (route === '/kite/callback' && method === 'GET') {
       const url = new URL(request.url)
       const requestToken = url.searchParams.get('request_token')
       const status = url.searchParams.get('status')
-      const html = `<!doctype html><html><head><title>Kite login</title><style>body{background:#080b12;color:#e2e8f0;font-family:system-ui;padding:40px;text-align:center}code{background:#1e293b;padding:6px 10px;border-radius:6px;color:#67e8f9}</style></head><body><h1>${status === 'success' ? '\u2705 Kite login successful' : '\u26a0\ufe0f Kite login'}</h1><p>request_token:</p><p><code>${requestToken || 'missing'}</code></p><p style="color:#94a3b8;font-size:13px">Use this request_token with your API secret to generate an access token, then set <code>KITE_ACCESS_TOKEN</code> in .env.</p><p><a style="color:#67e8f9" href="/">Back to Deepak Finance</a></p></body></html>`
+      const kiteKey = process.env.KITE_API_KEY, kiteSecret = process.env.KITE_API_SECRET
+      let accessToken = null, exchangeError = null, user_id = null
+      const user = await currentUser(request)
+      user_id = user?.id
+      if (requestToken && kiteKey && kiteSecret) {
+        try {
+          const checksum = crypto.createHash('sha256').update(kiteKey + requestToken + kiteSecret).digest('hex')
+          const body = new URLSearchParams({ api_key: kiteKey, request_token: requestToken, checksum }).toString()
+          const kr = await fetch('https://api.kite.trade/session/token', { method: 'POST', headers: { 'X-Kite-Version': '3', 'Content-Type': 'application/x-www-form-urlencoded' }, body, cache: 'no-store' })
+          const kd = await kr.json()
+          if (kr.ok && kd?.data?.access_token) {
+            accessToken = kd.data.access_token
+            if (user_id) {
+              await restRequest('profiles', 'PATCH', `?id=eq.${user_id}`, { kite_access_token: accessToken, kite_access_token_at: new Date().toISOString() })
+            }
+          } else {
+            exchangeError = kd?.message || JSON.stringify(kd)
+          }
+        } catch (e) { exchangeError = String(e) }
+      }
+      const ok = !!accessToken
+      const html = `<!doctype html><html><head><title>Kite login</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{background:#080b12;color:#e2e8f0;font-family:system-ui;padding:40px;text-align:center;max-width:640px;margin:0 auto}code{background:#1e293b;padding:6px 10px;border-radius:6px;color:#67e8f9;word-break:break-all}h1{margin-bottom:4px}p{color:#94a3b8;font-size:14px;line-height:1.6}a{display:inline-block;margin-top:24px;background:linear-gradient(90deg,#67e8f9,#3b82f6);color:#07101c;padding:12px 24px;border-radius:12px;font-weight:600;text-decoration:none}</style></head><body><h1>${ok ? '\u2705 Kite connected' : status === 'success' && !user_id ? '\u26a0\ufe0f Sign in first' : '\u26a0\ufe0f Kite connection failed'}</h1>${ok ? `<p>Live NSE/BSE prices are now active for your account. You&#39;ll need to reconnect tomorrow after 6 AM IST when Zerodha rotates the token.</p>` : !user_id ? `<p>Please sign in to Deepak Finance, then click <b>Connect Kite</b> from Investments and try again.</p>` : `<p>${exchangeError ? 'Kite said: <code>' + exchangeError.slice(0, 300) + '</code>' : 'No request_token received.'}</p>`}<a href="/">Back to Deepak Finance</a></body></html>`
       return new NextResponse(html, { status: 200, headers: { 'Content-Type': 'text/html' } })
     }
     if (route === '/kite/postback' && (method === 'POST' || method === 'GET')) {
@@ -471,7 +515,7 @@ async function handleRoute(request, { params }) {
     }
 
     // ---- FINANCE CRUD (accounts, categories, transactions, budgets, portfolios, holdings, sips, loans, loan_payments, bucket_list, lend_borrow, lend_repayments, credit_cards, credit_card_transactions, scholarships, scholarship_payments) ----
-    const collectionMatch = route.match(/^\/finance\/(accounts|categories|transactions|budgets|portfolios|holdings|sips|loans|loan_payments|bucket_list|lend_borrow|lend_repayments|credit_cards|credit_card_transactions|scholarships|scholarship_payments)(?:\/([^/]+))?$/)
+    const collectionMatch = route.match(/^\/finance\/(accounts|categories|transactions|budgets|portfolios|holdings|sips|loans|loan_payments|bucket_list|lend_borrow|lend_repayments|credit_cards|credit_card_transactions|scholarships|scholarship_payments|zopkit_transactions|money_rules)(?:\/([^/]+))?$/)
     if (collectionMatch) {
       const [, table, id] = collectionMatch
       const user = await currentUser(request)

@@ -751,8 +751,9 @@ function HoldingForm({ open, onClose, onSaved, editing, portfolios, defaultPortf
 }
 
 /* ---------------- Investments View ---------------- */
-function InvestmentsView({ data, onAddPortfolio, onAddHolding, onEditPortfolio, onEditHolding, onDeletePortfolio, onDeleteHolding, onRefreshPrice, onRefreshAll, pricesLoading, onAddFunds, showMoney }) {
-  const { portfolios, holdings } = data
+function InvestmentsView({ data, onAddPortfolio, onAddHolding, onEditPortfolio, onEditHolding, onDeletePortfolio, onDeleteHolding, onRefreshPrice, onRefreshAll, pricesLoading, onAddFunds, onConnectKite, showMoney }) {
+  const { portfolios, holdings, profile } = data
+  const kiteConnected = !!profile?.kite_access_token && profile.kite_access_token_at && (Date.now() - new Date(profile.kite_access_token_at).getTime() < 20 * 60 * 60 * 1000)
   const holdingsByPortfolio = (id) => holdings.filter((h) => h.portfolio_id === id)
   const totalInvested = holdings.reduce((s, h) => s + Number(h.qty) * Number(h.avg_buy_price), 0)
   const totalCurrent = holdings.reduce((s, h) => s + Number(h.qty) * Number(h.current_price || h.avg_buy_price), 0)
@@ -791,8 +792,10 @@ function InvestmentsView({ data, onAddPortfolio, onAddHolding, onEditPortfolio, 
             </div>
           </div>
         </div>
-        <div className="mt-4 flex items-center gap-2 rounded-xl border border-cyan-300/20 bg-cyan-300/5 px-4 py-2.5 text-xs text-cyan-200">
-          <Sparkles size={13} /> Live prices via Yahoo Finance (free). Add <code className="rounded bg-white/10 px-1.5 py-0.5">KITE_API_KEY</code> + <code className="rounded bg-white/10 px-1.5 py-0.5">KITE_ACCESS_TOKEN</code> in .env to use Kite instead.
+        <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-cyan-300/20 bg-cyan-300/5 px-4 py-2.5 text-xs text-cyan-200">
+          <Sparkles size={13} />
+          {kiteConnected ? <span>Live prices via <b>Kite</b>. Token refreshes tomorrow after 6 AM IST.</span> : <span>Currently using Yahoo Finance. Connect your Zerodha Kite for real-time NSE quotes.</span>}
+          {!kiteConnected && <button onClick={onConnectKite} className="ml-auto rounded-lg bg-cyan-300/20 px-3 py-1 text-[11px] font-semibold text-cyan-100 hover:bg-cyan-300/30">Connect Kite</button>}
         </div>
       </div>
 
@@ -2024,9 +2027,214 @@ function ScholarshipsView({ data, onAdd, onEdit, onDelete, onPay, showMoney }) {
   )
 }
 
+/* ---------------- Zopkit Form ---------------- */
+function ZopkitForm({ open, onClose, onSaved, editing, toast }) {
+  const initial = editing
+    ? { ...editing, amount: String(editing.amount), time: editing.time?.slice(0, 5) || new Date().toTimeString().slice(0, 5) }
+    : { type: 'expense', amount: '', description: '', category: 'tools/subscriptions', date: todayISO(), time: new Date().toTimeString().slice(0, 5), added_by: 'self', notes: '' }
+  const [form, setForm] = useState(initial)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => { setForm(initial) }, [editing, open])
+  if (!open) return null
+  const save = async (e) => {
+    e.preventDefault(); setBusy(true)
+    try {
+      const endpoint = editing ? `/api/finance/zopkit_transactions/${editing.id}` : '/api/finance/zopkit_transactions'
+      const response = await fetch(endpoint, { method: editing ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, amount: Number(form.amount) }) })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Could not save')
+      toast.push(editing ? 'Updated' : 'Logged'); onSaved()
+    } catch (err) { toast.push(err.message, 'error') } finally { setBusy(false) }
+  }
+  const cats = ['tools/subscriptions', 'team expenses', 'miscellaneous', 'other']
+  return (
+    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center" onClick={onClose}>
+      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-xl rounded-3xl border border-white/10 bg-[#141a28] p-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-white">{editing ? 'Edit entry' : 'Log Zopkit transaction'}</h2>
+          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-white/5"><X size={18} /></button>
+        </div>
+        <div className="mt-5 grid grid-cols-2 gap-2">
+          {[{ v: 'expense', l: 'Expense', c: 'bg-rose-400/15 text-rose-200 border-rose-400/30' }, { v: 'income', l: 'Income (from CEO)', c: 'bg-emerald-400/15 text-emerald-200 border-emerald-400/30' }].map((t) => (
+            <button key={t.v} type="button" onClick={() => setForm({ ...form, type: t.v, added_by: t.v === 'income' ? 'ceo' : 'self' })} className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${form.type === t.v ? t.c : 'border-white/10 text-slate-400 hover:bg-white/5'}`}>{t.l}</button>
+          ))}
+        </div>
+        <div className="mt-5 grid gap-4 sm:grid-cols-2">
+          <label className="text-sm text-slate-300">Amount
+            <input required type="number" step="0.01" min="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
+          </label>
+          <label className="text-sm text-slate-300">Category
+            <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
+              {cats.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </label>
+          <label className="text-sm text-slate-300 sm:col-span-2">Description
+            <input required value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="Vercel subscription" />
+          </label>
+          <div className="grid grid-cols-[1fr_auto] gap-2">
+            <label className="text-sm text-slate-300">Date
+              <input required type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
+            </label>
+            <label className="text-sm text-slate-300">Time
+              <input type="time" value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })} className="mt-2 w-[110px] rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
+            </label>
+          </div>
+          <label className="text-sm text-slate-300">Added by
+            <select value={form.added_by} onChange={(e) => setForm({ ...form, added_by: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
+              <option value="self">Self</option><option value="ceo">CEO</option>
+            </select>
+          </label>
+          <label className="text-sm text-slate-300 sm:col-span-2">Notes
+            <input value={form.notes || ''} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
+          </label>
+        </div>
+        <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : editing ? 'Update' : 'Save'}</button>
+      </form>
+    </div>
+  )
+}
+
+/* ---------------- Zopkit View ---------------- */
+function ZopkitView({ data, onAdd, onEdit, onDelete, showMoney }) {
+  const { zopkit_transactions } = data
+  const now = new Date()
+  const monthKey = `${now.getFullYear()}-${now.getMonth()}`
+  const monthTx = zopkit_transactions.filter((t) => { const d = new Date(t.date); return `${d.getFullYear()}-${d.getMonth()}` === monthKey })
+  const monthIn = monthTx.filter((t) => t.type === 'income').reduce((s, t) => s + Number(t.amount || 0), 0)
+  const monthOut = monthTx.filter((t) => t.type === 'expense').reduce((s, t) => s + Number(t.amount || 0), 0)
+  const totalIn = zopkit_transactions.filter((t) => t.type === 'income').reduce((s, t) => s + Number(t.amount || 0), 0)
+  const totalOut = zopkit_transactions.filter((t) => t.type === 'expense').reduce((s, t) => s + Number(t.amount || 0), 0)
+  const balance = totalIn - totalOut
+
+  const byCategory = {}
+  monthTx.filter((t) => t.type === 'expense').forEach((t) => { const k = t.category || 'other'; byCategory[k] = (byCategory[k] || 0) + Number(t.amount || 0) })
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-end justify-between">
+        <div>
+          <div className="mb-2 text-xs uppercase tracking-widest text-cyan-200/70">Startup ledger</div>
+          <h1 className="text-3xl font-semibold tracking-tight text-white">Zopkit finance</h1>
+        </div>
+        <button onClick={onAdd} className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 px-4 py-2.5 text-sm font-semibold text-[#07101c]"><Plus size={15} />Log</button>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-4">
+        <StatCard label={`In · ${now.toLocaleString('en-IN', { month: 'short' })}`} value={showMoney ? money(monthIn) : '••••'} icon={ArrowUpRight} accent="bg-emerald-400/15 text-emerald-200" sub={<span>{monthTx.filter(t => t.type === 'income').length} entries</span>} />
+        <StatCard label={`Out · ${now.toLocaleString('en-IN', { month: 'short' })}`} value={showMoney ? money(monthOut) : '••••'} icon={ArrowDownRight} accent="bg-rose-400/15 text-rose-200" tone="text-rose-300" sub={<span className="text-rose-300">{monthTx.filter(t => t.type === 'expense').length} entries</span>} />
+        <StatCard label="Net this month" value={showMoney ? money(monthIn - monthOut) : '••••'} icon={Target} accent="bg-cyan-400/15 text-cyan-200" sub={<span className={monthIn - monthOut >= 0 ? 'text-emerald-300' : 'text-rose-300'}>{monthIn - monthOut >= 0 ? 'Positive' : 'Negative'}</span>} tone={monthIn - monthOut >= 0 ? 'text-emerald-300' : 'text-rose-300'} />
+        <StatCard label="Zopkit balance" value={showMoney ? money(balance) : '••••'} icon={Briefcase} accent="bg-violet-400/15 text-violet-200" sub={<span>All-time</span>} />
+      </div>
+
+      {Object.keys(byCategory).length > 0 && (
+        <div className="rounded-2xl border border-white/10 bg-white/[.035] p-5">
+          <div className="mb-3 text-sm font-semibold text-white">This month by category</div>
+          <div className="space-y-2">
+            {Object.entries(byCategory).sort((a, b) => b[1] - a[1]).map(([cat, amt]) => {
+              const pct = monthOut > 0 ? Math.round((amt / monthOut) * 100) : 0
+              return (
+                <div key={cat}>
+                  <div className="flex items-center justify-between text-xs text-slate-400">
+                    <span className="capitalize">{cat}</span><span className="text-white">{money(amt)} · {pct}%</span>
+                  </div>
+                  <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white/5"><div className="h-full rounded-full bg-cyan-400" style={{ width: `${pct}%` }} /></div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[.035]">
+        {zopkit_transactions.length === 0 ? (
+          <EmptyState icon={Briefcase} title="No Zopkit entries yet" message="Log the money flowing through your startup — CEO transfers, tools, team ops." cta="Add first entry" onCta={onAdd} />
+        ) : (
+          <div className="divide-y divide-white/5">
+            {zopkit_transactions.map((t) => (
+              <div key={t.id} className="group grid grid-cols-[1.4fr_.9fr_.6fr_auto] items-center gap-4 px-5 py-4">
+                <div className="flex items-center gap-3">
+                  <div className={`flex h-9 w-9 items-center justify-center rounded-xl ${t.type === 'income' ? 'bg-emerald-400/15 text-emerald-200' : 'bg-rose-400/15 text-rose-200'}`}>
+                    {t.type === 'income' ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium text-white">{t.description}</div>
+                    <div className="text-[11px] text-slate-500">{t.category || 'other'} · by {t.added_by}</div>
+                  </div>
+                </div>
+                <div className="text-xs text-slate-500">{formatDateTime(t.date, t.time)}</div>
+                <div className={`text-sm font-semibold ${t.type === 'income' ? 'text-emerald-300' : 'text-rose-300'}`}>{showMoney ? (t.type === 'income' ? '+' : '-') + money(t.amount).replace('-', '') : '••••'}</div>
+                <div className="flex gap-1 opacity-0 transition group-hover:opacity-100">
+                  <button onClick={() => onEdit(t)} className="rounded-lg p-1.5 text-slate-500 hover:bg-white/5 hover:text-white"><Pencil size={13} /></button>
+                  <button onClick={() => onDelete(t)} className="rounded-lg p-1.5 text-rose-300/70 hover:bg-rose-300/10"><Trash2 size={13} /></button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/* ---------------- Money Rules View + Widget ---------------- */
+function MoneyRulesWidget({ rules, onOpen }) {
+  const active = rules.filter((r) => r.is_active).slice(0, 4)
+  return (
+    <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-violet-500/10 via-transparent to-cyan-500/5 p-5">
+      <div className="mb-3 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-violet-400/15 text-violet-200"><Star size={15} /></div>
+          <div className="text-sm font-semibold text-white">Money rules</div>
+        </div>
+        <button onClick={onOpen} className="text-xs text-cyan-300 hover:underline">Manage</button>
+      </div>
+      {active.length === 0 ? (
+        <button onClick={onOpen} className="w-full rounded-xl border border-dashed border-white/10 py-4 text-sm text-slate-400 hover:bg-white/5">+ Add your first financial rule</button>
+      ) : (
+        <ul className="space-y-2">
+          {active.map((r) => (<li key={r.id} className="flex items-start gap-2 text-sm text-slate-200"><span className="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-violet-300" />{r.rule_text}</li>))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+function MoneyRulesView({ data, onAdd, onToggle, onEdit, onDelete }) {
+  const { money_rules } = data
+  const [text, setText] = useState('')
+  const submit = async (e) => { e.preventDefault(); if (!text.trim()) return; await onAdd(text.trim()); setText('') }
+  return (
+    <div className="space-y-5">
+      <div>
+        <div className="mb-2 text-xs uppercase tracking-widest text-cyan-200/70">Your compass</div>
+        <h1 className="text-3xl font-semibold tracking-tight text-white">Money rules</h1>
+      </div>
+      <form onSubmit={submit} className="flex gap-2">
+        <input value={text} onChange={(e) => setText(e.target.value)} placeholder="e.g. Save 30% of every paycheck before spending" className="flex-1 rounded-xl border border-white/10 bg-white/[.04] px-4 py-3 text-white outline-none focus:border-cyan-300/50" />
+        <button className="rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 px-5 py-3 text-sm font-semibold text-[#07101c]">+ Add</button>
+      </form>
+      {money_rules.length === 0 ? (
+        <div className="rounded-2xl border border-white/10 bg-white/[.035]">
+          <EmptyState icon={Star} title="No rules yet" message="Write down your personal money principles. They&apos;ll appear on the dashboard as a gentle reminder." />
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {money_rules.map((r, i) => (
+            <div key={r.id} className="group flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[.035] px-4 py-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-violet-400/15 text-xs font-semibold text-violet-200">{i + 1}</div>
+              <div className={`flex-1 text-sm ${r.is_active ? 'text-white' : 'text-slate-500 line-through'}`}>{r.rule_text}</div>
+              <button onClick={() => onToggle(r)} className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${r.is_active ? 'bg-emerald-400/15 text-emerald-200 hover:bg-emerald-400/25' : 'bg-white/[.06] text-slate-400 hover:bg-white/[.1]'}`}>{r.is_active ? 'Active' : 'Off'}</button>
+              <button onClick={() => onDelete(r)} className="rounded-lg p-1.5 text-rose-300/70 opacity-0 transition hover:bg-rose-300/10 group-hover:opacity-100"><Trash2 size={13} /></button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 /* ---------------- Views ---------------- */
-function DashboardView({ data, showMoney, onOpenTxForm, setView }) {
-  const { accounts, transactions, categories, holdings = [], loans = [], bucket_list = [] } = data
+function DashboardView({ data, showMoney, onOpenTxForm, setView, onAddRule }) {
+  const { accounts, transactions, categories, holdings = [], loans = [], bucket_list = [], money_rules = [] } = data
   const totalBalance = accounts.reduce((s, a) => s + Number(a.current_balance || 0), 0)
   const invested = holdings.reduce((s, h) => s + Number(h.qty) * Number(h.avg_buy_price), 0)
   const currentInv = holdings.reduce((s, h) => s + Number(h.qty) * Number(h.current_price || h.avg_buy_price), 0)
@@ -2115,34 +2323,37 @@ function DashboardView({ data, showMoney, onOpenTxForm, setView }) {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-white/[.035] p-5">
-          <div className="mb-4 flex items-center justify-between">
-            <div>
-              <div className="text-sm font-semibold text-white">Your accounts</div>
-              <div className="text-xs text-slate-500">Live balance</div>
+        <div className="space-y-4">
+          <MoneyRulesWidget rules={money_rules} onOpen={() => setView('rules')} />
+          <div className="rounded-2xl border border-white/10 bg-white/[.035] p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <div className="text-sm font-semibold text-white">Your accounts</div>
+                <div className="text-xs text-slate-500">Live balance</div>
+              </div>
+              <button onClick={() => setView('accounts')} className="text-xs text-cyan-300 hover:underline">Manage</button>
             </div>
-            <button onClick={() => setView('accounts')} className="text-xs text-cyan-300 hover:underline">Manage</button>
-          </div>
-          {accounts.length === 0 ? (
-            <EmptyState icon={Landmark} title="No accounts yet" message="Add your first bank or wallet to start tracking." cta="Add account" onCta={() => setView('accounts')} />
-          ) : (
-            <div className="space-y-3">
-              {accounts.slice(0, 5).map((a) => (
-                <div key={a.id} className="flex items-center justify-between rounded-xl border border-white/5 bg-black/20 px-4 py-3">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-xl" style={{ background: `${a.color || '#22d3ee'}22`, color: a.color || '#22d3ee' }}>
-                      {a.type === 'credit_card' ? <CreditCard size={16} /> : a.type === 'cash' || a.type === 'wallet' ? <Wallet size={16} /> : <Landmark size={16} />}
+            {accounts.length === 0 ? (
+              <EmptyState icon={Landmark} title="No accounts yet" message="Add your first bank or wallet to start tracking." cta="Add account" onCta={() => setView('accounts')} />
+            ) : (
+              <div className="space-y-3">
+                {accounts.slice(0, 5).map((a) => (
+                  <div key={a.id} className="flex items-center justify-between rounded-xl border border-white/5 bg-black/20 px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-xl" style={{ background: `${a.color || '#22d3ee'}22`, color: a.color || '#22d3ee' }}>
+                        {a.type === 'credit_card' ? <CreditCard size={16} /> : a.type === 'cash' || a.type === 'wallet' ? <Wallet size={16} /> : <Landmark size={16} />}
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium text-white">{a.name}</div>
+                        <div className="text-[11px] capitalize text-slate-500">{a.type.replace('_', ' ')}{a.account_number_last4 ? ` · •${a.account_number_last4}` : ''}</div>
+                      </div>
                     </div>
-                    <div>
-                      <div className="text-sm font-medium text-white">{a.name}</div>
-                      <div className="text-[11px] capitalize text-slate-500">{a.type.replace('_', ' ')}{a.account_number_last4 ? ` · •${a.account_number_last4}` : ''}</div>
-                    </div>
+                    <div className="text-sm font-semibold text-white">{showMoney ? money(a.current_balance) : '••••'}</div>
                   </div>
-                  <div className="text-sm font-semibold text-white">{showMoney ? money(a.current_balance) : '••••'}</div>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -2478,7 +2689,7 @@ function InsightsView({ data }) {
 function Shell({ user, onLogout }) {
   const [view, setView] = useState('dashboard')
   const [showMoney, setShowMoney] = useState(true)
-  const [data, setData] = useState({ accounts: [], categories: [], transactions: [], budgets: [], portfolios: [], holdings: [], sips: [], loans: [], loan_payments: [], bucket_list: [], lend_borrow: [], lend_repayments: [], credit_cards: [], credit_card_transactions: [], scholarships: [], scholarship_payments: [], profile: null })
+  const [data, setData] = useState({ accounts: [], categories: [], transactions: [], budgets: [], portfolios: [], holdings: [], sips: [], loans: [], loan_payments: [], bucket_list: [], lend_borrow: [], lend_repayments: [], credit_cards: [], credit_card_transactions: [], scholarships: [], scholarship_payments: [], zopkit_transactions: [], money_rules: [], profile: null })
   const [loading, setLoading] = useState(true)
 
   const toast = useToast()
@@ -2519,6 +2730,8 @@ function Shell({ user, onLogout }) {
   const [scholarshipPayOpen, setScholarshipPayOpen] = useState(false)
   const [scholarshipPayTarget, setScholarshipPayTarget] = useState(null)
   const [pricesLoading, setPricesLoading] = useState(false)
+  const [zopkitFormOpen, setZopkitFormOpen] = useState(false)
+  const [zopkitEditing, setZopkitEditing] = useState(null)
 
   const refresh = async () => {
     try {
@@ -2532,6 +2745,7 @@ function Shell({ user, onLogout }) {
         lend_borrow: result.lend_borrow || [], lend_repayments: result.lend_repayments || [],
         credit_cards: result.credit_cards || [], credit_card_transactions: result.credit_card_transactions || [],
         scholarships: result.scholarships || [], scholarship_payments: result.scholarship_payments || [],
+        zopkit_transactions: result.zopkit_transactions || [], money_rules: result.money_rules || [],
         profile: result.profile || null,
       })
     } catch (e) {
@@ -2681,10 +2895,37 @@ function Shell({ user, onLogout }) {
       const response = await fetch('/api/finance/prices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ symbols }) })
       const result = await response.json()
       const updated = Object.keys(result.prices || {}).length
-      toast.push(`Refreshed ${updated} price${updated === 1 ? '' : 's'}${result.kite_configured ? ' via Kite' : ' via Yahoo'}`, updated ? 'success' : 'info')
+      toast.push(`Refreshed ${updated} price${updated === 1 ? '' : 's'}${result.kite_active ? ' via Kite live' : ' via Yahoo'}`, updated ? 'success' : 'info')
       await refresh()
     } catch (e) { toast.push('Price fetch failed', 'error') } finally { setPricesLoading(false) }
   }
+
+  // Zopkit
+  const openZopkitForm = (t = null) => { setZopkitEditing(t); setZopkitFormOpen(true) }
+  const closeZopkitForm = () => { setZopkitFormOpen(false); setZopkitEditing(null) }
+  const onZopkitSaved = async () => { closeZopkitForm(); await refresh() }
+  const deleteZopkit = async (t) => {
+    if (!window.confirm('Delete this Zopkit entry?')) return
+    const response = await fetch(`/api/finance/zopkit_transactions/${t.id}`, { method: 'DELETE' })
+    if (response.ok) { toast.push('Deleted'); await refresh() } else { toast.push('Delete failed', 'error') }
+  }
+
+  // Money rules
+  const addRule = async (rule_text) => {
+    const nextOrder = (data.money_rules?.[data.money_rules.length - 1]?.order_index ?? 0) + 1
+    const response = await fetch('/api/finance/money_rules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rule_text, order_index: nextOrder, is_active: true }) })
+    if (response.ok) { toast.push('Rule added'); await refresh() } else { toast.push('Could not add', 'error') }
+  }
+  const toggleRule = async (r) => {
+    const response = await fetch(`/api/finance/money_rules/${r.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_active: !r.is_active }) })
+    if (response.ok) await refresh()
+  }
+  const deleteRule = async (r) => {
+    if (!window.confirm(`Delete rule "${r.rule_text}"?`)) return
+    const response = await fetch(`/api/finance/money_rules/${r.id}`, { method: 'DELETE' })
+    if (response.ok) { toast.push('Rule deleted'); await refresh() }
+  }
+  const connectKite = () => { window.location.href = '/api/kite/login' }
 
   const deleteTx = async (t) => {
     if (!window.confirm('Delete this transaction? Balances will be recomputed.')) return
@@ -2715,6 +2956,8 @@ function Shell({ user, onLogout }) {
     { key: 'scholarships', label: 'Scholarships', icon: ShieldCheck },
     { key: 'budgets', label: 'Budgets', icon: Target },
     { key: 'bucket', label: 'Bucket list', icon: Mountain },
+    { key: 'zopkit', label: 'Zopkit', icon: Rocket },
+    { key: 'rules', label: 'Money rules', icon: Star },
     { key: 'insights', label: 'Insights', icon: LineChart },
     { key: 'profile', label: 'Profile', icon: Sparkles },
   ]
@@ -2776,9 +3019,11 @@ function Shell({ user, onLogout }) {
               {view === 'categories' && <CategoriesView data={data} onAdd={() => openCatForm()} onEdit={openCatForm} onDelete={deleteCategory} />}
               {view === 'categories' && <CategoriesView data={data} onAdd={() => openCatForm()} onEdit={openCatForm} onDelete={deleteCategory} />}
               {view === 'budgets' && <BudgetsView data={data} onAdd={() => openBudgetForm()} onEdit={openBudgetForm} onDelete={deleteBudget} />}
-              {view === 'investments' && <InvestmentsView data={data} onAddPortfolio={() => openPortfolioForm()} onEditPortfolio={openPortfolioForm} onDeletePortfolio={deletePortfolio} onAddHolding={openHoldingForm} onEditHolding={openHoldingEdit} onDeleteHolding={deleteHolding} onRefreshPrice={refreshHoldingPrice} onRefreshAll={refreshAllPrices} pricesLoading={pricesLoading} onAddFunds={openFundsForm} showMoney={showMoney} />}
+              {view === 'investments' && <InvestmentsView data={data} onAddPortfolio={() => openPortfolioForm()} onEditPortfolio={openPortfolioForm} onDeletePortfolio={deletePortfolio} onAddHolding={openHoldingForm} onEditHolding={openHoldingEdit} onDeleteHolding={deleteHolding} onRefreshPrice={refreshHoldingPrice} onRefreshAll={refreshAllPrices} pricesLoading={pricesLoading} onAddFunds={openFundsForm} onConnectKite={connectKite} showMoney={showMoney} />}
               {view === 'cards' && <CreditCardsView data={data} onAdd={() => openCardForm()} onEdit={openCardForm} onDelete={deleteCard} onSpend={openCardSpend} onPay={openCardPay} onDeleteSpend={deleteCardSpend} showMoney={showMoney} />}
               {view === 'scholarships' && <ScholarshipsView data={data} onAdd={() => openScholarshipForm()} onEdit={openScholarshipForm} onDelete={deleteScholarship} onPay={openScholarshipPay} showMoney={showMoney} />}
+              {view === 'zopkit' && <ZopkitView data={data} onAdd={() => openZopkitForm()} onEdit={openZopkitForm} onDelete={deleteZopkit} showMoney={showMoney} />}
+              {view === 'rules' && <MoneyRulesView data={data} onAdd={addRule} onToggle={toggleRule} onEdit={() => {}} onDelete={deleteRule} />}
               {view === 'loans' && <LoansView data={data} onAdd={() => openLoanForm()} onEdit={openLoanForm} onDelete={deleteLoan} onPay={openLoanPay} onDeletePayment={deleteLoanPayment} showMoney={showMoney} />}
               {view === 'lend' && <LendBorrowView data={data} onAdd={() => openLendForm()} onEdit={openLendForm} onDelete={deleteLend} showMoney={showMoney} />}
               {view === 'bucket' && <BucketListView data={data} onAdd={() => openBucketForm()} onEdit={openBucketForm} onDelete={deleteBucket} />}
@@ -2823,6 +3068,7 @@ function Shell({ user, onLogout }) {
       <CardPayForm open={cardPayOpen} onClose={closeCardPay} onSaved={onCardPaid} card={cardPayTarget} accounts={data.accounts} toast={toast} />
       <ScholarshipForm open={scholarshipFormOpen} onClose={closeScholarshipForm} onSaved={onScholarshipSaved} editing={scholarshipEditing} accounts={data.accounts} toast={toast} />
       <ScholarshipPayForm open={scholarshipPayOpen} onClose={closeScholarshipPay} onSaved={onScholarshipPaid} scholarship={scholarshipPayTarget} accounts={data.accounts} toast={toast} />
+      <ZopkitForm open={zopkitFormOpen} onClose={closeZopkitForm} onSaved={onZopkitSaved} editing={zopkitEditing} toast={toast} />
     </div>
   )
 }
