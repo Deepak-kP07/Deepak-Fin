@@ -1,5 +1,12 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
+# Local secrets
+.env
+
+# Local planning docs (not part of the shipped app)
+TODO.md
+PROJECT_CONTEXT.md
+
 # IDE and editors
 .idea/
 .vscode/

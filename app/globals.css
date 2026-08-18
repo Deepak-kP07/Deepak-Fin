@@ -139,3 +139,14 @@ code {
     @apply bg-background text-foreground;
     }
 }
+
+@keyframes ticker-up {
+  from { transform: translateY(0); }
+  to { transform: translateY(-50%); }
+}
+.ticker-track {
+  animation: ticker-up linear infinite;
+}
+.ticker-track:hover {
+  animation-play-state: paused;
+}
