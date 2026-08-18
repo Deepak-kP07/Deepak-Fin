@@ -3,13 +3,15 @@
 import { Children, isValidElement, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/browser'
 import { accrueInterest, calcEmi, daysBetween, projectSchedule, totalInterest } from '@/lib/amortization'
+import jsPDF from 'jspdf'
+import autoTable from 'jspdf-autotable'
 import {
   Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend,
 } from 'recharts'
 import {
-  ArrowDownRight, ArrowLeftRight, ArrowUpRight, BarChart3, Briefcase, Calendar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock, CreditCard,
-  Eye, EyeOff, Heart, Landmark, LayoutDashboard, LineChart, ListChecks, LogOut, Menu, Mountain, PiggyBank, Plus,
-  RefreshCw, Rocket, Search, ShieldCheck, Sparkles, Star, Tag, Target, TrendingDown, TrendingUp, Trash2, Pencil,
+  ArrowDownRight, ArrowLeftRight, ArrowUpDown, ArrowUpRight, BarChart3, Briefcase, Calendar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock, CreditCard,
+  Download, Eye, EyeOff, FileText, Heart, History, Landmark, LayoutDashboard, LineChart, ListChecks, LogOut, Menu, MoreVertical, Mountain, Paperclip, PieChart as PieChartIcon, PiggyBank, Plus,
+  RefreshCw, Repeat, Rocket, Search, ShieldCheck, Sparkles, Star, Tag, Target, TrendingDown, TrendingUp, Trash2, Pencil,
   Wallet, X, Zap,
 } from 'lucide-react'
 
@@ -102,10 +104,53 @@ function Select({ value, onChange, children, disabled, placeholder, className })
         <ChevronDown size={15} className={`shrink-0 text-slate-500 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
-        <div className="absolute left-0 right-0 z-30 mt-1 max-h-64 overflow-y-auto rounded-xl border border-white/10 bg-[#141a28] p-1 shadow-2xl">
+        <div className="absolute left-0 z-30 mt-1 max-h-64 w-max min-w-full max-w-[min(20rem,90vw)] overflow-y-auto rounded-xl border border-white/10 bg-[#141a28] p-1 shadow-2xl">
           {options.map((o, i) => (
             <button key={`${o.value}-${i}`} type="button" disabled={o.disabled} onClick={() => { onChange({ target: { value: o.value } }); setOpen(false) }} className={`block w-full rounded-lg px-3 py-2 text-left text-sm transition ${String(o.value) === String(currentValue) ? 'bg-cyan-400/15 text-cyan-200' : 'text-slate-300 hover:bg-white/5'} disabled:opacity-40`}>{o.label}</button>
           ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Category picker, specialized rather than reusing the generic Select — categories tend to run
+// long enough that a single scrolling column hides most of them; laying them out as a grid
+// surfaces far more at once. The pencil icon opens the same add-category flow as Profile.
+function CategorySelect({ value, onChange, categories, onAddCategory, className, placeholder = 'No category' }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  useEffect(() => {
+    const onDocClick = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [])
+  const selected = categories.find((c) => String(c.id) === String(value))
+  const base = className || 'w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none focus:border-cyan-300/50'
+
+  return (
+    <div ref={ref} className="relative">
+      <button type="button" onClick={() => setOpen((o) => !o)} className={`${base} flex items-center justify-between gap-2 text-left`}>
+        <span className={`truncate ${selected ? '' : 'text-slate-500'}`}>{selected ? selected.name : placeholder}</span>
+        <ChevronDown size={15} className={`shrink-0 text-slate-500 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="absolute left-0 z-30 mt-1 max-h-80 w-max min-w-full max-w-[min(24rem,90vw)] overflow-y-auto rounded-xl border border-white/10 bg-[#141a28] p-3 shadow-2xl">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-[10px] uppercase tracking-widest text-slate-500">Categories</span>
+            {onAddCategory && (
+              <button type="button" onClick={() => { setOpen(false); onAddCategory() }} className="rounded-lg p-1 text-slate-400 hover:bg-white/5 hover:text-cyan-200" title="Add new category"><Pencil size={13} /></button>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+            <button type="button" onClick={() => { onChange({ target: { value: '' } }); setOpen(false) }} className={`rounded-lg px-3 py-2 text-left text-sm transition ${!value ? 'bg-cyan-400/15 text-cyan-200' : 'text-slate-300 hover:bg-white/5'}`}>{placeholder}</button>
+            {categories.map((c) => (
+              <button key={c.id} type="button" onClick={() => { onChange({ target: { value: c.id } }); setOpen(false) }} className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-left text-sm transition ${String(value) === String(c.id) ? 'bg-cyan-400/15 text-cyan-200' : 'text-slate-300 hover:bg-white/5'}`}>
+                <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: c.color || '#94a3b8' }} />
+                <span className="truncate">{c.name}</span>
+              </button>
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -404,7 +449,7 @@ function Avatar({ src, name, email, size = 36, rounded = 'rounded-xl', className
 }
 
 /* ---------------- Transaction Form ---------------- */
-function TransactionForm({ open, onClose, onSaved, editing, accounts, categories, creditCards = [], lendBorrow = [], loans = [], onAddAccount, toast }) {
+function TransactionForm({ open, onClose, onSaved, editing, accounts, categories, creditCards = [], lendBorrow = [], loans = [], onAddAccount, onAddCategory, toast }) {
   const now = todayISO()
   const nowTime = new Date().toTimeString().slice(0, 5)
   const initial = useMemo(() => {
@@ -416,9 +461,22 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
   // settling a loan or a lend/borrow debt instead, and picks a target from that list.
   const [purposeMode, setPurposeMode] = useState(initial.repay_value ? 'repayment' : 'category')
   const [busy, setBusy] = useState(false)
-  useEffect(() => { setForm(initial); setPurposeMode(initial.repay_value ? 'repayment' : 'category') }, [initial])
+  const [attachmentFile, setAttachmentFile] = useState(null)
+  const [attachmentRemoved, setAttachmentRemoved] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [history, setHistory] = useState(null)
+  useEffect(() => { setForm(initial); setPurposeMode(initial.repay_value ? 'repayment' : 'category'); setAttachmentFile(null); setAttachmentRemoved(false); setHistoryOpen(false); setHistory(null) }, [initial])
 
   if (!open) return null
+
+  const toggleHistory = async () => {
+    if (historyOpen) { setHistoryOpen(false); return }
+    setHistoryOpen(true)
+    if (!history) {
+      const response = await fetch(`/api/finance/transactions/${editing.id}/history`)
+      setHistory(response.ok ? await response.json() : [])
+    }
+  }
   const catsForType = categories.filter((c) => c.type === (form.type === 'income' ? 'income' : 'expense'))
   const openLends = lendBorrow.filter((l) => l.type === 'lent' && l.status !== 'returned')
   const openBorrows = lendBorrow.filter((l) => l.type === 'borrowed' && l.status !== 'returned')
@@ -519,6 +577,22 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
       const response = await fetch(endpoint, { method: editing ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || data.message || 'Could not save')
+
+      if (attachmentRemoved && editing?.attachment_path) {
+        await fetch(`/api/finance/transactions/${data.id}/attachment`, { method: 'DELETE' })
+      }
+      if (attachmentFile) {
+        const supabase = createClient()
+        const { data: userData } = await supabase.auth.getUser()
+        const path = `${userData.user.id}/${data.id}/${Date.now()}-${attachmentFile.name}`
+        const { error: uploadError } = await supabase.storage.from('attachments').upload(path, attachmentFile, { upsert: true })
+        if (!uploadError) {
+          await fetch(endpoint === '/api/finance/transactions' ? `/api/finance/transactions/${data.id}` : endpoint, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ attachment_path: path, attachment_name: attachmentFile.name }) })
+        } else {
+          toast.push('Transaction saved, but the attachment failed to upload', 'error')
+        }
+      }
+
       toast.push(editing ? 'Transaction updated' : 'Transaction added')
       onSaved()
     } catch (e) { toast.push(e.message, 'error') } finally { setBusy(false) }
@@ -591,10 +665,7 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
                   <div className="mt-1 text-[11px] text-slate-500">Auto-marks the debt as partially/fully repaid.</div>
                 </>
               ) : (
-                <Select value={form.category_id || ''} onChange={(e) => setForm({ ...form, category_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none focus:border-cyan-300/50">
-                  <option value="">No category</option>
-                  {catsForType.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </Select>
+                <CategorySelect value={form.category_id || ''} onChange={(e) => setForm({ ...form, category_id: e.target.value })} categories={catsForType} onAddCategory={onAddCategory} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
               )}
             </div>
           )}
@@ -605,6 +676,46 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
           <label className="text-sm text-slate-300 sm:col-span-2">Notes
             <input value={form.notes || ''} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="Optional context" />
           </label>
+
+          <div className="text-sm text-slate-300 sm:col-span-2">
+            Receipt / attachment
+            {editing?.attachment_path && !attachmentRemoved ? (
+              <div className="mt-2 flex items-center justify-between rounded-xl border border-white/10 bg-white/[.04] px-3 py-3">
+                <button type="button" onClick={async () => {
+                  const response = await fetch(`/api/finance/transactions/${editing.id}/attachment`)
+                  const data = await response.json()
+                  if (response.ok) window.open(data.url, '_blank')
+                }} className="flex min-w-0 items-center gap-2 truncate text-sm text-cyan-200 hover:underline"><Paperclip size={14} className="shrink-0 text-slate-500" />{editing.attachment_name || 'Attachment'}</button>
+                <button type="button" onClick={() => setAttachmentRemoved(true)} className="shrink-0 rounded-lg p-1.5 text-rose-300/70 hover:bg-rose-300/10"><Trash2 size={14} /></button>
+              </div>
+            ) : (
+              <label className="mt-2 flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-white/15 bg-white/[.02] px-3 py-3 text-sm text-slate-400 hover:bg-white/[.04]">
+                <Paperclip size={14} />
+                {attachmentFile ? attachmentFile.name : 'Attach a photo of the receipt (optional)'}
+                <input type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => setAttachmentFile(e.target.files?.[0] || null)} />
+              </label>
+            )}
+          </div>
+
+          {editing && (
+            <div className="sm:col-span-2">
+              <button type="button" onClick={toggleHistory} className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300"><History size={13} />{historyOpen ? 'Hide edit history' : 'View edit history'}</button>
+              {historyOpen && (
+                <div className="mt-2 space-y-1.5 rounded-xl border border-white/10 bg-white/[.02] p-3">
+                  {history === null ? (
+                    <div className="text-xs text-slate-500">Loading…</div>
+                  ) : history.length === 0 ? (
+                    <div className="text-xs text-slate-500">No edits recorded yet.</div>
+                  ) : history.map((h) => (
+                    <div key={h.id} className="text-xs text-slate-400">
+                      <span className="text-slate-500">{formatDateTime(h.changed_at?.slice(0, 10), h.changed_at?.slice(11, 16))}</span>{' — '}
+                      {Object.entries(h.previous_values).map(([field, prev]) => `${field} was "${prev}"`).join(', ')}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <button disabled={busy || !hasAnySource} className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">
@@ -754,6 +865,116 @@ function CategoryForm({ open, onClose, onSaved, editing, toast }) {
   )
 }
 
+/* ---------------- Recurring Transaction Form ---------------- */
+function RecurringForm({ open, onClose, onSaved, editing, accounts, categories, toast }) {
+  const initial = editing
+    ? { ...editing, amount: String(editing.amount) }
+    : { account_id: accounts[0]?.id || '', category_id: '', type: 'expense', amount: '', description: '', notes: '', frequency: 'monthly', day_of_month: String(new Date().getDate()), next_due_date: todayISO(), is_active: true }
+  const [form, setForm] = useState(initial)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => { setForm(initial) }, [editing, open])
+  if (!open) return null
+  const catsForType = categories.filter((c) => c.type === form.type)
+  const save = async (e) => {
+    e.preventDefault(); setBusy(true)
+    try {
+      const endpoint = editing ? `/api/finance/recurring_transactions/${editing.id}` : '/api/finance/recurring_transactions'
+      const payload = { ...form, amount: Number(form.amount), category_id: form.category_id || null, day_of_month: form.day_of_month ? Number(form.day_of_month) : null }
+      const response = await fetch(endpoint, { method: editing ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || data.message || 'Could not save')
+      toast.push(editing ? 'Recurring rule updated' : 'Recurring rule added — it\'ll auto-log from its next due date')
+      onSaved()
+    } catch (err) { toast.push(err.message, 'error') } finally { setBusy(false) }
+  }
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center" onClick={onClose}>
+      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-3xl border border-white/10 bg-[#141a28] p-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-white">{editing ? 'Edit recurring rule' : 'New recurring transaction'}</h2>
+          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-white/5"><X size={18} /></button>
+        </div>
+        <div className="mt-5 grid gap-4">
+          <div className="grid grid-cols-2 gap-2">
+            {[{ v: 'expense', l: 'Expense' }, { v: 'income', l: 'Income' }].map((t) => (
+              <button key={t.v} type="button" onClick={() => setForm({ ...form, type: t.v, category_id: '' })} className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${form.type === t.v ? 'border-cyan-400/30 bg-cyan-400/15 text-cyan-200' : 'border-white/10 text-slate-400 hover:bg-white/5'}`}>{t.l}</button>
+            ))}
+          </div>
+          <label className="text-sm text-slate-300">Description
+            <input required value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="e.g. Rent, Salary, Netflix" />
+          </label>
+          <label className="text-sm text-slate-300">Amount
+            <input required type="number" step="0.01" min="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
+          </label>
+          <label className="text-sm text-slate-300">Account
+            <Select required value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
+              <option value="">Choose account…</option>
+              {accounts.filter((a) => a.type !== 'debit_card').map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </Select>
+          </label>
+          <label className="text-sm text-slate-300">Category
+            <CategorySelect value={form.category_id || ''} onChange={(e) => setForm({ ...form, category_id: e.target.value })} categories={catsForType} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
+          </label>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="text-sm text-slate-300">Repeats
+              <Select value={form.frequency} onChange={(e) => setForm({ ...form, frequency: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+                <option value="yearly">Yearly</option>
+              </Select>
+            </label>
+            <label className="text-sm text-slate-300">Next due
+              <DateInput value={form.next_due_date} onChange={(e) => setForm({ ...form, next_due_date: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
+            </label>
+          </div>
+          <div className="text-[11px] text-slate-500">Any occurrences already due by the time you save will be logged immediately, then it repeats {form.frequency} from there.</div>
+          <label className="text-sm text-slate-300">Notes
+            <input value={form.notes || ''} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="Optional" />
+          </label>
+        </div>
+        <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : editing ? 'Update rule' : 'Save recurring rule'}</button>
+      </form>
+    </div>
+  )
+}
+
+function RecurringManager({ open, onClose, rules, onAdd, onEdit, onToggle, onDelete, showMoney }) {
+  if (!open) return null
+  return (
+    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center" onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-3xl border border-white/10 bg-[#141a28] p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-white">Recurring transactions</h2>
+            <p className="mt-1 text-xs text-slate-500">Rent, salary, SIPs, subscriptions — set once, logged automatically.</p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-white/5"><X size={18} /></button>
+        </div>
+        <button type="button" onClick={onAdd} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 py-3 text-sm font-semibold text-[#07101c]"><Plus size={15} />New recurring transaction</button>
+        <div className="mt-4 space-y-2">
+          {rules.length === 0 ? (
+            <div className="rounded-2xl border border-white/10 bg-white/[.02] py-8 text-center text-sm text-slate-500">No recurring rules yet.</div>
+          ) : rules.map((r) => (
+            <div key={r.id} className={`rounded-2xl border p-4 ${r.is_active ? 'border-white/10 bg-white/[.035]' : 'border-white/5 bg-white/[.015] opacity-60'}`}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium text-white">{r.description}</div>
+                  <div className="mt-0.5 text-xs text-slate-500 capitalize">{r.frequency} · {r.type} · {showMoney ? money(r.amount) : '••••'} · next {formatDate(r.next_due_date)}</div>
+                </div>
+                <div className="flex shrink-0 gap-1">
+                  <button type="button" onClick={() => onToggle(r)} className={`rounded-lg px-2.5 py-1.5 text-[11px] font-medium transition ${r.is_active ? 'bg-emerald-400/15 text-emerald-200 hover:bg-emerald-400/25' : 'bg-white/[.06] text-slate-400 hover:bg-white/[.1]'}`}>{r.is_active ? 'Active' : 'Paused'}</button>
+                  <button type="button" onClick={() => onEdit(r)} className="rounded-lg p-1.5 text-slate-500 hover:bg-white/5 hover:text-white"><Pencil size={14} /></button>
+                  <button type="button" onClick={() => onDelete(r)} className="rounded-lg p-1.5 text-rose-300/70 hover:bg-rose-300/10"><Trash2 size={14} /></button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /* ---------------- Budget Form ---------------- */
 function BudgetForm({ open, onClose, onSaved, editing, categories, toast }) {
   const expenseCats = categories.filter((c) => c.type === 'expense')
@@ -802,14 +1023,14 @@ function BudgetForm({ open, onClose, onSaved, editing, categories, toast }) {
 }
 
 /* ---------------- CSV Import ---------------- */
-function CsvImport({ open, onClose, onImported, accounts, categories, toast }) {
+function CsvImport({ open, onClose, onImported, accounts, categories, transactions = [], toast }) {
   const [rows, setRows] = useState([])
   const [headers, setHeaders] = useState([])
   const [mapping, setMapping] = useState({ date: '', description: '', amount: '', type: '', category: '', notes: '' })
   const [defaultAccount, setDefaultAccount] = useState(accounts[0]?.id || '')
   const [busy, setBusy] = useState(false)
-  useEffect(() => { if (open) { setRows([]); setHeaders([]); setDefaultAccount(accounts[0]?.id || '') } }, [open, accounts])
-  if (!open) return null
+  const [excluded, setExcluded] = useState(() => new Set())
+  useEffect(() => { if (open) { setRows([]); setHeaders([]); setDefaultAccount(accounts[0]?.id || ''); setExcluded(new Set()) } }, [open, accounts])
 
   const parseCsv = (text) => {
     const lines = text.replace(/\r/g, '').split('\n').filter((l) => l.trim().length > 0)
@@ -848,26 +1069,61 @@ function CsvImport({ open, onClose, onImported, accounts, categories, toast }) {
     setMapping(auto)
   }
 
+  // Pure per-row parse — used both to build the preview (so what you see is exactly what gets
+  // imported) and to actually import, instead of two versions of the same logic drifting apart.
+  const parseRow = (r) => {
+    const rawAmount = String(r[mapping.amount] || '').replace(/[,₹\s]/g, '')
+    const amount = Number(rawAmount)
+    const valid = !!amount && !isNaN(amount)
+    const rawType = (mapping.type ? String(r[mapping.type] || '').toLowerCase() : '')
+    let finalType = 'expense'
+    if (rawType.includes('income') || rawType.includes('credit') || rawType === 'cr') finalType = 'income'
+    else if (rawType.includes('expense') || rawType.includes('debit') || rawType === 'dr') finalType = 'expense'
+    else if (rawAmount.startsWith('-')) finalType = 'expense'
+    const catName = mapping.category ? String(r[mapping.category] || '').trim().toLowerCase() : ''
+    const cat = catName ? categories.find((c) => c.name.toLowerCase() === catName && c.type === finalType) : null
+    let dateVal = r[mapping.date] || todayISO()
+    const m = String(dateVal).match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/)
+    if (m) { const y = m[3].length === 2 ? `20${m[3]}` : m[3]; dateVal = `${y}-${String(m[2]).padStart(2, '0')}-${String(m[1]).padStart(2, '0')}` }
+    const description = String(r[mapping.description] || 'Import').slice(0, 200)
+    return {
+      valid, type: finalType, amount: Math.abs(amount), description, date: dateVal,
+      account_id: defaultAccount, category_id: cat?.id || null, notes: mapping.notes ? String(r[mapping.notes] || '') : null,
+      categoryLabel: cat?.name || (catName ? `"${catName}" (no match)` : '—'),
+    }
+  }
+
+  // A likely duplicate: an existing transaction with the same date, same amount, and the same
+  // description already sitting in the account it'd be imported into — catches "ran the import
+  // twice" and "overlapping date range in two exports" without needing exact-ID matching.
+  const isDuplicate = (parsed) => transactions.some((t) =>
+    t.date === parsed.date && Number(t.amount) === parsed.amount &&
+    String(t.description || '').trim().toLowerCase() === parsed.description.trim().toLowerCase() &&
+    t.account_id === parsed.account_id)
+
+  const preview = useMemo(() => {
+    if (rows.length === 0 || !mapping.date || !mapping.description || !mapping.amount) return []
+    return rows.map((r) => { const parsed = parseRow(r); return { ...parsed, duplicate: parsed.valid && isDuplicate(parsed) } })
+  }, [rows, mapping, defaultAccount, categories, transactions])
+
+  useEffect(() => {
+    // Duplicates start unchecked (excluded) by default — everything else starts included.
+    setExcluded(new Set(preview.map((p, i) => (p.duplicate ? i : null)).filter((i) => i !== null)))
+  }, [rows, mapping, defaultAccount])
+
+  if (!open) return null
+
+  const toImport = preview.filter((p, i) => p.valid && !excluded.has(i))
+  const duplicateCount = preview.filter((p) => p.duplicate).length
+  const invalidCount = preview.filter((p) => !p.valid).length
+
   const doImport = async () => {
     if (!mapping.date || !mapping.description || !mapping.amount) { toast.push('Map at least Date, Description and Amount', 'error'); return }
     if (!defaultAccount) { toast.push('Choose a default account', 'error'); return }
     setBusy(true)
     let ok = 0; let fail = 0
-    for (const r of rows) {
-      const rawAmount = String(r[mapping.amount] || '').replace(/[,₹\s]/g, '')
-      const amount = Number(rawAmount)
-      if (!amount || isNaN(amount)) { fail++; continue }
-      const rawType = (mapping.type ? String(r[mapping.type] || '').toLowerCase() : '')
-      let finalType = 'expense'
-      if (rawType.includes('income') || rawType.includes('credit') || rawType === 'cr') finalType = 'income'
-      else if (rawType.includes('expense') || rawType.includes('debit') || rawType === 'dr') finalType = 'expense'
-      else if (rawAmount.startsWith('-')) finalType = 'expense'
-      const catName = mapping.category ? String(r[mapping.category] || '').trim().toLowerCase() : ''
-      const cat = catName ? categories.find((c) => c.name.toLowerCase() === catName && c.type === finalType) : null
-      let dateVal = r[mapping.date] || todayISO()
-      const m = String(dateVal).match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/)
-      if (m) { const y = m[3].length === 2 ? `20${m[3]}` : m[3]; dateVal = `${y}-${String(m[2]).padStart(2, '0')}-${String(m[1]).padStart(2, '0')}` }
-      const payload = { type: finalType, amount: Math.abs(amount), description: String(r[mapping.description] || 'Import').slice(0, 200), date: dateVal, account_id: defaultAccount, category_id: cat?.id || null, notes: mapping.notes ? String(r[mapping.notes] || '') : null }
+    for (const p of toImport) {
+      const { valid, duplicate, categoryLabel, ...payload } = p
       const res = await fetch('/api/finance/transactions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       if (res.ok) ok++; else fail++
     }
@@ -878,11 +1134,11 @@ function CsvImport({ open, onClose, onImported, accounts, categories, toast }) {
 
   return (
     <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center" onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} className="w-full max-w-2xl rounded-3xl border border-white/10 bg-[#141a28] p-6">
+      <div onClick={(e) => e.stopPropagation()} className="max-h-[85vh] w-full max-w-3xl overflow-y-auto rounded-3xl border border-white/10 bg-[#141a28] p-6">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold text-white">Import from CSV</h2>
-            <p className="mt-1 text-xs text-slate-500">Map your columns to match Personal Finance fields</p>
+            <p className="mt-1 text-xs text-slate-500">Map your columns, review exactly what gets created, then import</p>
           </div>
           <button onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-white/5"><X size={18} /></button>
         </div>
@@ -912,14 +1168,41 @@ function CsvImport({ open, onClose, onImported, accounts, categories, toast }) {
                 </Select>
               </label>
             </div>
-            <div className="mt-5 max-h-48 overflow-auto rounded-xl border border-white/10 bg-black/20 text-xs">
-              <table className="w-full">
-                <thead className="bg-white/[.04] text-slate-500"><tr>{headers.map((h) => <th key={h} className="px-3 py-2 text-left">{h}</th>)}</tr></thead>
-                <tbody>{rows.slice(0, 5).map((r, i) => <tr key={i} className="border-t border-white/5">{headers.map((h) => <td key={h} className="px-3 py-2 text-slate-400">{r[h]}</td>)}</tr>)}</tbody>
-              </table>
-            </div>
-            <div className="mt-2 text-xs text-slate-500">{rows.length} rows detected · showing first 5</div>
-            <button onClick={doImport} disabled={busy} className="mt-5 w-full rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Importing…' : `Import ${rows.length} transactions`}</button>
+
+            {preview.length === 0 ? (
+              <div className="mt-5 rounded-xl border border-amber-300/20 bg-amber-300/5 px-4 py-3 text-xs text-amber-200">Map Date, Description and Amount to see a preview of what will be imported.</div>
+            ) : (
+              <>
+                <div className="mt-5 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+                  <span>{preview.length} row{preview.length === 1 ? '' : 's'} detected{duplicateCount ? ` · ${duplicateCount} likely duplicate${duplicateCount === 1 ? '' : 's'} (unchecked by default)` : ''}{invalidCount ? ` · ${invalidCount} unreadable amount, will be skipped` : ''}</span>
+                  <button type="button" onClick={() => setExcluded(excluded.size > 0 ? new Set() : new Set(preview.map((_, i) => i)))} className="text-cyan-300 hover:underline">{excluded.size > 0 ? 'Select all' : 'Deselect all'}</button>
+                </div>
+                <div className="mt-2 max-h-72 overflow-auto rounded-xl border border-white/10 bg-black/20 text-xs">
+                  <table className="w-full">
+                    <thead className="sticky top-0 bg-[#141a28] text-slate-500"><tr><th className="px-3 py-2" /><th className="px-3 py-2 text-left">Date</th><th className="px-3 py-2 text-left">Description</th><th className="px-3 py-2 text-left">Type</th><th className="px-3 py-2 text-left">Category</th><th className="px-3 py-2 text-right">Amount</th></tr></thead>
+                    <tbody>
+                      {preview.map((p, i) => (
+                        <tr key={i} className={`border-t border-white/5 ${!p.valid ? 'opacity-40' : excluded.has(i) ? 'opacity-50' : ''}`}>
+                          <td className="px-3 py-2">
+                            <input type="checkbox" disabled={!p.valid} checked={p.valid && !excluded.has(i)} onChange={() => setExcluded((s) => { const n = new Set(s); n.has(i) ? n.delete(i) : n.add(i); return n })} />
+                          </td>
+                          <td className="px-3 py-2 text-slate-400">{p.valid ? formatDate(p.date) : '—'}</td>
+                          <td className="px-3 py-2 text-slate-300">
+                            {p.description}
+                            {p.duplicate && <span className="ml-2 rounded-full bg-amber-300/15 px-1.5 py-0.5 text-[10px] text-amber-200">possible duplicate</span>}
+                            {!p.valid && <span className="ml-2 rounded-full bg-rose-300/15 px-1.5 py-0.5 text-[10px] text-rose-200">unreadable amount</span>}
+                          </td>
+                          <td className="px-3 py-2 capitalize text-slate-400">{p.type}</td>
+                          <td className="px-3 py-2 text-slate-400">{p.categoryLabel}</td>
+                          <td className="px-3 py-2 text-right text-slate-300">{p.valid ? money(p.amount) : '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+            <button onClick={doImport} disabled={busy || toImport.length === 0} className="mt-5 w-full rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Importing…' : `Import ${toImport.length} transaction${toImport.length === 1 ? '' : 's'}`}</button>
           </>
         )}
       </div>
@@ -1392,7 +1675,7 @@ function LoanForm({ open, onClose, onSaved, editing, accounts, toast }) {
 }
 
 /* ---------------- Loan Payment Form ---------------- */
-function LoanPaymentForm({ open, onClose, onSaved, loan, accounts, toast }) {
+function LoanPaymentForm({ open, onClose, onSaved, loan, accounts, creditCards = [], toast }) {
   const initial = { amount: '', type: 'emi', prepay_mode: 'reduce_tenure', payment_date: todayISO(), account_id: loan?.paid_from_account_id || accounts[0]?.id || '', notes: '' }
   const [form, setForm] = useState(initial)
   const [busy, setBusy] = useState(false)
@@ -1490,6 +1773,7 @@ function LoanPaymentForm({ open, onClose, onSaved, loan, accounts, toast }) {
             <Select required value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
               <option value="">Choose account…</option>
               {accounts.filter((a) => a.type !== 'debit_card').map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+              {creditCards.map((c) => <option key={c.id} value={`cc:${c.id}`}>{c.name} (card)</option>)}
             </Select>
           </label>
           <label className="text-sm text-slate-300">Notes
@@ -2080,7 +2364,7 @@ function PortfolioFundsForm({ open, onClose, onSaved, portfolio, accounts, toast
 }
 
 /* ---------------- Lend / Borrow Form ---------------- */
-function LendForm({ open, onClose, onSaved, editing, accounts, toast }) {
+function LendForm({ open, onClose, onSaved, editing, accounts, creditCards = [], toast }) {
   const initial = editing
     ? { ...editing, amount: String(editing.amount) }
     : { person_name: '', type: 'lent', amount: '', date: todayISO(), due_date: '', from_account_id: accounts[0]?.id || '', reason: '', notes: '' }
@@ -2108,7 +2392,7 @@ function LendForm({ open, onClose, onSaved, editing, accounts, toast }) {
         </div>
         <div className="mt-5 grid grid-cols-2 gap-2">
           {[{ v: 'lent', l: 'I lent' }, { v: 'borrowed', l: 'I borrowed' }].map((t) => (
-            <button key={t.v} type="button" onClick={() => setForm({ ...form, type: t.v })} className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${form.type === t.v ? 'border-cyan-400/30 bg-cyan-400/15 text-cyan-200' : 'border-white/10 text-slate-400 hover:bg-white/5'}`}>{t.l}</button>
+            <button key={t.v} type="button" onClick={() => setForm({ ...form, type: t.v, from_account_id: t.v === 'borrowed' && String(form.from_account_id || '').startsWith('cc:') ? '' : form.from_account_id })} className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${form.type === t.v ? 'border-cyan-400/30 bg-cyan-400/15 text-cyan-200' : 'border-white/10 text-slate-400 hover:bg-white/5'}`}>{t.l}</button>
           ))}
         </div>
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
@@ -2125,6 +2409,7 @@ function LendForm({ open, onClose, onSaved, editing, accounts, toast }) {
             <Select value={form.from_account_id || ''} onChange={(e) => setForm({ ...form, from_account_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
               <option value="">None (skip account impact)</option>
               {accounts.filter((a) => a.type !== 'debit_card').map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+              {form.type === 'lent' && creditCards.map((c) => <option key={c.id} value={`cc:${c.id}`}>{c.name} (card)</option>)}
             </Select>
           </label>
           <label className="text-sm text-slate-300">Due date (optional)
@@ -3227,11 +3512,109 @@ function DashboardView({ data, showMoney, onOpenTxForm, setView, onAddRule }) {
   )
 }
 
-function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onImport, showMoney, onToggleMoney }) {
+// A quick look at a transaction's receipt without going through the edit form — fetches a
+// short-lived signed URL (the storage bucket is private) and renders it inline: an image shows
+// directly, a PDF renders in an iframe, anything else just offers a straight-through open link.
+function AttachmentViewer({ open, onClose, transaction }) {
+  const [url, setUrl] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [downloading, setDownloading] = useState(false)
+  useEffect(() => {
+    if (!open || !transaction) return
+    setLoading(true); setUrl(null)
+    fetch(`/api/finance/transactions/${transaction.id}/attachment`)
+      .then((r) => r.json())
+      .then((d) => setUrl(d.url || null))
+      .finally(() => setLoading(false))
+  }, [open, transaction])
+  if (!open) return null
+  const name = transaction?.attachment_name || ''
+  const isImage = /\.(png|jpe?g|gif|webp|bmp)$/i.test(name)
+  const isPdf = /\.pdf$/i.test(name)
+
+  // A plain <a href> to a signed URL just navigates (opens in a tab) since the response has no
+  // attachment disposition — fetch the bytes ourselves and hand the browser a blob it downloads.
+  const download = async () => {
+    if (!url || downloading) return
+    setDownloading(true)
+    try {
+      const res = await fetch(url)
+      const blob = await res.blob()
+      const blobUrl = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = blobUrl
+      link.download = name || 'attachment'
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(blobUrl)
+    } finally { setDownloading(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-white/10 bg-[#141a28]">
+        <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
+          <div className="flex min-w-0 items-center gap-2 text-sm font-medium text-white"><Paperclip size={15} className="shrink-0 text-slate-500" /><span className="truncate">{name || 'Attachment'}</span></div>
+          <div className="flex items-center gap-1">
+            {url && <button type="button" onClick={download} disabled={downloading} className="rounded-lg p-2 text-slate-400 hover:bg-white/5 hover:text-white disabled:opacity-50" title="Download"><Download size={16} /></button>}
+            <button onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-white/5"><X size={18} /></button>
+          </div>
+        </div>
+        <div className="flex-1 overflow-auto bg-black/30 p-4">
+          {loading ? (
+            <div className="flex h-64 items-center justify-center text-sm text-slate-500">Loading…</div>
+          ) : !url ? (
+            <div className="flex h-64 items-center justify-center text-sm text-slate-500">Couldn&apos;t load attachment.</div>
+          ) : isImage ? (
+            <img src={url} alt={name} className="mx-auto max-h-[70vh] rounded-xl object-contain" />
+          ) : isPdf ? (
+            <iframe src={url} title={name} className="h-[70vh] w-full rounded-xl bg-white" />
+          ) : (
+            <div className="flex h-64 flex-col items-center justify-center gap-3 text-sm text-slate-400">
+              <FileText size={28} />
+              <button type="button" onClick={download} disabled={downloading} className="rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 px-4 py-2 text-sm font-semibold text-[#07101c] disabled:opacity-60">{downloading ? 'Downloading…' : 'Download file'}</button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onImport, showMoney, onToggleMoney, onOpenRecurring }) {
   const { transactions, accounts, categories, credit_cards: creditCards = [] } = data
   const [query, setQuery] = useState('')
   const [type, setType] = useState('all')
   const [accountId, setAccountId] = useState('all')
+  const [categoryId, setCategoryId] = useState('all')
+  const [chartView, setChartView] = useState(false)
+  // Defaults to the current calendar month — the left/right arrows step one month at a time.
+  // A custom range (below) overrides this entirely while active.
+  const [monthCursor, setMonthCursor] = useState(() => { const d = new Date(); return { year: d.getFullYear(), month: d.getMonth() } })
+  const [customRange, setCustomRange] = useState(null)
+  const [rangeOpen, setRangeOpen] = useState(false)
+  const [rangeDraft, setRangeDraft] = useState({ start: '', end: '' })
+  const [sortBy, setSortBy] = useState('date_desc')
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [exportBusy, setExportBusy] = useState(false)
+  const [page, setPage] = useState(0)
+  const [viewingAttachment, setViewingAttachment] = useState(null)
+  const rangeRef = useRef(null)
+  const settingsRef = useRef(null)
+  useEffect(() => {
+    const onDocClick = (e) => {
+      if (rangeRef.current && !rangeRef.current.contains(e.target)) setRangeOpen(false)
+      if (settingsRef.current && !settingsRef.current.contains(e.target)) setSettingsOpen(false)
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [])
+  useEffect(() => { setPage(0) }, [type, accountId, categoryId, customRange, monthCursor, query, sortBy])
+  const shiftMonth = (delta) => {
+    setCustomRange(null)
+    setMonthCursor((c) => { const d = new Date(c.year, c.month + delta, 1); return { year: d.getFullYear(), month: d.getMonth() } })
+  }
   const resolveSource = (t) => accounts.find((a) => a.id === t.account_id) || (t.linked_module === 'credit_card' ? creditCards.find((c) => c.id === t.linked_module_id) : null)
 
   const visible = useMemo(() => transactions.filter((t) => {
@@ -3241,12 +3624,82 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onImport, 
         if (!(t.linked_module === 'credit_card' && t.linked_module_id === accountId.slice(3))) return false
       } else if (t.account_id !== accountId) return false
     }
+    if (categoryId !== 'all' && t.category_id !== categoryId) return false
+    if (customRange) {
+      if (t.date < customRange.start || t.date > customRange.end) return false
+    } else {
+      const d = new Date(`${t.date}T00:00:00`)
+      if (d.getFullYear() !== monthCursor.year || d.getMonth() !== monthCursor.month) return false
+    }
     const q = query.toLowerCase()
-    return `${t.description} ${t.notes || ''}`.toLowerCase().includes(q)
-  }), [transactions, type, accountId, query])
+    if (!q) return true
+    const acc = resolveSource(t)
+    const cat = categories.find((c) => c.id === t.category_id)
+    const searchable = `${t.description || ''} ${t.notes || ''} ${t.type || ''} ${acc?.name || ''} ${cat?.name || ''}`.toLowerCase()
+    return searchable.includes(q)
+  }), [transactions, type, accountId, categoryId, customRange, monthCursor, query, accounts, creditCards, categories])
+
+  // amount is always stored positive (income vs. expense is the `type`, not the sign) — sorting
+  // by the raw column would rank a ₹50,000 expense above a ₹10,000 income, which reads backwards
+  // next to the +/- signs shown in the list. Sort by the same signed value the row displays.
+  const signedAmount = (t) => {
+    const isIn = t.type === 'income' || (t.type === 'transfer' && t.transfer_direction === 'in')
+    return isIn ? Number(t.amount) : -Number(t.amount)
+  }
+
+  const sorted = useMemo(() => {
+    const arr = [...visible]
+    if (sortBy === 'date_asc') arr.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
+    else if (sortBy === 'amount_desc') arr.sort((a, b) => signedAmount(b) - signedAmount(a))
+    else if (sortBy === 'amount_asc') arr.sort((a, b) => signedAmount(a) - signedAmount(b))
+    else if (sortBy === 'description_asc') arr.sort((a, b) => (a.description || '').localeCompare(b.description || ''))
+    else if (sortBy === 'description_desc') arr.sort((a, b) => (b.description || '').localeCompare(a.description || ''))
+    else arr.sort((a, b) => (a.date > b.date ? -1 : a.date < b.date ? 1 : 0))
+    return arr
+  }, [visible, sortBy])
+
+  // Tapping a sortable column header toggles asc/desc; switching to a different column starts
+  // at whichever direction reads most naturally first (newest/highest/A-Z).
+  const toggleSort = (field) => {
+    setSortBy((prev) => {
+      if (prev === `${field}_asc`) return `${field}_desc`
+      if (prev === `${field}_desc`) return `${field}_asc`
+      return field === 'description' ? `${field}_asc` : `${field}_desc`
+    })
+  }
+  const sortIcon = (field) => {
+    if (sortBy === `${field}_asc`) return <ChevronUp size={12} className="text-cyan-300" />
+    if (sortBy === `${field}_desc`) return <ChevronDown size={12} className="text-cyan-300" />
+    return <ArrowUpDown size={11} className="text-slate-600" />
+  }
+
+  const PAGE_SIZE = 50
+  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE))
+  const pageRows = sorted.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
+
+  // Category split of whatever's currently visible — respects every active filter above, so it's
+  // always describing exactly the records on screen, not some separate fixed time window.
+  const categoryBreakdown = useMemo(() => {
+    const byCat = {}
+    visible.filter((t) => t.type !== 'transfer').forEach((t) => {
+      const cat = categories.find((c) => c.id === t.category_id)
+      const key = cat?.id || 'uncat'
+      if (!byCat[key]) byCat[key] = { name: cat?.name || 'Uncategorised', value: 0, color: cat?.color || '#64748b' }
+      byCat[key].value += Number(t.amount || 0)
+    })
+    return Object.values(byCat).sort((a, b) => b.value - a.value)
+  }, [visible, categories])
+
+  // jsPDF's built-in fonts (Helvetica/Times/Courier) only support the WinAnsi charset, which
+  // doesn't include ₹ — it silently falls back to a stray glyph instead of erroring. Since the
+  // Amount column header already says what it is, the plain number reads fine without a symbol.
+  const moneyForPdf = (value) => {
+    const n = Number(value || 0)
+    return `${n < 0 ? '-' : ''}${new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Math.abs(n))}`
+  }
 
   const exportCsv = () => {
-    const csv = ['Date,Description,Type,Amount,Category,Account,Notes', ...visible.map((r) => {
+    const csv = ['Date,Description,Type,Amount,Category,Account,Notes', ...sorted.map((r) => {
       const cat = categories.find((c) => c.id === r.category_id)?.name || ''
       const acc = resolveSource(r)?.name || ''
       return [r.date, JSON.stringify(r.description || ''), r.type, r.amount, JSON.stringify(cat), JSON.stringify(acc), JSON.stringify(r.notes || '')].join(',')
@@ -3257,6 +3710,29 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onImport, 
     link.click(); URL.revokeObjectURL(link.href)
   }
 
+  const exportPdf = () => {
+    const doc = new jsPDF()
+    const rangeLabel = customRange ? `${formatDate(customRange.start)} - ${formatDate(customRange.end)}` : `${MONTH_NAMES[monthCursor.month]} ${monthCursor.year}`
+    doc.setFontSize(14)
+    doc.text('Deepak Finance - Transaction Statement', 14, 16)
+    doc.setFontSize(10)
+    doc.text(rangeLabel, 14, 23)
+    autoTable(doc, {
+      startY: 28,
+      head: [['Date', 'Description', 'Type', 'Category', 'Account', 'Amount']],
+      body: sorted.map((r) => [formatDate(r.date), r.description || '', r.type, categories.find((c) => c.id === r.category_id)?.name || 'Uncategorised', resolveSource(r)?.name || '', moneyForPdf(r.amount)]),
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [30, 41, 59] },
+      columnStyles: { 5: { halign: 'right' } },
+    })
+    doc.save('deepak-finance-transactions.pdf')
+  }
+
+  const handleExport = async (kind) => {
+    setExportBusy(true)
+    try { kind === 'pdf' ? exportPdf() : exportCsv() } finally { setExportBusy(false); setSettingsOpen(false) }
+  }
+
   return (
     <div className="space-y-5">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
@@ -3265,9 +3741,38 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onImport, 
           <h1 className="text-3xl font-semibold tracking-tight text-white">Every rupee, accounted for</h1>
         </div>
         <div className="flex gap-2">
-          <button onClick={onImport} className="rounded-xl border border-white/10 px-4 py-2.5 text-sm text-slate-300 hover:bg-white/5">Import CSV</button>
-          <button onClick={exportCsv} className="rounded-xl border border-white/10 px-4 py-2.5 text-sm text-slate-300 hover:bg-white/5">Export CSV</button>
-          <button onClick={onOpenTxForm} className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 px-4 py-2.5 text-sm font-semibold text-[#07101c]"><Plus size={15} />Add</button>
+          <div className={`flex items-center rounded-xl border ${customRange ? 'border-white/5 opacity-40' : 'border-white/10'}`}>
+            <button type="button" disabled={!!customRange} onClick={() => shiftMonth(-1)} className="rounded-l-xl p-2.5 text-slate-400 hover:bg-white/5 hover:text-white disabled:pointer-events-none" title="Previous month"><ChevronLeft size={15} /></button>
+            <span className="w-9 text-center text-xs font-semibold uppercase tracking-wider text-slate-300" title={`${MONTH_NAMES[monthCursor.month]} ${monthCursor.year}`}>{MONTH_NAMES[monthCursor.month].slice(0, 3)}</span>
+            <button type="button" disabled={!!customRange} onClick={() => shiftMonth(1)} className="rounded-r-xl p-2.5 text-slate-400 hover:bg-white/5 hover:text-white disabled:pointer-events-none" title="Next month"><ChevronRight size={15} /></button>
+          </div>
+          <div ref={rangeRef} className="relative">
+            <button type="button" onClick={() => { setRangeDraft(customRange || { start: '', end: '' }); setRangeOpen((o) => !o) }} className={`rounded-xl border p-2.5 transition ${customRange ? 'border-cyan-300/40 bg-cyan-400/10 text-cyan-200' : 'border-white/10 text-slate-400 hover:bg-white/5 hover:text-white'}`} title="Custom date range">
+              <Calendar size={16} />
+            </button>
+            {rangeOpen && (
+              <div className="absolute right-0 z-30 mt-2 w-72 rounded-2xl border border-white/10 bg-[#141a28] p-4 shadow-2xl">
+                <div className="mb-3 text-xs uppercase tracking-widest text-slate-500">Custom range</div>
+                <label className="mb-3 block text-sm text-slate-300">Start date
+                  <DateInput value={rangeDraft.start} onChange={(e) => setRangeDraft((d) => ({ ...d, start: e.target.value }))} className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-2.5 text-white outline-none focus:border-cyan-300/50" />
+                </label>
+                <label className="mb-4 block text-sm text-slate-300">End date
+                  <DateInput value={rangeDraft.end} onChange={(e) => setRangeDraft((d) => ({ ...d, end: e.target.value }))} className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-2.5 text-white outline-none focus:border-cyan-300/50" />
+                </label>
+                <div className="flex gap-2">
+                  {customRange && (
+                    <button type="button" onClick={() => { setCustomRange(null); setRangeDraft({ start: '', end: '' }); setRangeOpen(false) }} className="flex-1 rounded-xl border border-white/10 px-3 py-2.5 text-sm text-slate-300 hover:bg-white/5">Clear</button>
+                  )}
+                  <button type="button" disabled={!rangeDraft.start || !rangeDraft.end || rangeDraft.start > rangeDraft.end} onClick={() => { setCustomRange({ start: rangeDraft.start, end: rangeDraft.end }); setRangeOpen(false) }} className="flex-1 rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 px-3 py-2.5 text-sm font-semibold text-[#07101c] disabled:opacity-50">Apply</button>
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="flex items-center overflow-hidden rounded-xl border border-white/10">
+            <button type="button" onClick={() => setChartView(false)} title="Table view" className={`flex items-center px-3 py-2.5 transition ${!chartView ? 'bg-cyan-400/15 text-cyan-200' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}><ListChecks size={16} /></button>
+            <div className="h-5 w-px shrink-0 bg-white/10" />
+            <button type="button" onClick={() => setChartView(true)} title="Chart view" className={`flex items-center px-3 py-2.5 transition ${chartView ? 'bg-cyan-400/15 text-cyan-200' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}><PieChartIcon size={16} /></button>
+          </div>
           <button onClick={onToggleMoney} className="rounded-xl border border-white/10 p-2.5 text-slate-400 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
             {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
           </button>
@@ -3287,17 +3792,79 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onImport, 
           {accounts.filter((a) => a.type !== 'debit_card').map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
           {creditCards.map((c) => <option key={c.id} value={`cc:${c.id}`}>{c.name} (card)</option>)}
         </Select>
+        <Select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="rounded-xl border border-white/10 bg-[#101621] px-4 py-2.5 text-sm text-slate-300 outline-none">
+          <option value="all">All categories</option>
+          {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </Select>
+        <div ref={settingsRef} className="relative">
+          <button type="button" onClick={() => setSettingsOpen((o) => !o)} className={`rounded-xl border p-2.5 transition ${settingsOpen ? 'border-cyan-300/40 bg-cyan-400/10 text-cyan-200' : 'border-white/10 text-slate-400 hover:bg-white/5 hover:text-white'}`} title="More options">
+            <MoreVertical size={16} />
+          </button>
+          {settingsOpen && (
+            <div className="absolute right-0 z-30 mt-2 w-52 rounded-xl border border-white/10 bg-[#141a28] p-1 shadow-2xl">
+              <button type="button" onClick={() => { setSettingsOpen(false); onImport() }} className="block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-300 hover:bg-white/5">Import CSV</button>
+              <button type="button" disabled={exportBusy} onClick={() => handleExport('csv')} className="block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-300 hover:bg-white/5 disabled:opacity-50">Export as CSV</button>
+              <button type="button" disabled={exportBusy} onClick={() => handleExport('pdf')} className="block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-300 hover:bg-white/5 disabled:opacity-50">Export as PDF</button>
+              <div className="my-1 border-t border-white/10" />
+              <button type="button" onClick={() => { setSettingsOpen(false); onOpenRecurring() }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-slate-300 hover:bg-white/5"><Repeat size={14} />Recurring transactions</button>
+            </div>
+          )}
+        </div>
       </div>
 
+      {chartView ? (
+        categoryBreakdown.length === 0 ? (
+          <div className="rounded-2xl border border-white/10 bg-white/[.035]">
+            <EmptyState icon={Tag} title="No category data" message="Nothing categorised in the current filters yet." />
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-white/10 bg-white/[.035] p-6">
+            <div className="mb-5 text-sm font-semibold text-white">By category · {customRange ? `${formatDate(customRange.start)} – ${formatDate(customRange.end)}` : `${MONTH_NAMES[monthCursor.month]} ${monthCursor.year}`}</div>
+            <div className="grid gap-8 lg:grid-cols-[1.3fr_1fr]">
+              <div className="h-[28rem]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={categoryBreakdown} dataKey="value" nameKey="name" innerRadius={90} outerRadius={170} stroke="none">
+                      {categoryBreakdown.map((c, i) => <Cell key={i} fill={c.color} />)}
+                    </Pie>
+                    <Tooltip contentStyle={{ background: '#0f1420', border: '1px solid #ffffff22', borderRadius: 12, color: '#fff' }} itemStyle={{ color: '#fff' }} labelStyle={{ color: '#fff' }} formatter={(v) => (showMoney ? money(v) : '••••')} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="flex flex-col justify-center gap-3">
+                {categoryBreakdown.map((c, i) => (
+                  <div key={i} className="flex items-center justify-between gap-3 text-sm">
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <div className="h-3 w-3 shrink-0 rounded-full" style={{ background: c.color }} />
+                      <div className="truncate text-slate-300">{c.name}</div>
+                    </div>
+                    <div className="shrink-0 font-medium text-white">{showMoney ? money(c.value) : '••••'}</div>
+                  </div>
+                ))}
+                <div className="mt-1 border-t border-white/20" />
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <div className="font-semibold text-white">Total</div>
+                  <div className="font-semibold text-white">{showMoney ? money(categoryBreakdown.reduce((s, c) => s + c.value, 0)) : '••••'}</div>
+                </div>
+                <div className="border-t border-white/20" />
+              </div>
+            </div>
+          </div>
+        )
+      ) : (
       <section className="overflow-hidden rounded-2xl border border-white/10 bg-white/[.035]">
         <div className="hidden grid-cols-[1.4fr_.9fr_.6fr_.6fr_auto] gap-4 border-b border-white/10 px-5 py-3 text-[10px] uppercase tracking-widest text-slate-600 sm:grid">
-          <span>Description</span><span>Category / Account</span><span>Date</span><span className="text-right">Amount</span><span />
+          <button type="button" onClick={() => toggleSort('description')} className="flex items-center gap-1 text-left hover:text-slate-300">Description{sortIcon('description')}</button>
+          <span>Category / Account</span>
+          <button type="button" onClick={() => toggleSort('date')} className="flex items-center gap-1 text-left hover:text-slate-300">Date{sortIcon('date')}</button>
+          <button type="button" onClick={() => toggleSort('amount')} className="flex items-center justify-end gap-1 text-right hover:text-slate-300">Amount{sortIcon('amount')}</button>
+          <span />
         </div>
-        {visible.length === 0 ? (
+        {sorted.length === 0 ? (
           <EmptyState icon={Wallet} title="No transactions match" message="Try adjusting filters, or add your first entry." cta="Add transaction" onCta={onOpenTxForm} />
         ) : (
           <div className="divide-y divide-white/5">
-            {visible.map((t) => {
+            {pageRows.map((t) => {
               const cat = categories.find((c) => c.id === t.category_id)
               const acc = resolveSource(t)
               const isIn = t.type === 'income' || (t.type === 'transfer' && t.transfer_direction === 'in')
@@ -3311,7 +3878,13 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onImport, 
                       {isTransfer ? <ArrowLeftRight size={16} /> : isIn ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}
                     </div>
                     <div>
-                      <div className="text-sm font-medium text-white">{t.description}</div>
+                      <div className="flex items-center gap-1.5 text-sm font-medium text-white">
+                        {t.description}
+                        {t.attachment_path && (
+                          <button type="button" onClick={(e) => { e.stopPropagation(); setViewingAttachment(t) }} className="shrink-0 text-slate-500 hover:text-cyan-300" title="View attachment"><Paperclip size={12} /></button>
+                        )}
+                        {t.recurring_source_id && <Repeat size={12} className="shrink-0 text-slate-500" title="Auto-generated from a recurring rule" />}
+                      </div>
                       {t.notes && <div className="text-[11px] text-slate-500">{t.notes}</div>}
                     </div>
                   </div>
@@ -3330,7 +3903,18 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onImport, 
             })}
           </div>
         )}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between border-t border-white/10 px-5 py-3 text-xs text-slate-400">
+            <span>Page {page + 1} of {totalPages} · {sorted.length} transactions</span>
+            <div className="flex gap-2">
+              <button type="button" disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))} className="rounded-lg border border-white/10 px-3 py-1.5 hover:bg-white/5 disabled:opacity-40 disabled:pointer-events-none">Previous</button>
+              <button type="button" disabled={page >= totalPages - 1} onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} className="rounded-lg border border-white/10 px-3 py-1.5 hover:bg-white/5 disabled:opacity-40 disabled:pointer-events-none">Next</button>
+            </div>
+          </div>
+        )}
       </section>
+      )}
+      <AttachmentViewer open={!!viewingAttachment} onClose={() => setViewingAttachment(null)} transaction={viewingAttachment} />
     </div>
   )
 }
@@ -3546,7 +4130,7 @@ function InsightsView({ data }) {
 function Shell({ user, onLogout }) {
   const [view, setView] = useState('dashboard')
   const [showMoney, setShowMoney] = useState(true)
-  const [data, setData] = useState({ accounts: [], categories: [], transactions: [], budgets: [], portfolios: [], holdings: [], sips: [], loans: [], loan_payments: [], bucket_list: [], lend_borrow: [], lend_repayments: [], credit_cards: [], credit_card_transactions: [], scholarships: [], scholarship_payments: [], zopkit_transactions: [], money_rules: [], profile: null })
+  const [data, setData] = useState({ accounts: [], categories: [], transactions: [], budgets: [], portfolios: [], holdings: [], sips: [], loans: [], loan_payments: [], bucket_list: [], lend_borrow: [], lend_repayments: [], credit_cards: [], credit_card_transactions: [], scholarships: [], scholarship_payments: [], zopkit_transactions: [], money_rules: [], recurring_transactions: [], profile: null })
   const [loading, setLoading] = useState(true)
 
   const toast = useToast()
@@ -3590,6 +4174,9 @@ function Shell({ user, onLogout }) {
   const [pricesLoading, setPricesLoading] = useState(false)
   const [zopkitFormOpen, setZopkitFormOpen] = useState(false)
   const [zopkitEditing, setZopkitEditing] = useState(null)
+  const [recurringManagerOpen, setRecurringManagerOpen] = useState(false)
+  const [recurringFormOpen, setRecurringFormOpen] = useState(false)
+  const [recurringEditing, setRecurringEditing] = useState(null)
 
   const refresh = async () => {
     try {
@@ -3604,6 +4191,7 @@ function Shell({ user, onLogout }) {
         credit_cards: result.credit_cards || [], credit_card_transactions: result.credit_card_transactions || [],
         scholarships: result.scholarships || [], scholarship_payments: result.scholarship_payments || [],
         zopkit_transactions: result.zopkit_transactions || [], money_rules: result.money_rules || [],
+        recurring_transactions: result.recurring_transactions || [],
         profile: result.profile || null,
       })
     } catch (e) {
@@ -3632,6 +4220,21 @@ function Shell({ user, onLogout }) {
     if (!(await confirm.ask('Delete this budget?'))) return
     const response = await fetch(`/api/finance/budgets/${b.id}`, { method: 'DELETE' })
     if (response.ok) { toast.push('Budget deleted'); await refresh() } else { toast.push('Delete failed', 'error') }
+  }
+
+  const openRecurringManager = () => setRecurringManagerOpen(true)
+  const closeRecurringManager = () => setRecurringManagerOpen(false)
+  const openRecurringForm = (r = null) => { setRecurringEditing(r); setRecurringFormOpen(true) }
+  const closeRecurringForm = () => { setRecurringFormOpen(false); setRecurringEditing(null) }
+  const onRecurringSaved = async () => { closeRecurringForm(); await refresh() }
+  const toggleRecurring = async (r) => {
+    const response = await fetch(`/api/finance/recurring_transactions/${r.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_active: !r.is_active }) })
+    if (response.ok) await refresh(); else toast.push('Update failed', 'error')
+  }
+  const deleteRecurring = async (r) => {
+    if (!(await confirm.ask(`Stop "${r.description}"? Past transactions it already created stay put.`, { confirmLabel: 'Stop' }))) return
+    const response = await fetch(`/api/finance/recurring_transactions/${r.id}`, { method: 'DELETE' })
+    if (response.ok) { toast.push('Recurring rule removed'); await refresh() } else { toast.push('Delete failed', 'error') }
   }
 
   // Investments
@@ -3883,7 +4486,7 @@ function Shell({ user, onLogout }) {
           ) : (
             <div className={fitScreen ? 'min-h-0 flex-1 lg:overflow-y-auto' : ''}>
               {view === 'dashboard' && <DashboardView data={data} showMoney={showMoney} onOpenTxForm={() => openTxForm()} setView={setView} />}
-              {view === 'transactions' && <TransactionsView data={data} onOpenTxForm={() => openTxForm()} onEditTx={openTxForm} onDeleteTx={deleteTx} onImport={() => setCsvOpen(true)} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
+              {view === 'transactions' && <TransactionsView data={data} onOpenTxForm={() => openTxForm()} onEditTx={openTxForm} onDeleteTx={deleteTx} onImport={() => setCsvOpen(true)} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onOpenRecurring={openRecurringManager} />}
               {view === 'accounts' && <AccountsView data={data} onAdd={() => openAccForm()} onEdit={openAccForm} onDelete={deleteAccount} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'categories' && <CategoriesView data={data} onAdd={() => openCatForm()} onEdit={openCatForm} onDelete={deleteCategory} />}
               {view === 'budgets' && <BudgetsView data={data} onAdd={() => openBudgetForm()} onEdit={openBudgetForm} onDelete={deleteBudget} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
@@ -3919,17 +4522,19 @@ function Shell({ user, onLogout }) {
       </nav>
 
       {/* Modals */}
-      <TransactionForm open={txFormOpen} onClose={closeTxForm} onSaved={onTxSaved} editing={txEditing} accounts={data.accounts} categories={data.categories} creditCards={data.credit_cards} lendBorrow={data.lend_borrow} loans={data.loans} onAddAccount={() => { closeTxForm(); openAccForm() }} toast={toast} />
+      <TransactionForm open={txFormOpen} onClose={closeTxForm} onSaved={onTxSaved} editing={txEditing} accounts={data.accounts} categories={data.categories} creditCards={data.credit_cards} lendBorrow={data.lend_borrow} loans={data.loans} onAddAccount={() => { closeTxForm(); openAccForm() }} onAddCategory={() => openCatForm()} toast={toast} />
       <AccountForm open={accFormOpen} onClose={closeAccForm} onSaved={onAccSaved} editing={accEditing} accounts={data.accounts} toast={toast} />
       <CategoryForm open={catFormOpen} onClose={closeCatForm} onSaved={onCatSaved} editing={catEditing} toast={toast} />
+      <RecurringManager open={recurringManagerOpen} onClose={closeRecurringManager} rules={data.recurring_transactions} onAdd={() => openRecurringForm()} onEdit={openRecurringForm} onToggle={toggleRecurring} onDelete={deleteRecurring} showMoney={showMoney} />
+      <RecurringForm open={recurringFormOpen} onClose={closeRecurringForm} onSaved={onRecurringSaved} editing={recurringEditing} accounts={data.accounts} categories={data.categories} toast={toast} />
       <BudgetForm open={budgetFormOpen} onClose={closeBudgetForm} onSaved={onBudgetSaved} editing={budgetEditing} categories={data.categories} toast={toast} />
-      <CsvImport open={csvOpen} onClose={() => setCsvOpen(false)} onImported={async () => { setCsvOpen(false); await refresh() }} accounts={data.accounts} categories={data.categories} toast={toast} />
+      <CsvImport open={csvOpen} onClose={() => setCsvOpen(false)} onImported={async () => { setCsvOpen(false); await refresh() }} accounts={data.accounts} categories={data.categories} transactions={data.transactions} toast={toast} />
       <PortfolioForm open={portfolioFormOpen} onClose={closePortfolioForm} onSaved={onPortfolioSaved} editing={portfolioEditing} accounts={data.accounts} toast={toast} />
       <HoldingForm open={holdingFormOpen} onClose={closeHoldingForm} onSaved={onHoldingSaved} editing={holdingEditing} portfolios={data.portfolios} defaultPortfolioId={holdingDefaultPortfolio} toast={toast} />
       <LoanForm open={loanFormOpen} onClose={closeLoanForm} onSaved={onLoanSaved} editing={loanEditing} accounts={data.accounts} toast={toast} />
-      <LoanPaymentForm open={loanPayOpen} onClose={closeLoanPay} onSaved={onLoanPaid} loan={loanPayLoan} accounts={data.accounts} toast={toast} />
+      <LoanPaymentForm open={loanPayOpen} onClose={closeLoanPay} onSaved={onLoanPaid} loan={loanPayLoan} accounts={data.accounts} creditCards={data.credit_cards} toast={toast} />
       <BucketForm open={bucketFormOpen} onClose={closeBucketForm} onSaved={onBucketSaved} editing={bucketEditing} toast={toast} />
-      <LendForm open={lendFormOpen} onClose={closeLendForm} onSaved={onLendSaved} editing={lendEditing} accounts={data.accounts} toast={toast} />
+      <LendForm open={lendFormOpen} onClose={closeLendForm} onSaved={onLendSaved} editing={lendEditing} accounts={data.accounts} creditCards={data.credit_cards} toast={toast} />
       <PortfolioFundsForm open={fundsFormOpen} onClose={closeFundsForm} onSaved={onFundsSaved} portfolio={fundsPortfolio} accounts={data.accounts} toast={toast} />
       <CreditCardForm open={cardFormOpen} onClose={closeCardForm} onSaved={onCardSaved} editing={cardEditing} toast={toast} />
       <CardSpendForm open={cardSpendOpen} onClose={closeCardSpend} onSaved={onCardSpendSaved} card={cardSpendTarget} categories={data.categories} toast={toast} />

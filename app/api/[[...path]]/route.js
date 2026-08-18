@@ -20,7 +20,8 @@ async function currentUser(supabase) {
 const safeFields = {
   accounts: ['name', 'type', 'bank_name', 'account_number_last4', 'opening_balance', 'currency', 'color', 'icon', 'is_active', 'linked_account_id'],
   categories: ['name', 'type', 'icon', 'color', 'is_default'],
-  transactions: ['account_id', 'category_id', 'amount', 'type', 'description', 'date', 'time', 'notes', 'linked_module', 'linked_module_id', 'transfer_group_id', 'transfer_direction'],
+  transactions: ['account_id', 'category_id', 'amount', 'type', 'description', 'date', 'time', 'notes', 'linked_module', 'linked_module_id', 'transfer_group_id', 'transfer_direction', 'attachment_path', 'attachment_name'],
+  recurring_transactions: ['account_id', 'category_id', 'type', 'amount', 'description', 'notes', 'frequency', 'day_of_month', 'next_due_date', 'is_active'],
   budgets: ['category_id', 'amount', 'period', 'start_date'],
   portfolios: ['name', 'broker', 'demat_account_id', 'cash_balance'],
   holdings: ['portfolio_id', 'symbol', 'exchange', 'company_name', 'qty', 'avg_buy_price', 'current_price', 'last_price_updated_at'],
@@ -74,6 +75,7 @@ function applyOrder(query, table) {
   if (table === 'categories') return query.order('type', { ascending: true }).order('name', { ascending: true })
   if (table === 'money_rules') return query.order('order_index', { ascending: true }).order('created_at', { ascending: true })
   if (table === 'accounts' || table === 'portfolios' || table === 'holdings' || table === 'credit_cards') return query.order('created_at', { ascending: true })
+  if (table === 'recurring_transactions') return query.order('next_due_date', { ascending: true })
   return query.order('created_at', { ascending: false })
 }
 
@@ -89,6 +91,9 @@ const DEFAULT_CATEGORIES = [
   { name: 'Bills & utilities', type: 'expense', icon: 'zap', color: '#facc15' },
   { name: 'Health', type: 'expense', icon: 'heart', color: '#ef4444' },
   { name: 'Entertainment', type: 'expense', icon: 'music', color: '#c084fc' },
+  { name: 'Loan / Debt', type: 'expense', icon: 'landmark', color: '#f97316' },
+  { name: 'Loan / Debt', type: 'income', icon: 'landmark', color: '#f97316' },
+  { name: 'Lended', type: 'expense', icon: 'heart', color: '#38bdf8' },
 ]
 
 async function syncProfileFromAuth(supabase, user) {
@@ -111,6 +116,51 @@ async function ensureDefaults(supabase, userId) {
   if (existing && existing.length > 0) return
   const rows = DEFAULT_CATEGORIES.map((c) => ({ ...c, user_id: userId, is_default: true }))
   await supabase.from('categories').insert(rows)
+}
+
+// Finds (or, for accounts predating this category, creates) a category by name — used to
+// silently tag loan-payment transactions as "Loan / Debt" instead of leaving them Uncategorised,
+// without needing the loan payment form to ask the user to pick one every time.
+async function ensureCategory(supabase, userId, name, type) {
+  const { data: existing } = await supabase.from('categories').select('id').eq('user_id', userId).eq('name', name).eq('type', type).maybeSingle()
+  if (existing) return existing.id
+  const { data: created } = await supabase.from('categories').insert({ user_id: userId, name, type, icon: 'landmark', color: '#f97316', is_default: true }).select('id').maybeSingle()
+  return created?.id || null
+}
+
+function addInterval(dateStr, frequency) {
+  const d = new Date(`${dateStr}T00:00:00`)
+  if (frequency === 'weekly') d.setDate(d.getDate() + 7)
+  else if (frequency === 'yearly') d.setFullYear(d.getFullYear() + 1)
+  else d.setMonth(d.getMonth() + 1)
+  return d.toISOString().slice(0, 10)
+}
+
+// No cron/background-job infra exists in this app, so recurring rules (rent, salary, SIPs,
+// subscriptions) are caught up lazily — every time the summary endpoint is hit, any rule whose
+// next_due_date has already passed gets its missed occurrences generated as real transactions,
+// stepping forward until it's caught up to today. Capped at 60 iterations per rule as a guard
+// against a corrupted/very old next_due_date generating an unbounded backlog in one request.
+async function generateDueRecurring(supabase, userId) {
+  const today = new Date().toISOString().slice(0, 10)
+  const { data: due } = await supabase.from('recurring_transactions').select('*').eq('user_id', userId).eq('is_active', true).lte('next_due_date', today)
+  if (!due || due.length === 0) return
+  for (const rule of due) {
+    let nextDue = rule.next_due_date
+    let lastGenerated = rule.last_generated_date
+    let guard = 0
+    while (nextDue <= today && guard < 60) {
+      await supabase.from('transactions').insert({
+        user_id: userId, account_id: rule.account_id, category_id: rule.category_id, amount: rule.amount,
+        type: rule.type, description: rule.description, date: nextDue, notes: rule.notes,
+        recurring_source_id: rule.id,
+      })
+      lastGenerated = nextDue
+      nextDue = addInterval(nextDue, rule.frequency)
+      guard++
+    }
+    await supabase.from('recurring_transactions').update({ next_due_date: nextDue, last_generated_date: lastGenerated }).eq('id', rule.id).eq('user_id', userId)
+  }
 }
 
 function randomUUID() {
@@ -181,11 +231,12 @@ async function handleRoute(request, { params }) {
       const user = await currentUser(supabase)
       if (!user) return cors(NextResponse.json({ error: 'Not authenticated' }, { status: 401 }))
       await ensureDefaults(supabase, user.id).catch(() => {})
+      await generateDueRecurring(supabase, user.id).catch(() => {})
       const readAll = async (table) => {
         const { data } = await applyOrder(supabase.from(table).select('*').eq('user_id', user.id), table)
         return data || []
       }
-      const [accounts, categories, transactions, budgets, portfolios, holdings, sips, loans, loan_payments, bucket_list, lend_borrow, lend_repayments, credit_cards, credit_card_transactions, scholarships, scholarship_payments, zopkit_transactions, money_rules, profile] = await Promise.all([
+      const [accounts, categories, transactions, budgets, portfolios, holdings, sips, loans, loan_payments, bucket_list, lend_borrow, lend_repayments, credit_cards, credit_card_transactions, scholarships, scholarship_payments, zopkit_transactions, money_rules, recurring_transactions, profile] = await Promise.all([
         readAll('accounts'),
         readAll('categories'),
         readAll('transactions'),
@@ -204,9 +255,10 @@ async function handleRoute(request, { params }) {
         readAll('scholarship_payments'),
         readAll('zopkit_transactions'),
         readAll('money_rules'),
+        readAll('recurring_transactions'),
         supabase.from('profiles').select('*').eq('id', user.id).maybeSingle().then((r) => r.data),
       ])
-      return cors(NextResponse.json({ accounts, categories, transactions, budgets, portfolios, holdings, sips, loans, loan_payments, bucket_list, lend_borrow, lend_repayments, credit_cards, credit_card_transactions, scholarships, scholarship_payments, zopkit_transactions, money_rules, profile }))
+      return cors(NextResponse.json({ accounts, categories, transactions, budgets, portfolios, holdings, sips, loans, loan_payments, bucket_list, lend_borrow, lend_repayments, credit_cards, credit_card_transactions, scholarships, scholarship_payments, zopkit_transactions, money_rules, recurring_transactions, profile }))
     }
 
     // ---- PRICES: Yahoo Finance fallback (public); Kite when creds set ----
@@ -330,6 +382,34 @@ async function handleRoute(request, { params }) {
       }
       const { error } = await supabase.from('credit_card_transactions').delete().eq('id', id).eq('user_id', user.id)
       return cors(NextResponse.json({ ok: !error }))
+    }
+
+    // ---- TRANSACTION edit history ----
+    if (route.match(/^\/finance\/transactions\/([^/]+)\/history$/) && method === 'GET') {
+      const user = await currentUser(supabase)
+      if (!user) return cors(NextResponse.json({ error: 'Not authenticated' }, { status: 401 }))
+      const txId = route.match(/^\/finance\/transactions\/([^/]+)\/history$/)[1]
+      const { data } = await supabase.from('transaction_edit_history').select('*').eq('transaction_id', txId).eq('user_id', user.id).order('changed_at', { ascending: false })
+      return cors(NextResponse.json(data || []))
+    }
+
+    // ---- TRANSACTION attachment: signed URL for viewing (bucket is private), and delete ----
+    if (route.match(/^\/finance\/transactions\/([^/]+)\/attachment$/) && (method === 'GET' || method === 'DELETE')) {
+      const user = await currentUser(supabase)
+      if (!user) return cors(NextResponse.json({ error: 'Not authenticated' }, { status: 401 }))
+      const txId = route.match(/^\/finance\/transactions\/([^/]+)\/attachment$/)[1]
+      const { data: tx } = await supabase.from('transactions').select('attachment_path').eq('id', txId).eq('user_id', user.id).maybeSingle()
+      if (!tx?.attachment_path) return cors(NextResponse.json({ error: 'No attachment' }, { status: 404 }))
+
+      if (method === 'GET') {
+        const { data: signed, error } = await supabase.storage.from('attachments').createSignedUrl(tx.attachment_path, 300)
+        if (error) return cors(NextResponse.json({ error: error.message }, { status: 400 }))
+        return cors(NextResponse.json({ url: signed.signedUrl }))
+      }
+
+      await supabase.storage.from('attachments').remove([tx.attachment_path])
+      await supabase.from('transactions').update({ attachment_path: null, attachment_name: null }).eq('id', txId).eq('user_id', user.id)
+      return cors(NextResponse.json({ ok: true }))
     }
 
     // ---- CREDIT CARD bill payment ----
@@ -530,21 +610,30 @@ async function handleRoute(request, { params }) {
 
       let linkedTxId = null
       const payingAccountId = account_id || loan.paid_from_account_id
+      // A "cc:<id>" account_id means this was paid on a credit card, not a bank/cash account —
+      // same convention the transaction form already uses. No money leaves a bank account; the
+      // card's outstanding balance goes up instead, exactly like logging a card spend directly.
+      const payingCardId = typeof payingAccountId === 'string' && payingAccountId.startsWith('cc:') ? payingAccountId.slice(3) : null
       if (payingAccountId) {
+        const loanCategoryId = await ensureCategory(supabase, user.id, 'Loan / Debt', 'expense')
         const txPayload = {
-          user_id: user.id, account_id: payingAccountId, amount, type: 'expense',
+          user_id: user.id, account_id: payingCardId ? null : payingAccountId, amount, type: 'expense',
           description: `Loan ${excessAmount > 0.01 ? 'EMI + prepayment' : 'EMI'} · ${loan.name}`,
-          date: effectiveDate,
-          notes: notes || null, linked_module: 'loan', linked_module_id: loan_id,
+          date: effectiveDate, category_id: loanCategoryId,
+          notes: notes || null, linked_module: payingCardId ? 'credit_card' : 'loan', linked_module_id: payingCardId || loan_id,
         }
         const { data: tx } = await supabase.from('transactions').insert(txPayload).select().single()
         if (tx?.id) linkedTxId = tx.id
+        if (payingCardId) {
+          const { data: card } = await supabase.from('credit_cards').select('current_outstanding').eq('id', payingCardId).eq('user_id', user.id).maybeSingle()
+          if (card) await supabase.from('credit_cards').update({ current_outstanding: Number(card.current_outstanding || 0) + amount }).eq('id', payingCardId).eq('user_id', user.id)
+        }
       }
 
       const paymentPayload = {
         user_id: user.id, loan_id, amount, type: paymentType,
         payment_date: effectiveDate,
-        account_id: payingAccountId, interest_saved: interestSaved || null,
+        account_id: payingCardId ? null : payingAccountId, interest_saved: interestSaved || null,
         interest_portion: interestPortion || 0, prepay_mode: prepayMode,
         outstanding_before: currentOutstanding, emi_before: currentEmi,
         linked_transaction_id: linkedTxId, notes: notes || null,
@@ -563,6 +652,11 @@ async function handleRoute(request, { params }) {
       const { data: payment } = await supabase.from('loan_payments').select('*').eq('id', id).eq('user_id', user.id).maybeSingle()
       if (!payment) return cors(NextResponse.json({ error: 'Not found' }, { status: 404 }))
       if (payment.linked_transaction_id) {
+        const { data: linkedTx } = await supabase.from('transactions').select('linked_module, linked_module_id, amount').eq('id', payment.linked_transaction_id).eq('user_id', user.id).maybeSingle()
+        if (linkedTx?.linked_module === 'credit_card' && linkedTx.linked_module_id) {
+          const { data: card } = await supabase.from('credit_cards').select('current_outstanding').eq('id', linkedTx.linked_module_id).eq('user_id', user.id).maybeSingle()
+          if (card) await supabase.from('credit_cards').update({ current_outstanding: Math.max(0, Number(card.current_outstanding || 0) - Number(linkedTx.amount)) }).eq('id', linkedTx.linked_module_id).eq('user_id', user.id)
+        }
         await supabase.from('transactions').delete().eq('id', payment.linked_transaction_id).eq('user_id', user.id)
       }
       const { data: loan } = await supabase.from('loans').select('*').eq('id', payment.loan_id).eq('user_id', user.id).maybeSingle()
@@ -579,7 +673,7 @@ async function handleRoute(request, { params }) {
     }
 
     // ---- FINANCE CRUD (accounts, categories, transactions, budgets, portfolios, holdings, sips, loans, loan_payments, bucket_list, lend_borrow, lend_repayments, credit_cards, credit_card_transactions, scholarships, scholarship_payments) ----
-    const collectionMatch = route.match(/^\/finance\/(accounts|categories|transactions|budgets|portfolios|holdings|sips|loans|loan_payments|bucket_list|lend_borrow|lend_repayments|credit_cards|credit_card_transactions|scholarships|scholarship_payments|zopkit_transactions|money_rules)(?:\/([^/]+))?$/)
+    const collectionMatch = route.match(/^\/finance\/(accounts|categories|transactions|budgets|portfolios|holdings|sips|loans|loan_payments|bucket_list|lend_borrow|lend_repayments|credit_cards|credit_card_transactions|scholarships|scholarship_payments|zopkit_transactions|money_rules|recurring_transactions)(?:\/([^/]+))?$/)
     if (collectionMatch) {
       const [, table, id] = collectionMatch
       const user = await currentUser(supabase)
@@ -625,6 +719,12 @@ async function handleRoute(request, { params }) {
         if (table === 'accounts' && payload.opening_balance !== undefined) payload.current_balance = payload.opening_balance
         if (table === 'loans' && payload.principal !== undefined && payload.outstanding === undefined) payload.outstanding = payload.principal
         if (table === 'transactions' && !payload.time) payload.time = new Date().toTimeString().slice(0, 5)
+        // "cc:<id>" in from_account_id means this lend was funded on a credit card — not a real
+        // accounts.id, so it can't go into this (uuid, FK) column. The side-effect below still
+        // reads the original "cc:<id>" off `body` (untouched), so card funding is still applied.
+        if (table === 'lend_borrow' && typeof payload.from_account_id === 'string' && payload.from_account_id.startsWith('cc:')) {
+          payload.from_account_id = null
+        }
         const { data: created, error } = await supabase.from(table).insert(payload).select().single()
         if (error) return cors(NextResponse.json({ error: error.message }, { status: 400 }))
 
@@ -653,19 +753,28 @@ async function handleRoute(request, { params }) {
           if (p) await supabase.from('portfolios').update({ cash_balance: Number(p.cash_balance || 0) - cost }).eq('id', payload.portfolio_id).eq('user_id', user.id)
         }
 
-        // Side-effect: creating a lend_borrow of type 'lent' from an account → deduct via expense transaction
+        // Side-effect: creating a lend_borrow of type 'lent' from an account → deduct via expense transaction.
+        // "cc:<id>" means funded on a credit card instead of a bank/cash account — no money leaves
+        // a bank account, the card's outstanding balance goes up instead.
         if (table === 'lend_borrow' && created?.id && body.from_account_id && body.type === 'lent') {
           const amount = Number(body.amount)
           const nowStr = new Date().toTimeString().slice(0, 5)
-          const txPayload = { user_id: user.id, account_id: body.from_account_id, amount, type: 'expense', description: `Lent to ${body.person_name}`, date: body.date || new Date().toISOString().slice(0, 10), time: nowStr, linked_module: 'lend', linked_module_id: created.id, notes: body.notes || null }
+          const lentCategoryId = await ensureCategory(supabase, user.id, 'Lended', 'expense')
+          const lentCardId = typeof body.from_account_id === 'string' && body.from_account_id.startsWith('cc:') ? body.from_account_id.slice(3) : null
+          const txPayload = { user_id: user.id, account_id: lentCardId ? null : body.from_account_id, amount, type: 'expense', description: `Lent to ${body.person_name}`, date: body.date || new Date().toISOString().slice(0, 10), time: nowStr, category_id: lentCategoryId, linked_module: lentCardId ? 'credit_card' : 'lend', linked_module_id: lentCardId || created.id, notes: body.notes || null }
           const { data: tx } = await supabase.from('transactions').insert(txPayload).select().single()
           if (tx?.id) await supabase.from('lend_borrow').update({ linked_transaction_id: tx.id }).eq('id', created.id).eq('user_id', user.id)
+          if (lentCardId) {
+            const { data: card } = await supabase.from('credit_cards').select('current_outstanding').eq('id', lentCardId).eq('user_id', user.id).maybeSingle()
+            if (card) await supabase.from('credit_cards').update({ current_outstanding: Number(card.current_outstanding || 0) + amount }).eq('id', lentCardId).eq('user_id', user.id)
+          }
         }
         // Side-effect: borrowed money → income into account
         if (table === 'lend_borrow' && created?.id && body.from_account_id && body.type === 'borrowed') {
           const amount = Number(body.amount)
           const nowStr = new Date().toTimeString().slice(0, 5)
-          const txPayload = { user_id: user.id, account_id: body.from_account_id, amount, type: 'income', description: `Borrowed from ${body.person_name}`, date: body.date || new Date().toISOString().slice(0, 10), time: nowStr, linked_module: 'lend', linked_module_id: created.id, notes: body.notes || null }
+          const borrowedCategoryId = await ensureCategory(supabase, user.id, 'Loan / Debt', 'income')
+          const txPayload = { user_id: user.id, account_id: body.from_account_id, amount, type: 'income', description: `Borrowed from ${body.person_name}`, date: body.date || new Date().toISOString().slice(0, 10), time: nowStr, category_id: borrowedCategoryId, linked_module: 'lend', linked_module_id: created.id, notes: body.notes || null }
           const { data: tx } = await supabase.from('transactions').insert(txPayload).select().single()
           if (tx?.id) await supabase.from('lend_borrow').update({ linked_transaction_id: tx.id }).eq('id', created.id).eq('user_id', user.id)
         }
@@ -693,8 +802,21 @@ async function handleRoute(request, { params }) {
           const { data } = await supabase.from('transactions').select('*').eq('id', id).eq('user_id', user.id).maybeSingle()
           oldRow = data
         }
-        const { data: updated, error } = await supabase.from(table).update(pickFields(table, body)).eq('id', id).eq('user_id', user.id).select().maybeSingle()
+        const patch = pickFields(table, body)
+        const { data: updated, error } = await supabase.from(table).update(patch).eq('id', id).eq('user_id', user.id).select().maybeSingle()
         if (error) return cors(NextResponse.json({ error: error.message }, { status: 400 }))
+
+        // Snapshot whatever actually changed — before-values only, so "what did this used to
+        // say" is answerable without needing a full old/new row dump for every field untouched.
+        if (table === 'transactions' && oldRow && updated?.id) {
+          const changed = {}
+          for (const field of Object.keys(patch)) {
+            if (String(oldRow[field] ?? '') !== String(patch[field] ?? '')) changed[field] = oldRow[field]
+          }
+          if (Object.keys(changed).length > 0) {
+            await supabase.from('transaction_edit_history').insert({ transaction_id: id, user_id: user.id, previous_values: changed })
+          }
+        }
 
         if (table === 'transactions' && updated?.id) {
           // Unwind whatever side-effect the old version of this transaction had applied,
@@ -728,7 +850,8 @@ async function handleRoute(request, { params }) {
       if (method === 'DELETE' && id) {
         // If deleting a transaction that is part of a transfer group, remove both sides
         if (table === 'transactions') {
-          const { data: row } = await supabase.from('transactions').select('id, transfer_group_id, linked_module, linked_module_id, amount, type').eq('id', id).eq('user_id', user.id).maybeSingle()
+          const { data: row } = await supabase.from('transactions').select('id, transfer_group_id, linked_module, linked_module_id, amount, type, attachment_path').eq('id', id).eq('user_id', user.id).maybeSingle()
+          if (row?.attachment_path) await supabase.storage.from('attachments').remove([row.attachment_path])
           const groupId = row?.transfer_group_id
           if (groupId) {
             const { error } = await supabase.from('transactions').delete().eq('transfer_group_id', groupId).eq('user_id', user.id)
@@ -756,10 +879,19 @@ async function handleRoute(request, { params }) {
             if (p) await supabase.from('portfolios').update({ cash_balance: Number(p.cash_balance || 0) + Number(h.qty) * Number(h.avg_buy_price) }).eq('id', h.portfolio_id).eq('user_id', user.id)
           }
         }
-        // Deleting a lend_borrow → remove linked transaction (balance restores automatically)
+        // Deleting a lend_borrow → remove linked transaction (bank/cash balance restores
+        // automatically via the DB trigger; a card's outstanding isn't trigger-managed, so
+        // that has to be reversed by hand here first).
         if (table === 'lend_borrow') {
           const { data: lb } = await supabase.from('lend_borrow').select('linked_transaction_id').eq('id', id).eq('user_id', user.id).maybeSingle()
-          if (lb?.linked_transaction_id) await supabase.from('transactions').delete().eq('id', lb.linked_transaction_id).eq('user_id', user.id)
+          if (lb?.linked_transaction_id) {
+            const { data: linkedTx } = await supabase.from('transactions').select('linked_module, linked_module_id, amount').eq('id', lb.linked_transaction_id).eq('user_id', user.id).maybeSingle()
+            if (linkedTx?.linked_module === 'credit_card' && linkedTx.linked_module_id) {
+              const { data: card } = await supabase.from('credit_cards').select('current_outstanding').eq('id', linkedTx.linked_module_id).eq('user_id', user.id).maybeSingle()
+              if (card) await supabase.from('credit_cards').update({ current_outstanding: Math.max(0, Number(card.current_outstanding || 0) - Number(linkedTx.amount)) }).eq('id', linkedTx.linked_module_id).eq('user_id', user.id)
+            }
+            await supabase.from('transactions').delete().eq('id', lb.linked_transaction_id).eq('user_id', user.id)
+          }
         }
         const { error } = await supabase.from(table).delete().eq('id', id).eq('user_id', user.id)
         return cors(NextResponse.json({ ok: !error }))

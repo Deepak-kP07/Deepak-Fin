@@ -1,4 +1,4 @@
-import { pgTable, pgSchema, pgEnum, uuid, text, numeric, integer, boolean, timestamp, date, time, check, unique, index } from 'drizzle-orm/pg-core'
+import { pgTable, pgSchema, pgEnum, uuid, text, numeric, integer, boolean, timestamp, date, time, jsonb, check, unique, index } from 'drizzle-orm/pg-core'
 import { sql } from 'drizzle-orm'
 
 // auth.users is managed by Supabase, not by this app's migrations — declared
@@ -12,6 +12,7 @@ export const accountType = pgEnum('account_type', ['bank', 'cash', 'credit_card'
 export const categoryType = pgEnum('category_type', ['income', 'expense'])
 export const transactionType = pgEnum('transaction_type', ['income', 'expense', 'transfer'])
 export const budgetPeriod = pgEnum('budget_period', ['monthly', 'yearly'])
+export const recurringFrequency = pgEnum('recurring_frequency', ['weekly', 'monthly', 'yearly'])
 
 export const accounts = pgTable('accounts', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -59,6 +60,12 @@ export const transactions = pgTable('transactions', {
   linkedModuleId: uuid('linked_module_id'),
   transferGroupId: uuid('transfer_group_id'),
   transferDirection: text('transfer_direction'),
+  // One receipt/attachment per transaction — stored in the private `attachments` Supabase
+  // Storage bucket under `${userId}/...`, path kept alongside the public-ish signed-URL-free
+  // reference so it can be looked up/deleted without re-deriving it.
+  attachmentPath: text('attachment_path'),
+  attachmentName: text('attachment_name'),
+  recurringSourceId: uuid('recurring_source_id'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   check('transactions_amount_check', sql`${t.amount} >= 0`),
@@ -67,6 +74,36 @@ export const transactions = pgTable('transactions', {
   index('transactions_user_account_idx').on(t.userId, t.accountId),
   index('transactions_transfer_group_idx').on(t.transferGroupId),
 ])
+
+// A transaction's prior state, snapshotted right before an edit overwrites it — lets the user
+// see what an amount/description/category used to be instead of the edit being silently lossy.
+export const transactionEditHistory = pgTable('transaction_edit_history', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  transactionId: uuid('transaction_id').notNull().references(() => transactions.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
+  previousValues: jsonb('previous_values').notNull(),
+  changedAt: timestamp('changed_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index('tx_history_tx_idx').on(t.transactionId), index('tx_history_user_idx').on(t.userId)])
+
+// A rule for auto-generating transactions on a schedule (rent, salary, SIPs, subscriptions).
+// No cron infra exists in this app, so due occurrences are generated lazily — whenever the
+// summary endpoint is hit, any rule whose nextDueDate has passed gets caught up to today.
+export const recurringTransactions = pgTable('recurring_transactions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
+  accountId: uuid('account_id').references(() => accounts.id, { onDelete: 'set null' }),
+  categoryId: uuid('category_id').references(() => categories.id, { onDelete: 'set null' }),
+  type: transactionType('type').notNull(),
+  amount: numeric('amount', { precision: 14, scale: 2 }).notNull(),
+  description: text('description').notNull(),
+  notes: text('notes'),
+  frequency: recurringFrequency('frequency').notNull().default('monthly'),
+  dayOfMonth: integer('day_of_month'),
+  nextDueDate: date('next_due_date').notNull(),
+  isActive: boolean('is_active').notNull().default(true),
+  lastGeneratedDate: date('last_generated_date'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [check('recurring_transactions_amount_check', sql`${t.amount} > 0`), index('recurring_user_idx').on(t.userId)])
 
 export const budgets = pgTable('budgets', {
   id: uuid('id').primaryKey().defaultRandom(),
