@@ -1,8 +1,60 @@
 'use client'
 
-import { Children, isValidElement, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/browser'
-import { accrueInterest, calcEmi, daysBetween, projectSchedule, totalInterest } from '@/lib/amortization'
+import { calcEmi, daysBetween, projectSchedule, totalInterest } from '@/lib/amortization'
+import {
+  MONTH_NAMES, addMonthsToDate, formatDate, formatDateTime, liveOutstanding, maskedMoney, money, money2,
+  monthAbbr, monthName, ordinal, paymentTypeLabel, todayISO,
+} from '@/lib/format'
+import { PALETTE } from '@/lib/palette'
+import { useToast } from '@/components/shared/Toast'
+import { useConfirm } from '@/components/shared/ConfirmDialog'
+import { usePrompt } from '@/components/shared/PromptDialog'
+import { Select } from '@/components/shared/Select'
+import { CsvBulkImport } from '@/components/shared/CsvBulkImport'
+import { CategorySelect } from '@/components/shared/CategorySelect'
+import { DateInput } from '@/components/shared/DateInput'
+import { StatCard } from '@/components/shared/StatCard'
+import { EmptyState } from '@/components/shared/EmptyState'
+import { Skeleton } from '@/components/shared/Skeleton'
+import { LoadingScreen } from '@/components/shared/LoadingScreen'
+import { Avatar } from '@/components/shared/Avatar'
+import { AuthScreen } from '@/features/auth/AuthScreen'
+import { CategoryForm } from '@/features/categories/CategoryForm'
+import { CategoriesView } from '@/features/categories/CategoriesView'
+import { MoneyRulesWidget } from '@/features/money-rules/MoneyRulesWidget'
+import { MoneyRulesView } from '@/features/money-rules/MoneyRulesView'
+import { AccountForm } from '@/features/accounts/AccountForm'
+import { AccountsView } from '@/features/accounts/AccountsView'
+import { BudgetForm } from '@/features/budgets/BudgetForm'
+import { BudgetsView } from '@/features/budgets/BudgetsView'
+import { RecurringForm } from '@/features/recurring/RecurringForm'
+import { RecurringManager } from '@/features/recurring/RecurringManager'
+import { PortfolioForm } from '@/features/investments/PortfolioForm'
+import { HoldingForm } from '@/features/investments/HoldingForm'
+import { OtherInvestmentForm } from '@/features/investments/OtherInvestmentForm'
+import { PortfolioFundsForm } from '@/features/investments/PortfolioFundsForm'
+import { WithdrawFundsForm } from '@/features/investments/WithdrawFundsForm'
+import { HoldingsBulkImport } from '@/features/investments/HoldingsBulkImport'
+import { SipForm } from '@/features/investments/SipForm'
+import { InvestmentsView } from '@/features/investments/InvestmentsView'
+import { LoanForm } from '@/features/loans/LoanForm'
+import { LoanPaymentForm } from '@/features/loans/LoanPaymentForm'
+import { LoansView } from '@/features/loans/LoansView'
+import { BucketForm } from '@/features/buckets/BucketForm'
+import { BucketListView } from '@/features/buckets/BucketListView'
+import { LendForm } from '@/features/lend-borrow/LendForm'
+import { LendBorrowView } from '@/features/lend-borrow/LendBorrowView'
+import { CreditCardForm } from '@/features/credit-cards/CreditCardForm'
+import { CardSpendForm } from '@/features/credit-cards/CardSpendForm'
+import { CardPayForm } from '@/features/credit-cards/CardPayForm'
+import { CreditCardsView } from '@/features/credit-cards/CreditCardsView'
+import { ScholarshipForm } from '@/features/scholarships/ScholarshipForm'
+import { ScholarshipPayForm } from '@/features/scholarships/ScholarshipPayForm'
+import { ScholarshipsView } from '@/features/scholarships/ScholarshipsView'
+import { ZopkitForm } from '@/features/zopkit/ZopkitForm'
+import { ZopkitView } from '@/features/zopkit/ZopkitView'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import {
@@ -15,446 +67,18 @@ import {
   Wallet, X, Zap,
 } from 'lucide-react'
 
-/* ---------------- Formatters ---------------- */
-const money = (value) => {
-  const n = Number(value || 0)
-  const sign = n < 0 ? '-' : ''
-  return `${sign}₹${new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(Math.abs(n))}`
-}
-const money2 = (value) => `₹${new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Math.abs(Number(value || 0)))}`
-const monthName = (d) => new Date(d).toLocaleString('en-IN', { month: 'short' })
-const formatDate = (d) => {
-  if (!d) return ''
-  const dt = new Date(d)
-  return `${String(dt.getDate()).padStart(2, '0')}-${dt.toLocaleString('en-IN', { month: 'short' })}-${dt.getFullYear()}`
-}
-const formatDateTime = (d, t) => {
-  const base = formatDate(d)
-  if (!t) return base
-  const [h, m] = String(t).slice(0, 5).split(':')
-  if (!h || !m) return base
-  const hn = parseInt(h, 10); const ampm = hn >= 12 ? 'PM' : 'AM'; const h12 = ((hn + 11) % 12) + 1
-  return `${base} (${h12}:${m} ${ampm})`
-}
-const todayISO = () => new Date().toISOString().slice(0, 10)
-
-/* ---------------- Toast ---------------- */
-function useToast() {
-  const [toasts, setToasts] = useState([])
-  const push = (message, tone = 'success') => {
-    const id = Math.random().toString(36).slice(2)
-    setToasts((t) => [...t, { id, message, tone }])
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 3200)
-  }
-  const view = (
-    <div className="pointer-events-none fixed right-4 top-4 z-[60] flex flex-col gap-2">
-      {toasts.map((t) => (
-        <div key={t.id} className={`pointer-events-auto rounded-xl border px-4 py-3 text-sm shadow-lg backdrop-blur-xl ${t.tone === 'error' ? 'border-rose-400/30 bg-rose-500/10 text-rose-100' : t.tone === 'info' ? 'border-cyan-300/30 bg-cyan-400/10 text-cyan-100' : 'border-emerald-400/30 bg-emerald-500/10 text-emerald-100'}`}>{t.message}</div>
-      ))}
-    </div>
-  )
-  return { push, view }
-}
-
-// Themed replacement for window.confirm — call as `await confirm('Delete this?')`,
-// resolves true/false the same way, just rendered as our own modal instead of the browser's.
-function useConfirm() {
-  const [state, setState] = useState(null)
-  const ask = (message, opts = {}) => new Promise((resolve) => setState({ message, resolve, confirmLabel: opts.confirmLabel || 'Delete' }))
-  const close = (result) => { state?.resolve(result); setState(null) }
-  const view = state && (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={() => close(false)}>
-      <div onClick={(e) => e.stopPropagation()} className="w-full max-w-sm rounded-3xl border border-white/10 bg-[#141a28] p-6 shadow-2xl">
-        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-rose-400/15 text-rose-300"><Trash2 size={18} /></div>
-        <p className="mt-4 text-sm text-slate-200">{state.message}</p>
-        <div className="mt-6 flex justify-end gap-2">
-          <button type="button" onClick={() => close(false)} className="rounded-xl border border-white/10 px-4 py-2.5 text-sm text-slate-300 hover:bg-white/5">Cancel</button>
-          <button type="button" onClick={() => close(true)} className="rounded-xl bg-gradient-to-r from-rose-400 to-rose-600 px-4 py-2.5 text-sm font-semibold text-white hover:opacity-90">{state.confirmLabel}</button>
-        </div>
-      </div>
-    </div>
-  )
-  return { ask, view }
-}
-
-// Custom-styled drop-in replacement for a native <select> — same usage shape
-// (value / onChange / <option> children), just rendered as our own themed dropdown
-// instead of the browser's default one.
-function Select({ value, onChange, children, disabled, placeholder, className }) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef(null)
-  useEffect(() => {
-    const onDocClick = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
-    document.addEventListener('mousedown', onDocClick)
-    return () => document.removeEventListener('mousedown', onDocClick)
-  }, [])
-
-  const options = []
-  Children.forEach(children, (child) => {
-    if (isValidElement(child) && child.type === 'option') options.push({ value: child.props.value ?? '', label: child.props.children, disabled: child.props.disabled })
-  })
-  const currentValue = value ?? ''
-  const selected = options.find((o) => String(o.value) === String(currentValue))
-  const base = className || 'w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none focus:border-cyan-300/50'
-
-  return (
-    <div ref={ref} className="relative">
-      <button type="button" disabled={disabled} onClick={() => setOpen((o) => !o)} className={`${base} flex items-center justify-between gap-2 text-left disabled:opacity-50`}>
-        <span className={`truncate ${selected && selected.value !== '' ? '' : 'text-slate-500'}`}>{selected ? selected.label : (placeholder || '')}</span>
-        <ChevronDown size={15} className={`shrink-0 text-slate-500 transition-transform ${open ? 'rotate-180' : ''}`} />
-      </button>
-      {open && (
-        <div className="absolute left-0 z-30 mt-1 max-h-64 w-max min-w-full max-w-[min(20rem,90vw)] overflow-y-auto rounded-xl border border-white/10 bg-[#141a28] p-1 shadow-2xl">
-          {options.map((o, i) => (
-            <button key={`${o.value}-${i}`} type="button" disabled={o.disabled} onClick={() => { onChange({ target: { value: o.value } }); setOpen(false) }} className={`block w-full rounded-lg px-3 py-2 text-left text-sm transition ${String(o.value) === String(currentValue) ? 'bg-cyan-400/15 text-cyan-200' : 'text-slate-300 hover:bg-white/5'} disabled:opacity-40`}>{o.label}</button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-// Category picker, specialized rather than reusing the generic Select — categories tend to run
-// long enough that a single scrolling column hides most of them; laying them out as a grid
-// surfaces far more at once. The pencil icon opens the same add-category flow as Profile.
-function CategorySelect({ value, onChange, categories, onAddCategory, className, placeholder = 'No category' }) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef(null)
-  useEffect(() => {
-    const onDocClick = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
-    document.addEventListener('mousedown', onDocClick)
-    return () => document.removeEventListener('mousedown', onDocClick)
-  }, [])
-  const selected = categories.find((c) => String(c.id) === String(value))
-  const base = className || 'w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none focus:border-cyan-300/50'
-
-  return (
-    <div ref={ref} className="relative">
-      <button type="button" onClick={() => setOpen((o) => !o)} className={`${base} flex items-center justify-between gap-2 text-left`}>
-        <span className={`truncate ${selected ? '' : 'text-slate-500'}`}>{selected ? selected.name : placeholder}</span>
-        <ChevronDown size={15} className={`shrink-0 text-slate-500 transition-transform ${open ? 'rotate-180' : ''}`} />
-      </button>
-      {open && (
-        <div className="absolute left-0 z-30 mt-1 max-h-80 w-max min-w-full max-w-[min(24rem,90vw)] overflow-y-auto rounded-xl border border-white/10 bg-[#141a28] p-3 shadow-2xl">
-          <div className="mb-2 flex items-center justify-between">
-            <span className="text-[10px] uppercase tracking-widest text-slate-500">Categories</span>
-            {onAddCategory && (
-              <button type="button" onClick={() => { setOpen(false); onAddCategory() }} className="rounded-lg p-1 text-slate-400 hover:bg-white/5 hover:text-cyan-200" title="Add new category"><Pencil size={13} /></button>
-            )}
-          </div>
-          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
-            <button type="button" onClick={() => { onChange({ target: { value: '' } }); setOpen(false) }} className={`rounded-lg px-3 py-2 text-left text-sm transition ${!value ? 'bg-cyan-400/15 text-cyan-200' : 'text-slate-300 hover:bg-white/5'}`}>{placeholder}</button>
-            {categories.map((c) => (
-              <button key={c.id} type="button" onClick={() => { onChange({ target: { value: c.id } }); setOpen(false) }} className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-left text-sm transition ${String(value) === String(c.id) ? 'bg-cyan-400/15 text-cyan-200' : 'text-slate-300 hover:bg-white/5'}`}>
-                <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: c.color || '#94a3b8' }} />
-                <span className="truncate">{c.name}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
-const monthAbbr = (dateStr) => MONTH_NAMES[Number((dateStr || '').slice(5, 7)) - 1]?.slice(0, 3) || ''
-
-// A lender's "outstanding" isn't frozen between payments — interest keeps accruing on it every
-// single day, so what you'd owe to close the loan out grows a little day over day until your
-// next payment resets the clock. The stored `outstanding` is only current as of the last real
-// payment; this adds today's not-yet-billed interest on top so the figure matches what the
-// lender's own app would show right now. Sync/adjustment entries don't reset this clock — they
-// correct the principal baseline, not the date interest was last actually paid.
-const liveOutstanding = (loan, payments) => {
-  const outstanding = Number(loan.outstanding || 0)
-  if (loan.status === 'closed' || outstanding <= 0) return outstanding
-  const realPayments = (payments || []).filter((p) => p.type !== 'adjustment')
-  const lastDate = realPayments.length > 0 ? realPayments.reduce((latest, p) => (p.payment_date > latest ? p.payment_date : latest), realPayments[0].payment_date) : (loan.start_date || todayISO())
-  const days = Math.max(0, daysBetween(lastDate, todayISO()))
-  return outstanding + accrueInterest(outstanding, Number(loan.interest_rate || 0), days)
-}
-const paymentTypeLabel = (p) => {
-  if (p.type === 'adjustment') return 'Synced with lender'
-  const modeSuffix = p.prepay_mode ? ` · ${p.prepay_mode === 'reduce_emi' ? 'Reduce EMI' : 'Reduce tenure'}` : ''
-  if (p.type === 'emi') return p.prepay_mode ? `EMI + prepayment${modeSuffix}` : 'EMI'
-  // A "Prepayment" that ended up with no genuine excess (interest owed ate all of it, or it
-  // exactly matched a standard EMI) has no reduce-mode to speak of — don't imply one.
-  return p.prepay_mode ? `Prepayment${modeSuffix}` : 'Prepayment'
-}
-
-// Custom-styled drop-in replacement for a native <input type="date"> — same usage shape
-// (value / onChange, value/target.value as an ISO yyyy-mm-dd string).
-function DateInput({ value, onChange, className, placeholder }) {
-  const [open, setOpen] = useState(false)
-  const [viewDate, setViewDate] = useState(() => (value ? new Date(`${value}T00:00:00`) : new Date()))
-  const ref = useRef(null)
-  useEffect(() => {
-    const onDocClick = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
-    document.addEventListener('mousedown', onDocClick)
-    return () => document.removeEventListener('mousedown', onDocClick)
-  }, [])
-  useEffect(() => { if (open) setViewDate(value ? new Date(`${value}T00:00:00`) : new Date()) }, [open])
-
-  const year = viewDate.getFullYear(), month = viewDate.getMonth()
-  const firstDow = new Date(year, month, 1).getDay()
-  const daysInMonth = new Date(year, month + 1, 0).getDate()
-  const cells = [...Array(firstDow).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)]
-  const pad = (n) => String(n).padStart(2, '0')
-  const isoOf = (d) => `${year}-${pad(month + 1)}-${pad(d)}`
-
-  const pick = (d) => { onChange({ target: { value: isoOf(d) } }); setOpen(false) }
-  const goToday = () => { onChange({ target: { value: todayISO() } }); setViewDate(new Date()); setOpen(false) }
-  const clear = () => { onChange({ target: { value: '' } }); setOpen(false) }
-  const base = className || 'w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50'
-
-  return (
-    <div ref={ref} className="relative">
-      <button type="button" onClick={() => setOpen((o) => !o)} className={`${base} flex items-center justify-between gap-2 text-left`}>
-        <span className={value ? '' : 'text-slate-500'}>{value ? formatDate(value) : (placeholder || 'Choose date')}</span>
-        <Calendar size={15} className="shrink-0 text-slate-500" />
-      </button>
-      {open && (
-        <div className="absolute left-0 z-30 mt-1 w-72 rounded-2xl border border-white/10 bg-[#141a28] p-3 shadow-2xl">
-          <div className="flex items-center justify-between">
-            <button type="button" onClick={() => setViewDate(new Date(year, month - 1, 1))} className="rounded-lg p-1.5 text-slate-400 hover:bg-white/5 hover:text-white"><ChevronLeft size={16} /></button>
-            <div className="text-sm font-semibold text-white">{MONTH_NAMES[month]} {year}</div>
-            <button type="button" onClick={() => setViewDate(new Date(year, month + 1, 1))} className="rounded-lg p-1.5 text-slate-400 hover:bg-white/5 hover:text-white"><ChevronRight size={16} /></button>
-          </div>
-          <div className="mt-3 grid grid-cols-7 gap-1 text-center text-[10px] uppercase tracking-wide text-slate-500">
-            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => <div key={i}>{d}</div>)}
-          </div>
-          <div className="mt-1 grid grid-cols-7 gap-1">
-            {cells.map((d, i) => {
-              if (d === null) return <div key={i} />
-              const iso = isoOf(d)
-              const isSelected = iso === value
-              const isToday = iso === todayISO()
-              return (
-                <button key={i} type="button" onClick={() => pick(d)} className={`h-8 rounded-lg text-xs transition ${isSelected ? 'bg-cyan-400 font-semibold text-[#07101c]' : isToday ? 'border border-cyan-300/40 text-cyan-200' : 'text-slate-300 hover:bg-white/10'}`}>{d}</button>
-              )
-            })}
-          </div>
-          <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-2 text-xs">
-            <button type="button" onClick={clear} className="font-medium text-slate-400 hover:text-white">Clear</button>
-            <button type="button" onClick={goToday} className="font-medium text-cyan-300 hover:text-cyan-200">Today</button>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function GoogleIcon(props) {
-  return (
-    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true" {...props}>
-      <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84c-.21 1.13-.84 2.09-1.8 2.73v2.27h2.91c1.7-1.57 2.69-3.88 2.69-6.64z" />
-      <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.17l-2.91-2.27c-.81.54-1.84.86-3.05.86-2.35 0-4.34-1.58-5.05-3.71H.96v2.34C2.44 15.98 5.48 18 9 18z" />
-      <path fill="#FBBC05" d="M3.95 10.71c-.18-.54-.28-1.11-.28-1.71s.1-1.17.28-1.71V4.95H.96A8.99 8.99 0 0 0 0 9c0 1.45.35 2.83.96 4.05l2.99-2.34z" />
-      <path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0 5.48 0 2.44 2.02.96 4.95l2.99 2.34C4.66 5.16 6.65 3.58 9 3.58z" />
-    </svg>
-  )
-}
-
-/* ---------------- Auth Screen ---------------- */
-function AuthScreen({ onAuth, initialError }) {
-  const [mode, setMode] = useState('login')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [name, setName] = useState('')
-  const [error, setError] = useState(initialError || '')
-  const [busy, setBusy] = useState(false)
-  const [googleBusy, setGoogleBusy] = useState(false)
-
-  const submit = async (event) => {
-    event.preventDefault(); setBusy(true); setError('')
-    try {
-      const response = await fetch(`/api/auth/${mode === 'login' ? 'login' : 'signup'}`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, name }),
-      })
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.msg || data.error_description || data.message || 'Please check your details and try again.')
-      if (mode === 'signup' && !data.access_token) {
-        setError('Account created. Check your inbox to confirm your email, then sign in.')
-        setMode('login')
-      } else {
-        onAuth(data.user)
-      }
-    } catch (caught) { setError(caught.message) } finally { setBusy(false) }
-  }
-
-  const signInWithGoogle = async () => {
-    setError(''); setGoogleBusy(true)
-    try {
-      const supabase = createClient()
-      const { error: oauthError } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: { redirectTo: `${window.location.origin}/api/auth/oauth_callback` },
-      })
-      if (oauthError) throw oauthError
-    } catch (caught) { setError(caught.message); setGoogleBusy(false) }
-  }
-
-  return (
-    <main className="min-h-screen overflow-hidden bg-[#080b12] px-5 py-6 lg:px-10">
-      <div className="mx-auto grid min-h-[calc(100vh-3rem)] max-w-[1480px] overflow-hidden rounded-[32px] border border-white/10 bg-[#0d111b] shadow-2xl shadow-cyan-950/20 lg:grid-cols-[1.1fr_.9fr]">
-        <section className="relative hidden overflow-hidden p-12 lg:flex lg:flex-col lg:justify-between">
-          <div className="absolute -left-24 top-20 h-96 w-96 rounded-full bg-cyan-400/10 blur-3xl" />
-          <div className="absolute bottom-0 right-0 h-[32rem] w-[32rem] rounded-full bg-violet-500/10 blur-3xl" />
-          <div className="relative">
-            <div className="flex items-center gap-3 text-sm font-semibold">
-              <img src="/logo.png" alt="" className="h-10 w-10 rounded-2xl object-cover" />
-              <span>Personal Finance</span>
-            </div>
-            <div className="mt-24 max-w-xl">
-              <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1.5 text-xs font-medium text-cyan-200"><Sparkles size={13} /> Your money, in one clear view</div>
-              <h1 className="text-6xl font-semibold leading-[1.03] tracking-[-.06em] text-white">Build wealth with <span className="bg-gradient-to-r from-cyan-200 via-blue-300 to-violet-300 bg-clip-text text-transparent">intention.</span></h1>
-              <p className="mt-6 max-w-md text-lg leading-8 text-slate-400">A calm command centre for your accounts, investments and everyday decisions.</p>
-            </div>
-          </div>
-          <div className="relative mt-12 grid grid-cols-3 gap-3">
-            {[{ l: 'Accounts', v: 'One view', i: Landmark }, { l: 'Insights', v: 'Monthly', i: LineChart }, { l: 'Secure', v: 'Supabase RLS', i: ShieldCheck }].map((x, i) => (
-              <div key={i} className="rounded-2xl border border-white/10 bg-white/[.04] p-4">
-                <x.i size={18} className="text-cyan-200" />
-                <div className="mt-4 text-xs text-slate-500">{x.l}</div>
-                <div className="text-sm font-semibold text-white">{x.v}</div>
-              </div>
-            ))}
-          </div>
-        </section>
-        <section className="flex items-center justify-center bg-[#101521] p-6 sm:p-12">
-          <div className="w-full max-w-sm">
-            <div className="mb-10 lg:hidden">
-              <div className="flex items-center gap-3 text-sm font-semibold">
-                <img src="/logo.png" alt="" className="h-10 w-10 rounded-2xl object-cover" />Personal Finance
-              </div>
-            </div>
-            <div className="mb-8">
-              <h2 className="text-3xl font-semibold tracking-tight text-white">{mode === 'login' ? 'Welcome back' : 'Start your money journey'}</h2>
-              <p className="mt-2 text-sm text-slate-400">{mode === 'login' ? 'Sign in to your private finance space.' : 'Create your secure personal finance space.'}</p>
-            </div>
-            <form onSubmit={submit} className="space-y-4">
-              {mode === 'signup' && (
-                <label className="block text-sm text-slate-300">Name
-                  <input value={name} onChange={(e) => setName(e.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-4 py-3.5 text-white outline-none transition focus:border-cyan-300/60" placeholder="Deepak" />
-                </label>
-              )}
-              <label className="block text-sm text-slate-300">Email
-                <input required type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-4 py-3.5 text-white outline-none transition focus:border-cyan-300/60" placeholder="you@example.com" />
-              </label>
-              <label className="block text-sm text-slate-300">Password
-                <input required minLength={6} type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-4 py-3.5 text-white outline-none transition focus:border-cyan-300/60" placeholder="••••••••" />
-              </label>
-              {error && <div className="rounded-xl border border-amber-300/20 bg-amber-300/10 px-4 py-3 text-sm leading-5 text-amber-200">{error}</div>}
-              <button disabled={busy} className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 px-4 py-3.5 font-semibold text-[#07101c] transition hover:brightness-110 disabled:opacity-60">
-                {busy ? 'Working…' : mode === 'login' ? 'Sign in securely' : 'Create account'}<ChevronRight size={17} />
-              </button>
-            </form>
-            <div className="my-8 flex items-center gap-3 text-xs text-slate-600"><div className="h-px flex-1 bg-white/10" />OR<div className="h-px flex-1 bg-white/10" /></div>
-            <button type="button" onClick={signInWithGoogle} disabled={googleBusy} className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[.04] px-4 py-3.5 text-sm font-medium text-white transition hover:bg-white/[.08] disabled:opacity-60">
-              <GoogleIcon />{googleBusy ? 'Redirecting…' : 'Continue with Google'}
-            </button>
-            <button onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setError('') }} className="mt-3 w-full rounded-xl border border-white/10 px-4 py-3.5 text-sm font-medium text-slate-300 transition hover:bg-white/5">
-              {mode === 'login' ? 'Create a new account' : 'I already have an account'}
-            </button>
-            <div className="mt-8 flex items-center justify-center gap-2 text-xs text-slate-500"><ShieldCheck size={14} className="text-emerald-300" />Your data is protected by Supabase Auth</div>
-          </div>
-        </section>
-      </div>
-    </main>
-  )
-}
-
-/* ---------------- Small UI atoms ---------------- */
-function StatCard({ label, value, sub, icon: Icon, accent = 'bg-cyan-300/10 text-cyan-200', tone = 'text-emerald-300' }) {
-  return (
-    <div className="rounded-2xl border border-white/10 bg-white/[.035] p-3.5">
-      <div className="flex items-center justify-between">
-        <span className="text-xs text-slate-400">{label}</span>
-        <div className={`flex h-7 w-7 items-center justify-center rounded-lg ${accent}`}><Icon size={14} /></div>
-      </div>
-      <div className="mt-2.5 text-xl font-semibold tracking-tight text-white">{value}</div>
-      {sub && <div className={`mt-1 flex items-center gap-1 text-[11px] ${tone}`}>{sub}</div>}
-    </div>
-  )
-}
-
-function EmptyState({ icon: Icon, title, message, cta, onCta, compact = false }) {
-  if (compact) {
-    return (
-      <div className="p-5 text-center">
-        <div className="mx-auto flex h-9 w-9 items-center justify-center rounded-xl bg-cyan-300/10 text-cyan-200"><Icon size={16} /></div>
-        <div className="mt-2.5 text-sm font-medium text-white">{title}</div>
-        <p className="mt-1 text-xs text-slate-500">{message}</p>
-        {cta && <button onClick={onCta} className="mt-3 rounded-lg bg-cyan-300 px-3 py-1.5 text-xs font-semibold text-[#07101c]">{cta}</button>}
-      </div>
-    )
-  }
-  return (
-    <div className="p-14 text-center">
-      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-300/10 text-cyan-200"><Icon size={20} /></div>
-      <div className="mt-4 font-medium text-white">{title}</div>
-      <p className="mt-1 text-sm text-slate-500">{message}</p>
-      {cta && <button onClick={onCta} className="mt-5 rounded-xl bg-cyan-300 px-4 py-2.5 text-sm font-semibold text-[#07101c]">{cta}</button>}
-    </div>
-  )
-}
-
-function Skeleton({ className = '' }) { return <div className={`animate-pulse rounded-xl bg-white/5 ${className}`} /> }
-
-function LoadingScreen() {
-  return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-5 bg-[#080b12]">
-      <div className="relative flex h-16 w-16 items-center justify-center">
-        <div className="absolute inset-0 animate-spin rounded-2xl border-2 border-cyan-300/15 border-t-cyan-300" style={{ animationDuration: '900ms' }} />
-        <img src="/logo.png" alt="" className="h-11 w-11 rounded-xl object-cover" />
-      </div>
-      <div className="flex items-center gap-1.5 text-sm text-slate-500">
-        <span>Loading your financial space</span>
-        <span className="flex gap-0.5">
-          <span className="h-1 w-1 animate-bounce rounded-full bg-slate-500" style={{ animationDelay: '0ms' }} />
-          <span className="h-1 w-1 animate-bounce rounded-full bg-slate-500" style={{ animationDelay: '150ms' }} />
-          <span className="h-1 w-1 animate-bounce rounded-full bg-slate-500" style={{ animationDelay: '300ms' }} />
-        </span>
-      </div>
-    </div>
-  )
-}
-
-function Avatar({ src, name, email, size = 36, rounded = 'rounded-xl', className = '' }) {
-  const [failed, setFailed] = useState(false)
-  useEffect(() => { setFailed(false) }, [src])
-  const initials = (name || email || 'D').trim().slice(0, 1).toUpperCase()
-  if (src && !failed) {
-    return (
-      <img
-        src={src}
-        alt=""
-        referrerPolicy="no-referrer"
-        onError={() => setFailed(true)}
-        className={`shrink-0 border border-white/10 object-cover ${rounded} ${className}`}
-        style={{ height: size, width: size }}
-      />
-    )
-  }
-  return (
-    <div
-      className={`flex shrink-0 items-center justify-center bg-gradient-to-br from-cyan-300 to-blue-600 font-semibold text-[#07101c] ${rounded} ${className}`}
-      style={{ height: size, width: size, fontSize: Math.round(size * 0.4) }}
-    >
-      {initials}
-    </div>
-  )
-}
-
 /* ---------------- Transaction Form ---------------- */
-function TransactionForm({ open, onClose, onSaved, editing, accounts, categories, creditCards = [], lendBorrow = [], loans = [], onAddAccount, onAddCategory, toast }) {
+function TransactionForm({ open, onClose, onSaved, editing, accounts, categories, creditCards = [], lendBorrow = [], loans = [], onAddAccount, onAddCategory, toast, profile }) {
   const now = todayISO()
   const nowTime = new Date().toTimeString().slice(0, 5)
   const initial = useMemo(() => {
     if (editing) return { ...editing, amount: String(editing.amount), time: editing.time?.slice(0, 5) || nowTime, to_account_id: '', account_id: editing.linked_module === 'credit_card' ? `cc:${editing.linked_module_id}` : (editing.account_id || ''), repay_value: editing.linked_module === 'lend' ? `lend:${editing.linked_module_id}` : '' }
-    return { type: 'expense', amount: '', description: '', date: now, time: nowTime, account_id: accounts[0]?.id || '', to_account_id: '', category_id: '', notes: '', linked_module: '', linked_module_id: '', repay_value: '' }
+    // No pre-filled default here on purpose — silently defaulting to whichever account happens
+    // to be first let transactions land on the wrong account without anyone noticing (e.g. an
+    // income entry meant for a cash account quietly going to a bank account instead). Leaving
+    // it blank forces an explicit, conscious choice every time, and pairs with `required` on
+    // the Select below actually blocking submission until one is picked.
+    return { type: 'expense', amount: '', description: '', date: now, time: nowTime, account_id: '', to_account_id: '', category_id: '', notes: '', linked_module: '', linked_module_id: '', repay_value: '' }
   }, [editing, open])
   const [form, setForm] = useState(initial)
   // 'category' = normal spending/income category selected; 'repayment' = this transaction is
@@ -465,6 +89,7 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
   const [attachmentRemoved, setAttachmentRemoved] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [history, setHistory] = useState(null)
+  const confirm = useConfirm()
   useEffect(() => { setForm(initial); setPurposeMode(initial.repay_value ? 'repayment' : 'category'); setAttachmentFile(null); setAttachmentRemoved(false); setHistoryOpen(false); setHistory(null) }, [initial])
 
   if (!open) return null
@@ -512,8 +137,50 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
     setForm({ ...form, repay_value: '', linked_module: '', linked_module_id: '', category_id: mode === 'category' ? (categories.find((c) => c.type === (form.type === 'income' ? 'income' : 'expense'))?.id || '') : '' })
   }
 
+  // `form.account_id` is always the money-leaving side regardless of which branch below actually
+  // ends up saving it (plain expense, transfer, loan/lend repayment, or a credit-card bill
+  // payment). Credit cards can never go past their own limit — that's a hard stop, no override.
+  // Between 30% and the limit it's a "Confirm" prompt, same shape as the bank one below. Banks/
+  // cash/debit default to a hard stop too, but that default lives in Profile settings — turning
+  // it off there swaps the block for the same "confirm anyway" prompt.
+  const warnIfRisky = async () => {
+    if (form.type === 'income') return true
+    const amount = Number(form.amount)
+    if (!(amount > 0)) return true
+    const sourceId = form.account_id
+    if (typeof sourceId === 'string' && sourceId.startsWith('cc:')) {
+      const card = creditCards.find((c) => c.id === sourceId.slice(3))
+      if (card) {
+        const limit = Number(card.credit_limit || 0)
+        if (limit > 0) {
+          const pct = ((Number(card.current_outstanding || 0) + amount) / limit) * 100
+          if (pct >= 100) {
+            await confirm.ask(`"${card.name}" only has ${money(Math.max(0, limit - Number(card.current_outstanding || 0)))} of headroom left — this would go over its credit limit.`, { okOnly: true })
+            return false
+          }
+          if (pct > 30) {
+            return confirm.ask(`This puts "${card.name}" at ${Math.round(pct)}% of its limit — best practice is staying under 30–40%. Do you want to confirm this payment anyway?`, { confirmLabel: 'Confirm' })
+          }
+        }
+      }
+      return true
+    }
+    const debitCard = debitCards.find((c) => c.id === sourceId)
+    const account = accounts.find((a) => a.id === (debitCard ? debitCard.linked_account_id : sourceId))
+    if (account && amount > Number(account.current_balance || 0)) {
+      if (profile?.block_insufficient_funds === false) {
+        return confirm.ask(`You don't have that much money in "${account.name}" — do you want to confirm this payment anyway?`, { confirmLabel: 'Confirm' })
+      }
+      await confirm.ask(`"${account.name}" doesn't have that much balance, so this is blocked. You may have missed logging some income — add it first to keep your accounting accurate, or turn this block off in your Profile settings.`, { okOnly: true })
+      return false
+    }
+    return true
+  }
+
   const save = async (event) => {
-    event.preventDefault(); setBusy(true)
+    event.preventDefault()
+    if (!(await warnIfRisky())) return
+    setBusy(true)
     try {
       const [repayKind, repayId] = purposeMode === 'repayment' ? (form.repay_value || '').split(':') : []
 
@@ -722,356 +389,28 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
           {busy ? 'Saving…' : editing ? 'Update transaction' : 'Save transaction'} <ChevronRight size={16} />
         </button>
       </form>
-    </div>
-  )
-}
-
-/* ---------------- Account Form ---------------- */
-function AccountForm({ open, onClose, onSaved, editing, accounts = [], toast }) {
-  const initial = editing
-    ? { ...editing, opening_balance: String(editing.opening_balance), linked_account_id: editing.linked_account_id || '' }
-    : { name: '', type: 'bank', bank_name: '', account_number_last4: '', opening_balance: '0', color: '#22d3ee', icon: 'landmark', is_active: true, linked_account_id: '' }
-  const [form, setForm] = useState(initial)
-  const [busy, setBusy] = useState(false)
-  useEffect(() => { setForm(initial) }, [editing, open])
-  if (!open) return null
-
-  const isDebitCard = form.type === 'debit_card'
-  const isCash = form.type === 'cash'
-  const bankAccounts = accounts.filter((a) => a.type === 'bank' && a.id !== editing?.id)
-
-  const save = async (e) => {
-    e.preventDefault(); setBusy(true)
-    try {
-      const endpoint = editing ? `/api/finance/accounts/${editing.id}` : '/api/finance/accounts'
-      const payload = isDebitCard
-        ? { name: form.name, type: 'debit_card', linked_account_id: form.linked_account_id, opening_balance: 0 }
-        : { ...form, opening_balance: Number(form.opening_balance), linked_account_id: null }
-      const response = await fetch(endpoint, { method: editing ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.error || data.message || 'Could not save')
-      toast.push(editing ? 'Account updated' : 'Account added')
-      onSaved()
-    } catch (err) { toast.push(err.message, 'error') } finally { setBusy(false) }
-  }
-
-  const palette = ['#22d3ee', '#a78bfa', '#f59e0b', '#f472b6', '#34d399', '#60a5fa', '#fb7185', '#facc15']
-
-  return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center" onClick={onClose}>
-      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-lg rounded-3xl border border-white/10 bg-[#141a28] p-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white">{editing ? 'Edit account' : 'Add account'}</h2>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-white/5"><X size={18} /></button>
-        </div>
-        <div className="mt-5 grid gap-4 sm:grid-cols-2">
-          <div className="text-sm text-slate-300 sm:col-span-2">Type
-            <div className="mt-2 grid grid-cols-3 gap-2">
-              {[{ v: 'bank', l: 'Bank' }, { v: 'cash', l: 'Cash' }, { v: 'debit_card', l: 'Debit card' }].map((t) => (
-                <button key={t.v} type="button" onClick={() => setForm({ ...form, type: t.v })} className={`rounded-xl border px-3 py-2.5 text-sm font-medium transition ${form.type === t.v ? 'border-cyan-300/50 bg-cyan-400/10 text-white' : 'border-white/10 text-slate-400 hover:bg-white/5'}`}>{t.l}</button>
-              ))}
-            </div>
-          </div>
-          <label className="text-sm text-slate-300 sm:col-span-2">Name
-            <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder={isDebitCard ? 'HDFC Visa Debit' : isCash ? 'Cash in hand' : 'HDFC Salary'} />
-          </label>
-          {isDebitCard ? (
-            <label className="text-sm text-slate-300 sm:col-span-2">Linked bank account
-              <Select required value={form.linked_account_id} onChange={(e) => setForm({ ...form, linked_account_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none focus:border-cyan-300/50">
-                <option value="">Choose account…</option>
-                {bankAccounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-              </Select>
-              <div className="mt-1 text-[11px] text-slate-500">This card draws from that account's balance — it has none of its own.</div>
-              {bankAccounts.length === 0 && <div className="mt-1 text-[11px] text-amber-300">Add a bank account first.</div>}
-            </label>
-          ) : (
-            <>
-              {!isCash && (
-                <>
-                  <label className="text-sm text-slate-300">Bank name
-                    <input value={form.bank_name || ''} onChange={(e) => setForm({ ...form, bank_name: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="HDFC Bank" />
-                  </label>
-                  <label className="text-sm text-slate-300">Last 4 digits
-                    <input maxLength={4} value={form.account_number_last4 || ''} onChange={(e) => setForm({ ...form, account_number_last4: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="1234" />
-                  </label>
-                </>
-              )}
-              <label className="text-sm text-slate-300">Opening balance
-                <input required type="number" step="0.01" value={form.opening_balance} onChange={(e) => setForm({ ...form, opening_balance: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
-              </label>
-            </>
-          )}
-          <div className="text-sm text-slate-300 sm:col-span-2">Colour
-            <div className="mt-2 flex flex-wrap gap-2">
-              {palette.map((c) => (
-                <button key={c} type="button" onClick={() => setForm({ ...form, color: c })} className={`h-8 w-8 rounded-full border-2 transition ${form.color === c ? 'border-white' : 'border-transparent'}`} style={{ background: c }} />
-              ))}
-            </div>
-          </div>
-        </div>
-        <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : editing ? 'Update account' : 'Save account'}</button>
-      </form>
-    </div>
-  )
-}
-
-/* ---------------- Category Form ---------------- */
-function CategoryForm({ open, onClose, onSaved, editing, toast }) {
-  const initial = editing ? { ...editing } : { name: '', type: 'expense', color: '#fb7185', icon: 'tag' }
-  const [form, setForm] = useState(initial)
-  const [busy, setBusy] = useState(false)
-  useEffect(() => { setForm(initial) }, [editing, open])
-  if (!open) return null
-  const save = async (e) => {
-    e.preventDefault(); setBusy(true)
-    try {
-      const endpoint = editing ? `/api/finance/categories/${editing.id}` : '/api/finance/categories'
-      const response = await fetch(endpoint, { method: editing ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.error || data.message || 'Could not save')
-      toast.push(editing ? 'Category updated' : 'Category added')
-      onSaved()
-    } catch (err) { toast.push(err.message, 'error') } finally { setBusy(false) }
-  }
-  const palette = ['#fb7185', '#f472b6', '#a78bfa', '#60a5fa', '#22d3ee', '#34d399', '#facc15', '#f59e0b']
-  return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center" onClick={onClose}>
-      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-3xl border border-white/10 bg-[#141a28] p-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white">{editing ? 'Edit category' : 'Add category'}</h2>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-white/5"><X size={18} /></button>
-        </div>
-        <div className="mt-5 grid gap-4">
-          <label className="text-sm text-slate-300">Name
-            <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="Groceries" />
-          </label>
-          <label className="text-sm text-slate-300">Type
-            <Select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
-              <option value="expense">Expense</option>
-              <option value="income">Income</option>
-            </Select>
-          </label>
-          <div className="text-sm text-slate-300">Colour
-            <div className="mt-2 flex flex-wrap gap-2">
-              {palette.map((c) => (
-                <button key={c} type="button" onClick={() => setForm({ ...form, color: c })} className={`h-8 w-8 rounded-full border-2 transition ${form.color === c ? 'border-white' : 'border-transparent'}`} style={{ background: c }} />
-              ))}
-            </div>
-          </div>
-        </div>
-        <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : editing ? 'Update' : 'Save category'}</button>
-      </form>
-    </div>
-  )
-}
-
-/* ---------------- Recurring Transaction Form ---------------- */
-function RecurringForm({ open, onClose, onSaved, editing, accounts, categories, toast }) {
-  const initial = editing
-    ? { ...editing, amount: String(editing.amount) }
-    : { account_id: accounts[0]?.id || '', category_id: '', type: 'expense', amount: '', description: '', notes: '', frequency: 'monthly', day_of_month: String(new Date().getDate()), next_due_date: todayISO(), is_active: true }
-  const [form, setForm] = useState(initial)
-  const [busy, setBusy] = useState(false)
-  useEffect(() => { setForm(initial) }, [editing, open])
-  if (!open) return null
-  const catsForType = categories.filter((c) => c.type === form.type)
-  const save = async (e) => {
-    e.preventDefault(); setBusy(true)
-    try {
-      const endpoint = editing ? `/api/finance/recurring_transactions/${editing.id}` : '/api/finance/recurring_transactions'
-      const payload = { ...form, amount: Number(form.amount), category_id: form.category_id || null, day_of_month: form.day_of_month ? Number(form.day_of_month) : null }
-      const response = await fetch(endpoint, { method: editing ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.error || data.message || 'Could not save')
-      toast.push(editing ? 'Recurring rule updated' : 'Recurring rule added — it\'ll auto-log from its next due date')
-      onSaved()
-    } catch (err) { toast.push(err.message, 'error') } finally { setBusy(false) }
-  }
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center" onClick={onClose}>
-      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-3xl border border-white/10 bg-[#141a28] p-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white">{editing ? 'Edit recurring rule' : 'New recurring transaction'}</h2>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-white/5"><X size={18} /></button>
-        </div>
-        <div className="mt-5 grid gap-4">
-          <div className="grid grid-cols-2 gap-2">
-            {[{ v: 'expense', l: 'Expense' }, { v: 'income', l: 'Income' }].map((t) => (
-              <button key={t.v} type="button" onClick={() => setForm({ ...form, type: t.v, category_id: '' })} className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${form.type === t.v ? 'border-cyan-400/30 bg-cyan-400/15 text-cyan-200' : 'border-white/10 text-slate-400 hover:bg-white/5'}`}>{t.l}</button>
-            ))}
-          </div>
-          <label className="text-sm text-slate-300">Description
-            <input required value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="e.g. Rent, Salary, Netflix" />
-          </label>
-          <label className="text-sm text-slate-300">Amount
-            <input required type="number" step="0.01" min="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
-          </label>
-          <label className="text-sm text-slate-300">Account
-            <Select required value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
-              <option value="">Choose account…</option>
-              {accounts.filter((a) => a.type !== 'debit_card').map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-            </Select>
-          </label>
-          <label className="text-sm text-slate-300">Category
-            <CategorySelect value={form.category_id || ''} onChange={(e) => setForm({ ...form, category_id: e.target.value })} categories={catsForType} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
-          </label>
-          <div className="grid grid-cols-2 gap-3">
-            <label className="text-sm text-slate-300">Repeats
-              <Select value={form.frequency} onChange={(e) => setForm({ ...form, frequency: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
-                <option value="weekly">Weekly</option>
-                <option value="monthly">Monthly</option>
-                <option value="yearly">Yearly</option>
-              </Select>
-            </label>
-            <label className="text-sm text-slate-300">Next due
-              <DateInput value={form.next_due_date} onChange={(e) => setForm({ ...form, next_due_date: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
-            </label>
-          </div>
-          <div className="text-[11px] text-slate-500">Any occurrences already due by the time you save will be logged immediately, then it repeats {form.frequency} from there.</div>
-          <label className="text-sm text-slate-300">Notes
-            <input value={form.notes || ''} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="Optional" />
-          </label>
-        </div>
-        <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : editing ? 'Update rule' : 'Save recurring rule'}</button>
-      </form>
-    </div>
-  )
-}
-
-function RecurringManager({ open, onClose, rules, onAdd, onEdit, onToggle, onDelete, showMoney }) {
-  if (!open) return null
-  return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center" onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-3xl border border-white/10 bg-[#141a28] p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-white">Recurring transactions</h2>
-            <p className="mt-1 text-xs text-slate-500">Rent, salary, SIPs, subscriptions — set once, logged automatically.</p>
-          </div>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-white/5"><X size={18} /></button>
-        </div>
-        <button type="button" onClick={onAdd} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 py-3 text-sm font-semibold text-[#07101c]"><Plus size={15} />New recurring transaction</button>
-        <div className="mt-4 space-y-2">
-          {rules.length === 0 ? (
-            <div className="rounded-2xl border border-white/10 bg-white/[.02] py-8 text-center text-sm text-slate-500">No recurring rules yet.</div>
-          ) : rules.map((r) => (
-            <div key={r.id} className={`rounded-2xl border p-4 ${r.is_active ? 'border-white/10 bg-white/[.035]' : 'border-white/5 bg-white/[.015] opacity-60'}`}>
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-medium text-white">{r.description}</div>
-                  <div className="mt-0.5 text-xs text-slate-500 capitalize">{r.frequency} · {r.type} · {showMoney ? money(r.amount) : '••••'} · next {formatDate(r.next_due_date)}</div>
-                </div>
-                <div className="flex shrink-0 gap-1">
-                  <button type="button" onClick={() => onToggle(r)} className={`rounded-lg px-2.5 py-1.5 text-[11px] font-medium transition ${r.is_active ? 'bg-emerald-400/15 text-emerald-200 hover:bg-emerald-400/25' : 'bg-white/[.06] text-slate-400 hover:bg-white/[.1]'}`}>{r.is_active ? 'Active' : 'Paused'}</button>
-                  <button type="button" onClick={() => onEdit(r)} className="rounded-lg p-1.5 text-slate-500 hover:bg-white/5 hover:text-white"><Pencil size={14} /></button>
-                  <button type="button" onClick={() => onDelete(r)} className="rounded-lg p-1.5 text-rose-300/70 hover:bg-rose-300/10"><Trash2 size={14} /></button>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-/* ---------------- Budget Form ---------------- */
-function BudgetForm({ open, onClose, onSaved, editing, categories, toast }) {
-  const expenseCats = categories.filter((c) => c.type === 'expense')
-  const initial = editing ? { ...editing, amount: String(editing.amount) } : { category_id: expenseCats[0]?.id || '', amount: '', period: 'monthly', start_date: todayISO() }
-  const [form, setForm] = useState(initial)
-  const [busy, setBusy] = useState(false)
-  useEffect(() => { setForm(initial) }, [editing, open])
-  if (!open) return null
-  const save = async (e) => {
-    e.preventDefault(); setBusy(true)
-    try {
-      const endpoint = editing ? `/api/finance/budgets/${editing.id}` : '/api/finance/budgets'
-      const response = await fetch(endpoint, { method: editing ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, amount: Number(form.amount) }) })
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.error || data.message || 'Could not save')
-      toast.push(editing ? 'Budget updated' : 'Budget added'); onSaved()
-    } catch (err) { toast.push(err.message, 'error') } finally { setBusy(false) }
-  }
-  return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center" onClick={onClose}>
-      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-3xl border border-white/10 bg-[#141a28] p-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white">{editing ? 'Edit budget' : 'Set a budget'}</h2>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-white/5"><X size={18} /></button>
-        </div>
-        <div className="mt-5 grid gap-4">
-          <label className="text-sm text-slate-300">Category
-            <Select required value={form.category_id} onChange={(e) => setForm({ ...form, category_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
-              <option value="">Choose category…</option>
-              {expenseCats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </Select>
-          </label>
-          <label className="text-sm text-slate-300">Limit amount
-            <input required type="number" step="0.01" min="0" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="10000" />
-          </label>
-          <label className="text-sm text-slate-300">Period
-            <Select value={form.period} onChange={(e) => setForm({ ...form, period: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
-              <option value="monthly">Monthly</option><option value="yearly">Yearly</option>
-            </Select>
-          </label>
-        </div>
-        <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : editing ? 'Update budget' : 'Save budget'}</button>
-      </form>
+      {confirm.view}
     </div>
   )
 }
 
 /* ---------------- CSV Import ---------------- */
+const TX_IMPORT_FIELDS = [
+  { key: 'date', label: 'Date', required: true },
+  { key: 'description', label: 'Description', required: true, detect: (l) => l.includes('desc') || l === 'narration' || l === 'particulars' },
+  { key: 'amount', label: 'Amount', required: true, detect: (l) => l === 'amount' || l.includes('amount') || l === 'value' },
+  { key: 'type', label: 'Type', required: false, detect: (l) => l === 'type' || l === 'kind' },
+  { key: 'category', label: 'Category', required: false, detect: (l) => l.includes('categ') },
+  { key: 'notes', label: 'Notes', required: false, detect: (l) => l.includes('note') },
+]
+
 function CsvImport({ open, onClose, onImported, accounts, categories, transactions = [], toast }) {
-  const [rows, setRows] = useState([])
-  const [headers, setHeaders] = useState([])
-  const [mapping, setMapping] = useState({ date: '', description: '', amount: '', type: '', category: '', notes: '' })
   const [defaultAccount, setDefaultAccount] = useState(accounts[0]?.id || '')
-  const [busy, setBusy] = useState(false)
-  const [excluded, setExcluded] = useState(() => new Set())
-  useEffect(() => { if (open) { setRows([]); setHeaders([]); setDefaultAccount(accounts[0]?.id || ''); setExcluded(new Set()) } }, [open, accounts])
-
-  const parseCsv = (text) => {
-    const lines = text.replace(/\r/g, '').split('\n').filter((l) => l.trim().length > 0)
-    if (lines.length === 0) return { headers: [], rows: [] }
-    const split = (line) => {
-      const out = []; let cur = ''; let inQ = false
-      for (let i = 0; i < line.length; i++) {
-        const ch = line[i]
-        if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++ }
-        else if (ch === '"') { inQ = !inQ }
-        else if (ch === ',' && !inQ) { out.push(cur); cur = '' }
-        else cur += ch
-      }
-      out.push(cur); return out.map((c) => c.trim())
-    }
-    const hs = split(lines[0])
-    const rs = lines.slice(1).map((l) => { const cols = split(l); const obj = {}; hs.forEach((h, i) => { obj[h] = cols[i] || '' }); return obj })
-    return { headers: hs, rows: rs }
-  }
-
-  const onFile = async (e) => {
-    const file = e.target.files?.[0]; if (!file) return
-    const text = await file.text()
-    const { headers: hs, rows: rs } = parseCsv(text)
-    setHeaders(hs); setRows(rs)
-    const auto = { date: '', description: '', amount: '', type: '', category: '', notes: '' }
-    hs.forEach((h) => {
-      const l = h.toLowerCase()
-      if (!auto.date && l.includes('date')) auto.date = h
-      if (!auto.description && (l.includes('desc') || l === 'narration' || l === 'particulars')) auto.description = h
-      if (!auto.amount && (l === 'amount' || l.includes('amount') || l === 'value')) auto.amount = h
-      if (!auto.type && (l === 'type' || l === 'kind')) auto.type = h
-      if (!auto.category && l.includes('categ')) auto.category = h
-      if (!auto.notes && l.includes('note')) auto.notes = h
-    })
-    setMapping(auto)
-  }
+  useEffect(() => { if (open) setDefaultAccount(accounts[0]?.id || '') }, [open, accounts])
 
   // Pure per-row parse — used both to build the preview (so what you see is exactly what gets
   // imported) and to actually import, instead of two versions of the same logic drifting apart.
-  const parseRow = (r) => {
+  const parseRow = (r, mapping) => {
     const rawAmount = String(r[mapping.amount] || '').replace(/[,₹\s]/g, '')
     const amount = Number(rawAmount)
     const valid = !!amount && !isNaN(amount)
@@ -1101,1432 +440,57 @@ function CsvImport({ open, onClose, onImported, accounts, categories, transactio
     String(t.description || '').trim().toLowerCase() === parsed.description.trim().toLowerCase() &&
     t.account_id === parsed.account_id)
 
-  const preview = useMemo(() => {
-    if (rows.length === 0 || !mapping.date || !mapping.description || !mapping.amount) return []
-    return rows.map((r) => { const parsed = parseRow(r); return { ...parsed, duplicate: parsed.valid && isDuplicate(parsed) } })
-  }, [rows, mapping, defaultAccount, categories, transactions])
-
-  useEffect(() => {
-    // Duplicates start unchecked (excluded) by default — everything else starts included.
-    setExcluded(new Set(preview.map((p, i) => (p.duplicate ? i : null)).filter((i) => i !== null)))
-  }, [rows, mapping, defaultAccount])
-
-  if (!open) return null
-
-  const toImport = preview.filter((p, i) => p.valid && !excluded.has(i))
-  const duplicateCount = preview.filter((p) => p.duplicate).length
-  const invalidCount = preview.filter((p) => !p.valid).length
-
-  const doImport = async () => {
-    if (!mapping.date || !mapping.description || !mapping.amount) { toast.push('Map at least Date, Description and Amount', 'error'); return }
-    if (!defaultAccount) { toast.push('Choose a default account', 'error'); return }
-    setBusy(true)
-    let ok = 0; let fail = 0
-    for (const p of toImport) {
-      const { valid, duplicate, categoryLabel, ...payload } = p
-      const res = await fetch('/api/finance/transactions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-      if (res.ok) ok++; else fail++
-    }
-    setBusy(false)
-    toast.push(`Imported ${ok} transaction${ok === 1 ? '' : 's'}${fail ? ` · ${fail} failed` : ''}`, fail ? 'info' : 'success')
-    onImported()
-  }
-
   return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center" onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} className="max-h-[85vh] w-full max-w-3xl overflow-y-auto rounded-3xl border border-white/10 bg-[#141a28] p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-white">Import from CSV</h2>
-            <p className="mt-1 text-xs text-slate-500">Map your columns, review exactly what gets created, then import</p>
-          </div>
-          <button onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-white/5"><X size={18} /></button>
-        </div>
-        {rows.length === 0 ? (
-          <div className="mt-6">
-            <label className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-white/10 bg-white/[.02] px-6 py-14 text-center hover:border-cyan-300/40 hover:bg-cyan-300/5">
-              <ListChecks size={24} className="text-cyan-300" />
-              <div className="mt-3 text-sm font-medium text-white">Choose a CSV file</div>
-              <div className="mt-1 text-xs text-slate-500">Bank statement, spreadsheet export — we&apos;ll auto-detect columns</div>
-              <input type="file" accept=".csv,text/csv" onChange={onFile} className="hidden" />
-            </label>
-          </div>
-        ) : (
-          <>
-            <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              {['date', 'description', 'amount', 'type', 'category', 'notes'].map((field) => (
-                <label key={field} className="text-sm text-slate-300 capitalize">{field}
-                  <Select value={mapping[field]} onChange={(e) => setMapping({ ...mapping, [field]: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-2.5 text-white outline-none">
-                    <option value="">— none —</option>
-                    {headers.map((h) => <option key={h} value={h}>{h}</option>)}
-                  </Select>
-                </label>
-              ))}
-              <label className="text-sm text-slate-300 sm:col-span-2">Default account
-                <Select value={defaultAccount} onChange={(e) => setDefaultAccount(e.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-2.5 text-white outline-none">
-                  {accounts.filter((a) => a.type !== 'debit_card').map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-                </Select>
-              </label>
-            </div>
-
-            {preview.length === 0 ? (
-              <div className="mt-5 rounded-xl border border-amber-300/20 bg-amber-300/5 px-4 py-3 text-xs text-amber-200">Map Date, Description and Amount to see a preview of what will be imported.</div>
-            ) : (
-              <>
-                <div className="mt-5 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
-                  <span>{preview.length} row{preview.length === 1 ? '' : 's'} detected{duplicateCount ? ` · ${duplicateCount} likely duplicate${duplicateCount === 1 ? '' : 's'} (unchecked by default)` : ''}{invalidCount ? ` · ${invalidCount} unreadable amount, will be skipped` : ''}</span>
-                  <button type="button" onClick={() => setExcluded(excluded.size > 0 ? new Set() : new Set(preview.map((_, i) => i)))} className="text-cyan-300 hover:underline">{excluded.size > 0 ? 'Select all' : 'Deselect all'}</button>
-                </div>
-                <div className="mt-2 max-h-72 overflow-auto rounded-xl border border-white/10 bg-black/20 text-xs">
-                  <table className="w-full">
-                    <thead className="sticky top-0 bg-[#141a28] text-slate-500"><tr><th className="px-3 py-2" /><th className="px-3 py-2 text-left">Date</th><th className="px-3 py-2 text-left">Description</th><th className="px-3 py-2 text-left">Type</th><th className="px-3 py-2 text-left">Category</th><th className="px-3 py-2 text-right">Amount</th></tr></thead>
-                    <tbody>
-                      {preview.map((p, i) => (
-                        <tr key={i} className={`border-t border-white/5 ${!p.valid ? 'opacity-40' : excluded.has(i) ? 'opacity-50' : ''}`}>
-                          <td className="px-3 py-2">
-                            <input type="checkbox" disabled={!p.valid} checked={p.valid && !excluded.has(i)} onChange={() => setExcluded((s) => { const n = new Set(s); n.has(i) ? n.delete(i) : n.add(i); return n })} />
-                          </td>
-                          <td className="px-3 py-2 text-slate-400">{p.valid ? formatDate(p.date) : '—'}</td>
-                          <td className="px-3 py-2 text-slate-300">
-                            {p.description}
-                            {p.duplicate && <span className="ml-2 rounded-full bg-amber-300/15 px-1.5 py-0.5 text-[10px] text-amber-200">possible duplicate</span>}
-                            {!p.valid && <span className="ml-2 rounded-full bg-rose-300/15 px-1.5 py-0.5 text-[10px] text-rose-200">unreadable amount</span>}
-                          </td>
-                          <td className="px-3 py-2 capitalize text-slate-400">{p.type}</td>
-                          <td className="px-3 py-2 text-slate-400">{p.categoryLabel}</td>
-                          <td className="px-3 py-2 text-right text-slate-300">{p.valid ? money(p.amount) : '—'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </>
-            )}
-            <button onClick={doImport} disabled={busy || toImport.length === 0} className="mt-5 w-full rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Importing…' : `Import ${toImport.length} transaction${toImport.length === 1 ? '' : 's'}`}</button>
-          </>
-        )}
-      </div>
-    </div>
-  )
-}
-
-/* ---------------- Budgets View ---------------- */
-function BudgetsView({ data, onAdd, onEdit, onDelete, showMoney, onToggleMoney }) {
-  const { budgets, categories, transactions } = data
-  const now = new Date()
-  const monthKey = `${now.getFullYear()}-${now.getMonth()}`
-  const yearKey = `${now.getFullYear()}`
-  const spendByCat = (categoryId, period) => transactions.filter((t) => {
-    if (t.type !== 'expense' || t.category_id !== categoryId) return false
-    const d = new Date(t.date)
-    if (period === 'monthly') return `${d.getFullYear()}-${d.getMonth()}` === monthKey
-    return `${d.getFullYear()}` === yearKey
-  }).reduce((s, t) => s + Number(t.amount || 0), 0)
-
-  return (
-    <div className="space-y-5">
-      <div className="flex items-end justify-between">
-        <div>
-          <div className="mb-2 text-xs uppercase tracking-widest text-cyan-200/70">Guardrails</div>
-          <h1 className="text-3xl font-semibold tracking-tight text-white">Budgets</h1>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={onAdd} className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 px-4 py-2.5 text-sm font-semibold text-[#07101c]"><Plus size={15} />Add budget</button>
-          <button onClick={onToggleMoney} className="rounded-xl border border-white/10 p-2.5 text-slate-400 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
-            {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
-          </button>
-        </div>
-      </div>
-      {budgets.length === 0 ? (
-        <div className="rounded-2xl border border-white/10 bg-white/[.035]">
-          <EmptyState icon={Target} title="No budgets yet" message="Set a monthly limit per category to keep spending in check." cta="Add budget" onCta={onAdd} />
-        </div>
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {budgets.map((b) => {
-            const cat = categories.find((c) => c.id === b.category_id)
-            const spent = spendByCat(b.category_id, b.period)
-            const limit = Number(b.amount || 0)
-            const pct = limit > 0 ? Math.min(100, Math.round((spent / limit) * 100)) : 0
-            const tone = pct >= 100 ? 'bg-rose-400' : pct >= 80 ? 'bg-amber-400' : 'bg-emerald-400'
-            const text = pct >= 100 ? 'text-rose-300' : pct >= 80 ? 'text-amber-300' : 'text-emerald-300'
-            return (
-              <div key={b.id} className="group rounded-2xl border border-white/10 bg-white/[.035] p-5">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="h-9 w-9 rounded-xl" style={{ background: `${cat?.color || '#94a3b8'}22`, color: cat?.color }} />
-                    <div>
-                      <div className="text-sm font-semibold text-white">{cat?.name || 'Category'}</div>
-                      <div className="text-[11px] capitalize text-slate-500">{b.period}</div>
-                    </div>
-                  </div>
-                  <div className="flex gap-1 opacity-0 transition group-hover:opacity-100">
-                    <button onClick={() => onEdit(b)} className="rounded-lg p-1.5 text-slate-500 hover:bg-white/5 hover:text-white"><Pencil size={14} /></button>
-                    <button onClick={() => onDelete(b)} className="rounded-lg p-1.5 text-rose-300/70 hover:bg-rose-300/10"><Trash2 size={14} /></button>
-                  </div>
-                </div>
-                <div className="mt-5 flex items-baseline justify-between">
-                  <div className="text-2xl font-semibold tracking-tight text-white">{showMoney ? money(spent) : '••••'}</div>
-                  <div className="text-xs text-slate-500">of {showMoney ? money(limit) : '••••'}</div>
-                </div>
-                <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/5">
-                  <div className={`h-full rounded-full ${tone} transition-all`} style={{ width: `${pct}%` }} />
-                </div>
-                <div className={`mt-2 text-xs ${text}`}>{showMoney ? (pct >= 100 ? `Over budget by ${money(spent - limit)}` : `${pct}% used · ${money(limit - spent)} left`) : `${pct}% used`}</div>
-              </div>
-            )
-          })}
-        </div>
-      )}
-    </div>
-  )
-}
-
-/* ---------------- Portfolio Form ---------------- */
-function PortfolioForm({ open, onClose, onSaved, editing, accounts, toast }) {
-  const initial = editing ? { ...editing } : { name: '', broker: 'other', demat_account_id: '' }
-  const [form, setForm] = useState(initial)
-  const [busy, setBusy] = useState(false)
-  useEffect(() => { setForm(initial) }, [editing, open])
-  if (!open) return null
-  const save = async (e) => {
-    e.preventDefault(); setBusy(true)
-    try {
-      const endpoint = editing ? `/api/finance/portfolios/${editing.id}` : '/api/finance/portfolios'
-      const payload = { ...form, demat_account_id: form.demat_account_id || null }
-      const response = await fetch(endpoint, { method: editing ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.error || data.message || 'Could not save')
-      toast.push(editing ? 'Portfolio updated' : 'Portfolio added'); onSaved()
-    } catch (err) { toast.push(err.message, 'error') } finally { setBusy(false) }
-  }
-  return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center" onClick={onClose}>
-      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-3xl border border-white/10 bg-[#141a28] p-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white">{editing ? 'Edit portfolio' : 'Add portfolio'}</h2>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-white/5"><X size={18} /></button>
-        </div>
-        <div className="mt-5 grid gap-4">
-          <label className="text-sm text-slate-300">Name
-            <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="Zerodha Demat A" />
-          </label>
-          <label className="text-sm text-slate-300">Broker
-            <Select value={form.broker} onChange={(e) => setForm({ ...form, broker: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
-              <option value="zerodha">Zerodha</option><option value="angel_one">Angel One</option><option value="other">Other</option>
-            </Select>
-          </label>
-          <label className="text-sm text-slate-300">Linked account (optional)
-            <Select value={form.demat_account_id || ''} onChange={(e) => setForm({ ...form, demat_account_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
-              <option value="">None</option>
-              {accounts.filter((a) => a.type !== 'debit_card').map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-            </Select>
-          </label>
-        </div>
-        <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : editing ? 'Update' : 'Save portfolio'}</button>
-      </form>
-    </div>
-  )
-}
-
-/* ---------------- Holding Form ---------------- */
-function HoldingForm({ open, onClose, onSaved, editing, portfolios, defaultPortfolioId, toast }) {
-  const initial = editing
-    ? { ...editing, qty: String(editing.qty), avg_buy_price: String(editing.avg_buy_price), current_price: String(editing.current_price) }
-    : { portfolio_id: defaultPortfolioId || portfolios[0]?.id || '', symbol: '', exchange: 'NSE', company_name: '', qty: '', avg_buy_price: '', current_price: '' }
-  const [form, setForm] = useState(initial)
-  const [busy, setBusy] = useState(false)
-  useEffect(() => { setForm(initial) }, [editing, open, defaultPortfolioId])
-  if (!open) return null
-  const save = async (e) => {
-    e.preventDefault(); setBusy(true)
-    try {
-      const endpoint = editing ? `/api/finance/holdings/${editing.id}` : '/api/finance/holdings'
-      const payload = { ...form, symbol: form.symbol.toUpperCase(), qty: Number(form.qty), avg_buy_price: Number(form.avg_buy_price), current_price: Number(form.current_price || form.avg_buy_price), last_price_updated_at: new Date().toISOString() }
-      const response = await fetch(endpoint, { method: editing ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.error || data.message || 'Could not save')
-      toast.push(editing ? 'Holding updated' : 'Holding added'); onSaved()
-    } catch (err) { toast.push(err.message, 'error') } finally { setBusy(false) }
-  }
-  return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center" onClick={onClose}>
-      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-xl rounded-3xl border border-white/10 bg-[#141a28] p-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white">{editing ? 'Edit holding' : 'Add holding'}</h2>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-white/5"><X size={18} /></button>
-        </div>
-        <div className="mt-5 grid gap-4 sm:grid-cols-2">
-          <label className="text-sm text-slate-300 sm:col-span-2">Portfolio
-            <Select required value={form.portfolio_id} onChange={(e) => setForm({ ...form, portfolio_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
-              <option value="">Choose portfolio…</option>
-              {portfolios.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </Select>
-          </label>
-          <label className="text-sm text-slate-300">Symbol
-            <input required value={form.symbol} onChange={(e) => setForm({ ...form, symbol: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 uppercase text-white outline-none focus:border-cyan-300/50" placeholder="RELIANCE" />
-          </label>
-          <label className="text-sm text-slate-300">Exchange
-            <Select value={form.exchange} onChange={(e) => setForm({ ...form, exchange: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
-              <option value="NSE">NSE</option><option value="BSE">BSE</option>
-            </Select>
-          </label>
-          <label className="text-sm text-slate-300 sm:col-span-2">Company name
-            <input value={form.company_name || ''} onChange={(e) => setForm({ ...form, company_name: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="Reliance Industries" />
-          </label>
-          <label className="text-sm text-slate-300">Quantity
-            <input required type="number" step="0.0001" min="0" value={form.qty} onChange={(e) => setForm({ ...form, qty: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
-          </label>
-          <label className="text-sm text-slate-300">Avg buy price
-            <input required type="number" step="0.01" min="0" value={form.avg_buy_price} onChange={(e) => setForm({ ...form, avg_buy_price: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
-          </label>
-          <label className="text-sm text-slate-300 sm:col-span-2">Current price <span className="text-xs text-slate-500">(starting value — refresh live prices anytime from the toolbar)</span>
-            <input type="number" step="0.01" min="0" value={form.current_price} onChange={(e) => setForm({ ...form, current_price: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="Same as avg if blank" />
-          </label>
-        </div>
-        <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : editing ? 'Update holding' : 'Save holding'}</button>
-      </form>
-    </div>
-  )
-}
-
-/* ---------------- Investments View ---------------- */
-function InvestmentsView({ data, onAddPortfolio, onAddHolding, onEditPortfolio, onEditHolding, onDeletePortfolio, onDeleteHolding, onRefreshPrice, onRefreshAll, pricesLoading, onAddFunds, onConnectKite, showMoney, onToggleMoney }) {
-  const { portfolios, holdings, profile } = data
-  const kiteConnected = !!profile?.kite_access_token && profile.kite_access_token_at && (Date.now() - new Date(profile.kite_access_token_at).getTime() < 20 * 60 * 60 * 1000)
-  const holdingsByPortfolio = (id) => holdings.filter((h) => h.portfolio_id === id)
-  const totalInvested = holdings.reduce((s, h) => s + Number(h.qty) * Number(h.avg_buy_price), 0)
-  const totalCurrent = holdings.reduce((s, h) => s + Number(h.qty) * Number(h.current_price || h.avg_buy_price), 0)
-  const totalPnl = totalCurrent - totalInvested
-  const totalPnlPct = totalInvested > 0 ? (totalPnl / totalInvested) * 100 : 0
-
-  return (
-    <div className="space-y-5">
-      <div className="flex items-end justify-between">
-        <div>
-          <div className="mb-2 text-xs uppercase tracking-widest text-cyan-200/70">Wealth builders</div>
-          <h1 className="text-3xl font-semibold tracking-tight text-white">Investments</h1>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={onRefreshAll} disabled={pricesLoading || data.holdings.length === 0} className="flex items-center gap-2 rounded-xl border border-emerald-400/25 bg-emerald-400/10 px-4 py-2.5 text-sm font-medium text-emerald-200 hover:bg-emerald-400/20 disabled:opacity-50"><RefreshCw size={14} className={pricesLoading ? 'animate-spin' : ''} />{pricesLoading ? 'Fetching…' : 'Refresh prices'}</button>
-          <button onClick={onAddPortfolio} className="rounded-xl border border-white/10 px-4 py-2.5 text-sm text-slate-300 hover:bg-white/5">New portfolio</button>
-          <button onClick={() => onAddHolding()} className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 px-4 py-2.5 text-sm font-semibold text-[#07101c]"><Plus size={15} />Add holding</button>
-          <button onClick={onToggleMoney} className="rounded-xl border border-white/10 p-2.5 text-slate-400 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
-            {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
-          </button>
-        </div>
-      </div>
-
-      <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-cyan-500/5 via-transparent to-violet-500/5 p-5">
-        <div className="grid gap-6 sm:grid-cols-3">
-          <div>
-            <div className="text-xs text-slate-400">Invested value</div>
-            <div className="mt-2 text-2xl font-semibold tracking-tight text-white">{showMoney ? money(totalInvested) : '••••••'}</div>
-          </div>
-          <div>
-            <div className="text-xs text-slate-400">Current value</div>
-            <div className="mt-2 text-2xl font-semibold tracking-tight text-white">{showMoney ? money(totalCurrent) : '••••••'}</div>
-          </div>
-          <div>
-            <div className="text-xs text-slate-400">Overall P&amp;L</div>
-            <div className={`mt-2 flex items-baseline gap-2 text-2xl font-semibold tracking-tight ${totalPnl >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
-              {showMoney ? (totalPnl >= 0 ? '+' : '−') + money(totalPnl).replace('-', '') : '••••'}
-              <span className="text-xs">({totalPnl >= 0 ? '+' : ''}{totalPnlPct.toFixed(2)}%)</span>
-            </div>
-          </div>
-        </div>
-        <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-cyan-300/20 bg-cyan-300/5 px-4 py-2.5 text-xs text-cyan-200">
-          <Sparkles size={13} />
-          {kiteConnected ? <span>Live prices via <b>Kite</b>. Token refreshes tomorrow after 6 AM IST.</span> : <span>Currently using Yahoo Finance. Connect your Zerodha Kite for real-time NSE quotes.</span>}
-          {!kiteConnected && <button onClick={onConnectKite} className="ml-auto rounded-lg bg-cyan-300/20 px-3 py-1 text-[11px] font-semibold text-cyan-100 hover:bg-cyan-300/30">Connect Kite</button>}
-        </div>
-      </div>
-
-      {portfolios.length === 0 ? (
-        <div className="rounded-2xl border border-white/10 bg-white/[.035]">
-          <EmptyState icon={TrendingUp} title="No portfolios yet" message="Create a portfolio like ‘Zerodha Demat A’ to group your holdings." cta="Create portfolio" onCta={onAddPortfolio} />
-        </div>
-      ) : (
-        <div className="space-y-6">
-          {portfolios.map((p) => {
-            const items = holdingsByPortfolio(p.id)
-            const invested = items.reduce((s, h) => s + Number(h.qty) * Number(h.avg_buy_price), 0)
-            const current = items.reduce((s, h) => s + Number(h.qty) * Number(h.current_price || h.avg_buy_price), 0)
-            const pnl = current - invested
-            const pct = invested > 0 ? (pnl / invested) * 100 : 0
-            return (
-              <div key={p.id} className="rounded-2xl border border-white/10 bg-white/[.035]">
-                <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
-                  <div>
-                    <div className="text-sm font-semibold text-white">{p.name}</div>
-                    <div className="text-xs capitalize text-slate-500">{p.broker.replace('_', ' ')} · {items.length} holding{items.length === 1 ? '' : 's'} · Cash {money(p.cash_balance || 0)}</div>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <div className="text-right">
-                      <div className="text-xs text-slate-500">Value</div>
-                      <div className="text-sm font-semibold text-white">{showMoney ? money(current + Number(p.cash_balance || 0)) : '••••'}</div>
-                    </div>
-                    <div className={`text-right ${pnl >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
-                      <div className="text-xs opacity-70">P&amp;L</div>
-                      <div className="text-sm font-semibold">{showMoney ? (pnl >= 0 ? '+' : '−') + money(pnl).replace('-', '') : '••••'} <span className="text-[10px]">({pct.toFixed(1)}%)</span></div>
-                    </div>
-                    <button onClick={() => onAddFunds(p)} className="rounded-lg bg-emerald-400/15 px-3 py-1.5 text-xs font-semibold text-emerald-200 hover:bg-emerald-400/25">+ Funds</button>
-                    <button onClick={() => onAddHolding(p.id)} className="rounded-lg bg-white/10 px-3 py-1.5 text-xs text-white hover:bg-white/15">+ Holding</button>
-                    <button onClick={() => onEditPortfolio(p)} className="rounded-lg p-1.5 text-slate-500 hover:bg-white/5 hover:text-white"><Pencil size={14} /></button>
-                    <button onClick={() => onDeletePortfolio(p)} className="rounded-lg p-1.5 text-rose-300/70 hover:bg-rose-300/10"><Trash2 size={14} /></button>
-                  </div>
-                </div>
-                {items.length === 0 ? (
-                  <div className="p-10 text-center text-sm text-slate-500">No holdings in this portfolio yet.</div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead className="bg-white/[.02] text-[10px] uppercase tracking-widest text-slate-500">
-                        <tr>
-                          <th className="px-5 py-3 text-left">Symbol</th>
-                          <th className="px-3 py-3 text-right">Qty</th>
-                          <th className="px-3 py-3 text-right">Avg Buy</th>
-                          <th className="px-3 py-3 text-right">LTP</th>
-                          <th className="px-3 py-3 text-right">Value</th>
-                          <th className="px-3 py-3 text-right">P&amp;L</th>
-                          <th className="px-3 py-3 text-right">%</th>
-                          <th className="px-5 py-3" />
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {items.map((h) => {
-                          const inv = Number(h.qty) * Number(h.avg_buy_price)
-                          const cur = Number(h.qty) * Number(h.current_price || h.avg_buy_price)
-                          const p = cur - inv
-                          const pp = inv > 0 ? (p / inv) * 100 : 0
-                          return (
-                            <tr key={h.id} className="border-t border-white/5 text-slate-300">
-                              <td className="px-5 py-3">
-                                <div className="text-sm font-semibold text-white">{h.symbol}</div>
-                                <div className="text-[11px] text-slate-500">{h.exchange}{h.company_name ? ` · ${h.company_name}` : ''}</div>
-                              </td>
-                              <td className="px-3 py-3 text-right">{Number(h.qty)}</td>
-                              <td className="px-3 py-3 text-right">{money2(h.avg_buy_price)}</td>
-                              <td className="px-3 py-3 text-right">
-                                <button onClick={() => onRefreshPrice(h)} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-slate-300 hover:bg-white/5">
-                                  {money2(h.current_price || h.avg_buy_price)} <RefreshCw size={11} className="text-slate-500" />
-                                </button>
-                              </td>
-                              <td className="px-3 py-3 text-right text-white">{showMoney ? money(cur) : '••••'}</td>
-                              <td className={`px-3 py-3 text-right font-semibold ${p >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>{showMoney ? (p >= 0 ? '+' : '−') + money(p).replace('-', '') : '••••'}</td>
-                              <td className={`px-3 py-3 text-right ${p >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>{pp >= 0 ? '+' : ''}{pp.toFixed(2)}%</td>
-                              <td className="px-5 py-3">
-                                <div className="flex justify-end gap-1">
-                                  <button onClick={() => onEditHolding(h)} className="rounded-lg p-1.5 text-slate-500 hover:bg-white/5 hover:text-white"><Pencil size={14} /></button>
-                                  <button onClick={() => onDeleteHolding(h)} className="rounded-lg p-1.5 text-rose-300/70 hover:bg-rose-300/10"><Trash2 size={14} /></button>
-                                </div>
-                              </td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      )}
-    </div>
-  )
-}
-
-/* ---------------- Loan Form ---------------- */
-function addMonthsToDate(dateStr, n) {
-  const d = new Date(dateStr)
-  d.setMonth(d.getMonth() + n)
-  return d.toISOString().slice(0, 10)
-}
-
-function LoanForm({ open, onClose, onSaved, editing, accounts, toast }) {
-  const initial = editing
-    ? { ...editing, principal: String(editing.principal), interest_rate: String(editing.interest_rate), tenure_months: String(editing.tenure_months), emi_amount: String(editing.emi_amount), outstanding: String(editing.outstanding), emi_due_day: editing.emi_due_day ? String(editing.emi_due_day) : '' }
-    : { name: '', lender: '', principal: '', interest_rate: '', tenure_months: '', emi_amount: '', outstanding: '', emi_due_day: '', start_date: todayISO(), paid_from_account_id: accounts[0]?.id || '', monthsAlreadyPaid: '' }
-  const [form, setForm] = useState(initial)
-  const [busy, setBusy] = useState(false)
-  useEffect(() => { setForm(initial) }, [editing, open])
-
-  // Hooks must run unconditionally on every render, so this stays above the `!open` early
-  // return below — otherwise the hook order shifts between the closed and open renders.
-  const backfillSchedule = useMemo(() => {
-    const months = Number(form.monthsAlreadyPaid)
-    const P = Number(form.principal), rate = Number(form.interest_rate), emi = Number(form.emi_amount)
-    if (!editing && months > 0 && P > 0 && emi > 0) {
-      return projectSchedule({ outstanding: P, annualRatePct: rate, emiAmount: emi, startDate: form.start_date }).slice(0, Math.min(60, months))
-    }
-    return null
-  }, [form.monthsAlreadyPaid, form.principal, form.interest_rate, form.emi_amount, editing])
-
-  if (!open) return null
-
-  // Auto-calc EMI if principal/rate/tenure known and emi is empty
-  const suggestEmi = () => {
-    const P = Number(form.principal), n = Number(form.tenure_months)
-    if (P > 0 && n > 0) setForm({ ...form, emi_amount: calcEmi(P, Number(form.interest_rate) || 0, n).toFixed(2) })
-  }
-
-  const applyBackfillOutstanding = () => {
-    if (backfillSchedule?.length) setForm({ ...form, outstanding: backfillSchedule[backfillSchedule.length - 1].closing.toFixed(2) })
-  }
-
-  const save = async (e) => {
-    e.preventDefault(); setBusy(true)
-    try {
-      const endpoint = editing ? `/api/finance/loans/${editing.id}` : '/api/finance/loans'
-      const payload = {
-        ...form,
-        principal: Number(form.principal), interest_rate: Number(form.interest_rate), tenure_months: Number(form.tenure_months),
-        emi_amount: Number(form.emi_amount),
-        outstanding: form.outstanding !== '' ? Number(form.outstanding) : Number(form.principal),
-        emi_due_day: form.emi_due_day ? Number(form.emi_due_day) : null,
+    <CsvBulkImport
+      open={open}
+      onClose={onClose}
+      onImported={onImported}
+      toast={toast}
+      title="Import from CSV or Excel"
+      subtitle="Map your columns, review exactly what gets created, then import"
+      itemLabel="transaction"
+      uploadHint="Bank statement, spreadsheet export — we'll auto-detect columns"
+      fields={TX_IMPORT_FIELDS}
+      parseRow={parseRow}
+      isDuplicate={isDuplicate}
+      invalidLabel="unreadable amount, will be skipped"
+      readyToImport={!!defaultAccount}
+      notReadyMessage="Choose a default account"
+      extraFields={
+        <label className="text-sm text-slate-300 sm:col-span-2">Default account
+          <Select value={defaultAccount} onChange={(e) => setDefaultAccount(e.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-2.5 text-white outline-none">
+            {accounts.filter((a) => a.type !== 'debit_card').map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </Select>
+        </label>
       }
-      const monthsAlreadyPaid = Math.min(60, Math.max(0, Math.floor(Number(form.monthsAlreadyPaid) || 0)))
-      delete payload.monthsAlreadyPaid
-      const response = await fetch(endpoint, { method: editing ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.error || data.message || 'Could not save')
-
-      if (!editing && monthsAlreadyPaid > 0) {
-        toast.push(`Backfilling ${monthsAlreadyPaid} past EMI${monthsAlreadyPaid === 1 ? '' : 's'}…`)
-        for (let i = 1; i <= monthsAlreadyPaid; i++) {
-          await fetch('/api/finance/loan_payments', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ loan_id: data.id, amount: payload.emi_amount, type: 'emi', payment_date: addMonthsToDate(payload.start_date, i), account_id: payload.paid_from_account_id || undefined }),
-          })
-        }
-        toast.push('Backfill complete')
-      }
-
-      toast.push(editing ? 'Loan updated' : 'Loan added'); onSaved()
-    } catch (err) { toast.push(err.message, 'error') } finally { setBusy(false) }
-  }
-  return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center" onClick={onClose}>
-      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-xl rounded-3xl border border-white/10 bg-[#141a28] p-6 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white">{editing ? 'Edit loan' : 'Add loan'}</h2>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-white/5"><X size={18} /></button>
-        </div>
-        <div className="mt-5 grid gap-4 sm:grid-cols-2">
-          <label className="text-sm text-slate-300">Name
-            <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="Home loan" />
-          </label>
-          <label className="text-sm text-slate-300">Lender
-            <input value={form.lender || ''} onChange={(e) => setForm({ ...form, lender: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="HDFC Bank" />
-          </label>
-          <label className="text-sm text-slate-300">Principal
-            <input required type="number" step="0.01" min="0" value={form.principal} onChange={(e) => setForm({ ...form, principal: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
-          </label>
-          <label className="text-sm text-slate-300">Interest rate % p.a.
-            <input required type="number" step="0.01" min="0" value={form.interest_rate} onChange={(e) => setForm({ ...form, interest_rate: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
-          </label>
-          <label className="text-sm text-slate-300">Tenure (months)
-            <input required type="number" min="1" value={form.tenure_months} onChange={(e) => setForm({ ...form, tenure_months: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
-          </label>
-          <label className="text-sm text-slate-300">EMI amount
-            <div className="mt-2 flex gap-2">
-              <input required type="number" step="0.01" min="0" value={form.emi_amount} onChange={(e) => setForm({ ...form, emi_amount: e.target.value })} className="w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
-              <button type="button" onClick={suggestEmi} className="rounded-xl border border-white/10 px-3 text-xs text-cyan-200 hover:bg-white/5">Calc</button>
-            </div>
-          </label>
-          <label className="text-sm text-slate-300">Start date
-            <DateInput value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
-          </label>
-          <label className="text-sm text-slate-300">EMI due day <span className="text-xs text-slate-500">(1–31, optional)</span>
-            <input type="number" min="1" max="31" value={form.emi_due_day} onChange={(e) => setForm({ ...form, emi_due_day: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="e.g. 5" />
-          </label>
-          <label className="text-sm text-slate-300">Pay from account
-            <Select value={form.paid_from_account_id || ''} onChange={(e) => setForm({ ...form, paid_from_account_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
-              <option value="">None</option>
-              {accounts.filter((a) => a.type !== 'debit_card').map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-            </Select>
-          </label>
-          <label className="text-sm text-slate-300">Current outstanding <span className="text-xs text-slate-500">(defaults to principal)</span>
-            <input type="number" step="0.01" min="0" value={form.outstanding} onChange={(e) => setForm({ ...form, outstanding: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder={form.principal || '0.00'} />
-          </label>
-        </div>
-
-        {!editing && (
-          <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-4">
-            <div className="text-sm text-slate-300">Already paid EMIs before tracking this here?</div>
-            <label className="mt-2 block text-xs text-slate-400">Months already paid
-              <input type="number" min="0" max="60" value={form.monthsAlreadyPaid} onChange={(e) => setForm({ ...form, monthsAlreadyPaid: e.target.value })} className="mt-1 w-32 rounded-xl border border-white/10 bg-white/[.04] px-3 py-2 text-white outline-none focus:border-cyan-300/50" placeholder="0" />
-            </label>
-            {backfillSchedule?.length > 0 && (
-              <div className="mt-3 rounded-lg bg-white/[.03] p-3 text-xs text-slate-400">
-                <div>This will log {backfillSchedule.length} past EMI{backfillSchedule.length === 1 ? '' : 's'} of {money(Number(form.emi_amount))} each, dated monthly from {formatDate(addMonthsToDate(form.start_date, 1))} → {formatDate(addMonthsToDate(form.start_date, backfillSchedule.length))} — resulting outstanding ≈ <span className="font-medium text-white">{money(backfillSchedule[backfillSchedule.length - 1].closing)}</span>.</div>
-                <button type="button" onClick={applyBackfillOutstanding} className="mt-2 rounded-lg border border-cyan-300/30 px-3 py-1.5 text-xs font-medium text-cyan-200 hover:bg-cyan-300/10">Use this as current outstanding</button>
-                <div className="mt-1 text-[11px] text-slate-500">These EMI payments (and their linked expense transactions) are created after you save, so they'll show up in your real transaction history dated in the past.</div>
-              </div>
-            )}
-          </div>
-        )}
-
-        <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : editing ? 'Update loan' : 'Save loan'}</button>
-      </form>
-    </div>
-  )
-}
-
-/* ---------------- Loan Payment Form ---------------- */
-function LoanPaymentForm({ open, onClose, onSaved, loan, accounts, creditCards = [], toast }) {
-  const initial = { amount: '', type: 'emi', prepay_mode: 'reduce_tenure', payment_date: todayISO(), account_id: loan?.paid_from_account_id || accounts[0]?.id || '', notes: '' }
-  const [form, setForm] = useState(initial)
-  const [busy, setBusy] = useState(false)
-  useEffect(() => { setForm({ ...initial, amount: loan?.emi_amount ? String(loan.emi_amount) : '', account_id: loan?.paid_from_account_id || accounts[0]?.id || '' }) }, [loan, open, accounts])
-  if (!open || !loan) return null
-
-  const currentEmiAmount = Number(loan.emi_amount || 0)
-  const excessAmount = Math.max(0, Number(form.amount || 0) - currentEmiAmount)
-  const showPrepayModeToggle = excessAmount > 0.01
-
-  // Live preview — mirrors the backend's unified logic: interest owed since the last payment is
-  // charged first regardless of whether you picked EMI or Prepayment (the real day-count is only
-  // known server-side, so this uses a nominal ~30-day estimate — a close preview, not a promise
-  // of the exact figure), then only the amount beyond a standard EMI counts as genuine extra.
-  const prepayPreview = (() => {
-    const amount = Number(form.amount)
-    if (!(amount > 0) || excessAmount <= 0.01) return null
-    const annualRatePct = Number(loan.interest_rate || 0)
-    const currentOutstanding = Number(loan.outstanding || 0)
-    const anchorDate = form.payment_date || todayISO()
-    const nominalInterest = Math.min(currentOutstanding * (annualRatePct / 100 / 365) * 30, amount)
-    const standardPrincipal = Math.max(0, Math.min(currentEmiAmount, amount) - nominalInterest)
-    const standardOutstandingAfter = Math.max(0, currentOutstanding - standardPrincipal)
-    const actualOutstandingAfter = Math.max(0, currentOutstanding - (amount - nominalInterest))
-    const scheduleStandard = projectSchedule({ outstanding: standardOutstandingAfter, annualRatePct, emiAmount: currentEmiAmount, startDate: anchorDate })
-    const newEmi = form.prepay_mode === 'reduce_emi' ? calcEmi(actualOutstandingAfter, annualRatePct, scheduleStandard.length) : currentEmiAmount
-    const scheduleActual = projectSchedule({ outstanding: actualOutstandingAfter, annualRatePct, emiAmount: newEmi, startDate: anchorDate })
-    const interestSaved = Math.max(0, totalInterest(scheduleStandard) - totalInterest(scheduleActual))
-    return { newEmi, monthsBefore: scheduleStandard.length, monthsAfter: scheduleActual.length, interestSaved }
-  })()
-
-  const save = async (e) => {
-    e.preventDefault(); setBusy(true)
-    try {
-      const payload = { loan_id: loan.id, ...form, amount: Number(form.amount) }
-      const response = await fetch('/api/finance/loan_payments', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.error || data.message || 'Could not save')
-      const msg = data.interest_saved > 0 ? `Payment logged · Interest saved ${money(data.interest_saved)}` : 'Payment logged'
-      toast.push(msg)
-      onSaved()
-    } catch (err) { toast.push(err.message, 'error') } finally { setBusy(false) }
-  }
-  return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center" onClick={onClose}>
-      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-3xl border border-white/10 bg-[#141a28] p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-white">Log payment</h2>
-            <p className="mt-1 text-xs text-slate-500">{loan.name} · outstanding {money(loan.outstanding)}</p>
-          </div>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-white/5"><X size={18} /></button>
-        </div>
-        <div className="mt-5 grid gap-4">
-          <div className="grid grid-cols-2 gap-2">
-            {[{ v: 'emi', l: 'EMI' }, { v: 'prepayment', l: 'Prepayment' }].map((t) => (
-              <button key={t.v} type="button" onClick={() => setForm({ ...form, type: t.v })} className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${form.type === t.v ? 'border-cyan-400/30 bg-cyan-400/15 text-cyan-200' : 'border-white/10 text-slate-400 hover:bg-white/5'}`}>{t.l}</button>
-            ))}
-          </div>
-          <label className="text-sm text-slate-300">Amount
-            <input required type="number" step="0.01" min="0.01" value={form.amount} onChange={(e) => {
-              const amount = e.target.value
-              const excess = Math.max(0, Number(amount || 0) - currentEmiAmount)
-              setForm({ ...form, amount, type: excess > 0.01 ? 'prepayment' : form.type })
-            }} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
-            {excessAmount > 0.01 && (
-              <div className="mt-1 text-[11px] text-cyan-200">{money(currentEmiAmount)} covers the regular EMI — the extra {money(excessAmount)} is treated as a prepayment.</div>
-            )}
-          </label>
-          {showPrepayModeToggle && (
-            <div>
-              <div className="grid grid-cols-2 gap-2">
-                {[{ v: 'reduce_tenure', l: 'Reduce tenure' }, { v: 'reduce_emi', l: 'Reduce EMI' }].map((m) => (
-                  <button key={m.v} type="button" onClick={() => setForm({ ...form, prepay_mode: m.v })} className={`rounded-xl border px-3 py-2 text-xs font-medium transition ${form.prepay_mode === m.v ? 'border-emerald-400/30 bg-emerald-400/15 text-emerald-200' : 'border-white/10 text-slate-400 hover:bg-white/5'}`}>{m.l}</button>
-                ))}
-              </div>
-              <div className="mt-1 text-[11px] text-slate-500">Reduce tenure keeps the EMI the same and finishes the loan sooner — it saves more interest than reducing the EMI.</div>
-              {form.prepay_mode === 'reduce_emi' && (
-                <div className="mt-1 text-[11px] text-amber-300/80">Most lenders default to reducing tenure, not EMI, after a prepayment — reducing the EMI usually needs an explicit request to your lender to take effect on their side. This just tracks your intent here.</div>
-              )}
-              {prepayPreview && (
-                <div className="mt-2 rounded-lg bg-emerald-400/5 px-3 py-2 text-[11px] text-emerald-200">
-                  {form.prepay_mode === 'reduce_emi'
-                    ? <>New EMI ≈ {money(prepayPreview.newEmi)} · same ~{prepayPreview.monthsAfter} months left</>
-                    : <>~{Math.max(0, prepayPreview.monthsBefore - prepayPreview.monthsAfter)} months cut off the loan</>}
-                  {' · '}Interest saved ≈ {money(prepayPreview.interestSaved)}
-                </div>
-              )}
-            </div>
-          )}
-          <label className="text-sm text-slate-300">Payment date
-            <DateInput value={form.payment_date} onChange={(e) => setForm({ ...form, payment_date: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
-          </label>
-          <label className="text-sm text-slate-300">Pay from account
-            <Select required value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
-              <option value="">Choose account…</option>
-              {accounts.filter((a) => a.type !== 'debit_card').map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-              {creditCards.map((c) => <option key={c.id} value={`cc:${c.id}`}>{c.name} (card)</option>)}
-            </Select>
-          </label>
-          <label className="text-sm text-slate-300">Notes
-            <input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="Optional" />
-          </label>
-        </div>
-        <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : 'Log payment'}</button>
-      </form>
-    </div>
-  )
-}
-
-/* ---------------- Loans View ---------------- */
-function ordinal(n) {
-  const s = ['th', 'st', 'nd', 'rd']
-  const v = n % 100
-  return n + (s[(v - 20) % 10] || s[v] || s[0])
-}
-
-/* ---------------- Loan Detail View ---------------- */
-function LoanDetailView({ loan, payments, accounts, onBack, onPay, onDeletePayment, onEdit, onDelete, onSync, showMoney, onToggleMoney }) {
-  const [syncOpen, setSyncOpen] = useState(false)
-  const [syncValue, setSyncValue] = useState('')
-  const [syncBusy, setSyncBusy] = useState(false)
-  const [scheduleOpen, setScheduleOpen] = useState(false)
-  const principal = Number(loan.principal || 0)
-  const outstanding = Number(loan.outstanding || 0)
-  const emi = Number(loan.emi_amount || 0)
-  const rate = Number(loan.interest_rate || 0)
-  const account = accounts.find((a) => a.id === loan.paid_from_account_id)
-  const cleared = principal > 0 ? Math.max(0, Math.min(100, Math.round(((principal - outstanding) / principal) * 100))) : 0
-  const outstandingExceedsPrincipal = outstanding > principal
-  const todaysOutstanding = useMemo(() => liveOutstanding(loan, payments), [loan, payments])
-  const accruedSinceLastPayment = Math.max(0, todaysOutstanding - outstanding)
-  // "EMIs paid" counts installments actually fully settled — an amount that covered the EMI
-  // in force at the time — regardless of which button (EMI/Prepayment) was tapped to log it.
-  // The type field is just a label now; both compute identically since the unified calc.
-  const emisPaid = payments.filter((p) => p.type !== 'adjustment' && Number(p.amount) >= Number(p.emi_before || 0) - 0.01).length
-
-  // Anchor the projection at the actual next EMI due date (not just "today") so the real
-  // day-count for the first projected month is accurate.
-  const nextDueDate = useMemo(() => {
-    const now = new Date()
-    if (!loan.emi_due_day) return todayISO()
-    const day = Number(loan.emi_due_day)
-    let due = new Date(now.getFullYear(), now.getMonth(), day)
-    if (now > due) due = new Date(now.getFullYear(), now.getMonth() + 1, day)
-    return due.toISOString().slice(0, 10)
-  }, [loan.emi_due_day])
-
-  const schedule = useMemo(() => loan.status === 'closed' ? [] : projectSchedule({ outstanding, annualRatePct: rate, emiAmount: emi, startDate: nextDueDate }), [outstanding, rate, emi, loan.status, nextDueDate])
-  const monthsRemaining = schedule.length
-  const totalInterestPaid = payments.reduce((s, p) => s + Number(p.interest_portion || 0), 0)
-  const payoffDate = loan.status !== 'closed' && monthsRemaining > 0 ? (() => { const d = new Date(); d.setMonth(d.getMonth() + monthsRemaining); return d.toISOString().slice(0, 10) })() : null
-
-  // Every one of the originally-sanctioned months, marked paid / still to go / no-longer-needed
-  // — the last group only exists because a reduce-tenure prepayment shortened the loan, and
-  // showing it grayed out is purely a visual "this is what you don't have to pay anymore" cue.
-  const emiCalendar = useMemo(() => {
-    const totalOriginal = Number(loan.tenure_months || 0)
-    if (totalOriginal <= 0 || !loan.start_date) return []
-    const day = loan.emi_due_day ? Number(loan.emi_due_day) : new Date(`${loan.start_date}T00:00:00`).getDate()
-    const totalNow = emisPaid + monthsRemaining
-    const cursor = new Date(`${loan.start_date}T00:00:00`)
-    cursor.setDate(1)
-    cursor.setMonth(cursor.getMonth() + 1)
-    const months = []
-    for (let i = 0; i < totalOriginal; i++) {
-      const daysInMonth = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate()
-      const date = new Date(cursor.getFullYear(), cursor.getMonth(), Math.min(day, daysInMonth))
-      months.push({ date, status: i < emisPaid ? 'paid' : i < totalNow ? 'upcoming' : 'saved' })
-      cursor.setMonth(cursor.getMonth() + 1)
-    }
-    return months
-  }, [loan.tenure_months, loan.start_date, loan.emi_due_day, emisPaid, monthsRemaining])
-  const monthsSaved = emiCalendar.length - emisPaid - monthsRemaining
-  const emiCalendarByYear = useMemo(() => {
-    const groups = {}
-    emiCalendar.forEach((m) => {
-      const y = m.date.getFullYear()
-      if (!groups[y]) groups[y] = []
-      groups[y].push(m)
-    })
-    return groups
-  }, [emiCalendar])
-
-  // Payments are often made a few days (or weeks) before the 1st-of-month due date, so the
-  // calendar month a payment happened in isn't the EMI cycle it actually settles — walk
-  // payments oldest-first and assign each one that fully covers an installment to the next
-  // unclaimed due date from the EMI calendar. The same walk also flags payments that land on
-  // the exact same date as the real payment right before them — mirrors the backend's rule
-  // that a same-day repeat can't be settling "a new EMI" (no time passed for one to come due),
-  // so the whole amount is genuine prepayment, not just whatever's above the EMI threshold.
-  const { paymentCycleDates, freshCyclePayments } = useMemo(() => {
-    const chrono = [...payments].filter((p) => p.type !== 'adjustment').sort((a, b) => a.payment_date === b.payment_date ? new Date(a.created_at) - new Date(b.created_at) : new Date(a.payment_date) - new Date(b.payment_date))
-    const dateMap = new Map()
-    const freshSet = new Set()
-    let cursor = 0
-    chrono.forEach((p, i) => {
-      const prev = chrono[i - 1]
-      if (!(prev && prev.payment_date === p.payment_date)) freshSet.add(p.id)
-      if (Number(p.amount) >= Number(p.emi_before || 0) - 0.01 && emiCalendar[cursor]) {
-        dateMap.set(p.id, emiCalendar[cursor].date)
-        cursor++
-      }
-    })
-    return { paymentCycleDates: dateMap, freshCyclePayments: freshSet }
-  }, [payments, emiCalendar])
-
-  // Every payment that carries a prepay_mode had SOME extra beyond the regular EMI — only the
-  // part above that payment's EMI-at-the-time (emi_before) counts as the prepaid extra, unless
-  // it's a same-day repeat (see above), in which case the whole amount is extra.
-  const prepaymentEvents = payments
-    .filter((p) => p.prepay_mode)
-    .map((p) => ({ ...p, extra: freshCyclePayments.has(p.id) ? Math.max(0, Number(p.amount) - Number(p.emi_before || 0)) : Number(p.amount) }))
-  const totalExtraPrepaid = prepaymentEvents.reduce((s, p) => s + p.extra, 0)
-
-  const paymentRowLabel = (p) => {
-    if (p.type === 'adjustment') return 'Synced with lender'
-    const cycleDate = paymentCycleDates.get(p.id)
-    if (!cycleDate) return paymentTypeLabel(p)
-    const modeSuffix = p.prepay_mode ? ` · ${p.prepay_mode === 'reduce_emi' ? 'Reduce EMI' : 'Reduce tenure'}` : ''
-    return `${monthAbbr(cycleDate.toISOString().slice(0, 10))} EMI${p.prepay_mode ? ` + prepayment${modeSuffix}` : ''}`
-  }
-
-  const emiDue = (() => {
-    if (!loan.emi_due_day || loan.status === 'closed') return null
-    const now = new Date(); const day = Number(loan.emi_due_day)
-    let due = new Date(now.getFullYear(), now.getMonth(), day)
-    if (now > due) due = new Date(now.getFullYear(), now.getMonth() + 1, day)
-    const days = Math.ceil((due - now) / 86400000)
-    return { days }
-  })()
-
-  return (
-    <div className="space-y-5">
-      <button onClick={onBack} className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-white"><ChevronRight size={14} className="rotate-180" /> Back to loans</button>
-
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-3xl font-semibold tracking-tight text-white">{loan.name}</h1>
-            <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-widest ${loan.status === 'closed' ? 'bg-emerald-400/15 text-emerald-200' : 'bg-cyan-400/15 text-cyan-200'}`}>{loan.status}</span>
-          </div>
-          <div className="mt-1 text-sm text-slate-500">{loan.lender || 'Lender'}{account ? ` · Paying from ${account.name}` : ''}</div>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={() => onPay(loan)} disabled={loan.status === 'closed'} className="rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 px-4 py-2.5 text-sm font-semibold text-[#07101c] disabled:opacity-50">Log payment</button>
-          <button onClick={() => setSyncOpen((o) => !o)} className={`flex items-center gap-1.5 rounded-xl border px-3 py-2.5 text-sm font-medium transition ${syncOpen ? 'border-cyan-300/40 bg-cyan-400/10 text-cyan-200' : 'border-white/10 text-slate-400 hover:bg-white/5 hover:text-white'}`}><RefreshCw size={15} /><span className="hidden sm:inline">Sync</span></button>
-          <button onClick={() => onEdit(loan)} className="rounded-xl border border-white/10 p-2.5 text-slate-400 hover:bg-white/5 hover:text-white"><Pencil size={15} /></button>
-          <button onClick={() => onDelete(loan)} className="rounded-xl border border-white/10 p-2.5 text-rose-300/70 hover:bg-rose-300/10"><Trash2 size={15} /></button>
-          <button onClick={onToggleMoney} className="rounded-xl border border-white/10 p-2.5 text-slate-400 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
-            {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
-          </button>
-        </div>
-      </div>
-
-      {syncOpen && (
-        <div className="rounded-xl border border-cyan-300/20 bg-cyan-400/[.03] p-4">
-          <div className="text-sm text-slate-300">Sync with your lender's app</div>
-          <div className="mt-1 text-[11px] text-slate-500">The Outstanding figure above already includes today's not-yet-billed interest, same as your lender's app. If there's still a small gap after that — rounding, an unmodeled fee — enter your lender's figure here to close it, without logging it as a payment.</div>
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <input type="number" step="0.01" min="0" value={syncValue} onChange={(e) => setSyncValue(e.target.value)} placeholder={String(Math.round(todaysOutstanding))} className="w-40 rounded-xl border border-white/10 bg-white/[.04] px-3 py-2 text-sm text-white outline-none focus:border-cyan-300/50" />
-            <button
-              type="button"
-              disabled={syncBusy || !syncValue}
-              onClick={async () => {
-                setSyncBusy(true)
-                await onSync(loan, Number(syncValue))
-                setSyncBusy(false); setSyncOpen(false); setSyncValue('')
-              }}
-              className="rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 px-4 py-2 text-sm font-semibold text-[#07101c] disabled:opacity-50"
-            >{syncBusy ? 'Syncing…' : 'Sync'}</button>
-            {syncValue && (
-              <span className="text-[11px] text-slate-500">
-                {Number(syncValue) < todaysOutstanding ? `${money(todaysOutstanding - Number(syncValue))} lower than tracked` : Number(syncValue) > todaysOutstanding ? `${money(Number(syncValue) - todaysOutstanding)} higher — likely fees/charges` : 'Matches already'}
-              </span>
-            )}
-          </div>
-        </div>
+      renderTableHead={() => (
+        <>
+          <th className="px-3 py-2 text-left">Date</th>
+          <th className="px-3 py-2 text-left">Description</th>
+          <th className="px-3 py-2 text-left">Type</th>
+          <th className="px-3 py-2 text-left">Category</th>
+          <th className="px-3 py-2 text-right">Amount</th>
+        </>
       )}
-
-      {emiDue && (
-        <div className={`rounded-xl border px-4 py-3 text-sm ${emiDue.days <= 3 ? 'border-amber-300/30 bg-amber-300/5 text-amber-200' : 'border-white/10 bg-white/[.035] text-slate-300'}`}>
-          Next EMI due on the {ordinal(loan.emi_due_day)} · {emiDue.days > 0 ? `in ${emiDue.days} day${emiDue.days === 1 ? '' : 's'}` : emiDue.days === 0 ? 'today' : 'overdue'}
-        </div>
+      renderTableRow={(p) => (
+        <>
+          <td className="px-3 py-2 text-slate-400">{p.valid ? formatDate(p.date) : '—'}</td>
+          <td className="px-3 py-2 text-slate-300">
+            {p.description}
+            {p.duplicate && <span className="ml-2 rounded-full bg-amber-300/15 px-1.5 py-0.5 text-[10px] text-amber-200">possible duplicate</span>}
+            {!p.valid && <span className="ml-2 rounded-full bg-rose-300/15 px-1.5 py-0.5 text-[10px] text-rose-200">unreadable amount</span>}
+          </td>
+          <td className="px-3 py-2 capitalize text-slate-400">{p.type}</td>
+          <td className="px-3 py-2 text-slate-400">{p.categoryLabel}</td>
+          <td className="px-3 py-2 text-right text-slate-300">{p.valid ? money(p.amount) : '—'}</td>
+        </>
       )}
-
-      {outstandingExceedsPrincipal && (
-        <div className="rounded-xl border border-amber-300/30 bg-amber-300/5 px-4 py-3 text-sm text-amber-200">
-          Outstanding ({money(outstanding)}) is higher than Principal ({money(principal)}) — that shouldn't happen. Double-check the Principal amount by editing this loan.
-        </div>
-      )}
-
-      <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-6">
-        <StatCard label="Outstanding" value={showMoney ? money(todaysOutstanding) : '••••'} icon={Landmark} accent="bg-rose-400/15 text-rose-200" tone="text-rose-300" sub={<span>{cleared}% cleared{accruedSinceLastPayment > 0.5 ? ` · +${money(accruedSinceLastPayment)} accrued today` : ''}</span>} />
-        <StatCard label="EMI" value={showMoney ? money(emi) : '••••'} icon={RefreshCw} accent="bg-cyan-300/15 text-cyan-200" sub={<span>{rate}% p.a.</span>} />
-        <StatCard label="EMIs paid" value={String(emisPaid)} icon={Target} accent="bg-violet-400/15 text-violet-200" sub={<span>of ~{loan.status === 'closed' ? emisPaid : emisPaid + monthsRemaining} total</span>} />
-        <StatCard label="EMIs remaining" value={loan.status === 'closed' ? '0' : String(monthsRemaining)} icon={Target} accent="bg-emerald-400/15 text-emerald-200" sub={<span>{payoffDate ? `payoff ~${formatDate(payoffDate)}` : 'Paid off'}</span>} />
-        <StatCard label="Interest paid" value={showMoney ? money(totalInterestPaid) : '••••'} icon={ArrowDownRight} accent="bg-amber-400/15 text-amber-200" tone="text-amber-300" sub={<span>so far</span>} />
-        <StatCard label="Interest saved" value={showMoney ? money(loan.interest_saved || 0) : '••••'} icon={ArrowUpRight} accent="bg-emerald-400/15 text-emerald-200" sub={<span>from prepayments</span>} />
-      </div>
-
-      {prepaymentEvents.length > 0 && (
-        <div className="rounded-2xl border border-emerald-400/15 bg-emerald-500/[.03]">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 px-5 py-3">
-            <div className="text-xs uppercase tracking-widest text-slate-500">Prepayments · {prepaymentEvents.length}</div>
-            <div className="text-xs text-slate-400">
-              <span className="font-semibold text-white">{showMoney ? money(totalExtraPrepaid) : '••••'}</span> extra paid · <span className="font-semibold text-emerald-300">{showMoney ? money(loan.interest_saved || 0) : '••••'}</span> saved
-            </div>
-          </div>
-          <div className="divide-y divide-white/5">
-            {prepaymentEvents.map((p) => (
-              <div key={p.id} className="grid grid-cols-[1.2fr_1fr_1fr] items-center gap-3 px-5 py-3 text-sm">
-                <div className="text-slate-300">{formatDate(p.payment_date)}<span className="ml-1 text-[11px] text-slate-500">{p.extra < Number(p.amount) - 0.01 ? '· on top of EMI' : '· standalone'}</span></div>
-                <div className="font-medium text-white">{showMoney ? `+${money(p.extra)}` : '••••'} extra</div>
-                <div className="text-right text-emerald-300">{showMoney ? money(p.interest_saved || 0) : '••••'} saved</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className="rounded-2xl border border-white/10 bg-white/[.035]">
-        <div className="border-b border-white/10 px-5 py-3 text-xs uppercase tracking-widest text-slate-500">Payment history · {payments.length}</div>
-        {payments.length === 0 ? (
-          <div className="px-5 py-6 text-sm text-slate-500">No payments logged yet.</div>
-        ) : (
-          <div className="max-h-96 divide-y divide-white/5 overflow-y-auto">
-            {payments.map((p) => {
-              const acc = accounts.find((a) => a.id === p.account_id)
-              return (
-                <div key={p.id} className="grid grid-cols-[1.4fr_1fr_1fr_auto] items-center gap-3 px-5 py-3 text-sm">
-                  <div className="text-slate-300">{paymentRowLabel(p)}</div>
-                  <div className="text-slate-500">paid {formatDate(p.payment_date)}{acc ? ` · ${acc.name}` : ''}</div>
-                  <div className="text-right font-medium text-white">{showMoney ? money(p.amount) : '••••'}</div>
-                  <button onClick={() => onDeletePayment(p)} className="rounded-lg p-1.5 text-rose-300/70 hover:bg-rose-300/10"><Trash2 size={13} /></button>
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </div>
-
-      {emiCalendar.length > 0 && (
-        <div className="rounded-2xl border border-white/10 bg-white/[.035]">
-          <button type="button" onClick={() => setScheduleOpen((o) => !o)} className="flex w-full items-center justify-between px-5 py-3 text-xs uppercase tracking-widest text-slate-500 hover:text-slate-300">
-            <span>EMI calendar · {emisPaid} paid, {monthsRemaining} to go{monthsSaved > 0 ? `, ${monthsSaved} saved` : ''} of {emiCalendar.length} original</span>
-            <ChevronDown size={14} className={`transition-transform ${scheduleOpen ? 'rotate-180' : ''}`} />
-          </button>
-          {scheduleOpen && (
-            <div className="max-h-[28rem] overflow-y-auto border-t border-white/10">
-              {Object.entries(emiCalendarByYear).map(([year, months]) => (
-                <div key={year}>
-                  <div className="sticky top-0 border-b border-white/5 bg-[#161d2c] px-5 py-2 text-xs font-semibold text-cyan-200/80">{year}</div>
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 px-5 py-3 sm:grid-cols-3">
-                    {months.map((m) => (
-                      <div key={m.date.toISOString()} className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm ${m.status === 'saved' ? 'text-slate-600' : 'text-slate-300'}`}>
-                        {m.status === 'paid' && <CheckCircle2 size={14} className="shrink-0 text-emerald-400" />}
-                        {m.status === 'upcoming' && <Clock size={14} className="shrink-0 text-slate-500" />}
-                        {m.status === 'saved' && <Sparkles size={14} className="shrink-0 text-slate-700" />}
-                        <span className={m.status === 'saved' ? 'line-through decoration-slate-700' : ''}>{formatDate(m.date.toISOString().slice(0, 10))}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-              {monthsSaved > 0 && (
-                <div className="flex items-center gap-2 border-t border-white/10 px-5 py-3 text-xs text-emerald-300">
-                  <Sparkles size={13} />{monthsSaved} month{monthsSaved === 1 ? '' : 's'} saved off the original schedule thanks to your prepayments.
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function LoansView({ data, onAdd, onEdit, onDelete, onPay, onDeletePayment, onSync, showMoney, onToggleMoney }) {
-  const { loans, loan_payments, accounts } = data
-  const [selectedLoanId, setSelectedLoanId] = useState(null)
-  const selectedLoan = loans.find((l) => l.id === selectedLoanId)
-
-  if (selectedLoan) {
-    return (
-      <LoanDetailView
-        loan={selectedLoan}
-        payments={loan_payments.filter((p) => p.loan_id === selectedLoan.id)}
-        accounts={accounts}
-        onBack={() => setSelectedLoanId(null)}
-        onPay={onPay}
-        onDeletePayment={onDeletePayment}
-        onEdit={onEdit}
-        onDelete={(l) => { onDelete(l); setSelectedLoanId(null) }}
-        onSync={onSync}
-        showMoney={showMoney}
-        onToggleMoney={onToggleMoney}
-      />
-    )
-  }
-
-  return (
-    <div className="space-y-5">
-      <div className="flex items-end justify-between">
-        <div>
-          <div className="mb-2 text-xs uppercase tracking-widest text-cyan-200/70">Debt clarity</div>
-          <h1 className="text-3xl font-semibold tracking-tight text-white">Loans</h1>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={onAdd} className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 px-4 py-2.5 text-sm font-semibold text-[#07101c]"><Plus size={15} />Add loan</button>
-          <button onClick={onToggleMoney} className="rounded-xl border border-white/10 p-2.5 text-slate-400 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
-            {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
-          </button>
-        </div>
-      </div>
-      {loans.length === 0 ? (
-        <div className="rounded-2xl border border-white/10 bg-white/[.035]">
-          <EmptyState icon={Landmark} title="No loans yet" message="Log home, car or personal loans and track EMIs + prepayments." cta="Add loan" onCta={onAdd} />
-        </div>
-      ) : (
-        <div className="space-y-6">
-          {loans.map((loan) => {
-            const payments = loan_payments.filter((p) => p.loan_id === loan.id)
-            const totalPaid = payments.reduce((s, p) => s + Number(p.amount || 0), 0)
-            const principal = Number(loan.principal || 0)
-            const outstanding = Number(loan.outstanding || 0)
-            const todaysOutstanding = liveOutstanding(loan, payments)
-            const cleared = principal > 0 ? Math.max(0, Math.min(100, Math.round(((principal - outstanding) / principal) * 100))) : 0
-            const account = accounts.find((a) => a.id === loan.paid_from_account_id)
-            return (
-              <div key={loan.id} className="rounded-2xl border border-white/10 bg-white/[.035]">
-                <div role="button" tabIndex={0} onClick={() => setSelectedLoanId(loan.id)} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setSelectedLoanId(loan.id)} className="grid w-full cursor-pointer gap-5 border-b border-white/10 px-5 py-5 text-left transition hover:bg-white/[.02] sm:grid-cols-[1.4fr_1fr_1fr_auto]">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <div className="text-base font-semibold text-white">{loan.name}</div>
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-widest ${loan.status === 'closed' ? 'bg-emerald-400/15 text-emerald-200' : 'bg-cyan-400/15 text-cyan-200'}`}>{loan.status}</span>
-                    </div>
-                    <div className="mt-1 text-xs text-slate-500">{loan.lender || 'Lender'} · EMI {money(loan.emi_amount)} · {loan.interest_rate}% p.a. · {loan.tenure_months} mo</div>
-                    {account && <div className="mt-1 text-[11px] text-slate-500">Paying from {account.name}</div>}
-                  </div>
-                  <div>
-                    <div className="text-xs text-slate-500">Outstanding</div>
-                    <div className="text-xl font-semibold text-white">{showMoney ? money(todaysOutstanding) : '••••'}</div>
-                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/5">
-                      <div className="h-full rounded-full bg-emerald-400" style={{ width: `${cleared}%` }} />
-                    </div>
-                    <div className="mt-1 text-[11px] text-emerald-300">{cleared}% cleared</div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-slate-500">Total paid</div>
-                    <div className="text-xl font-semibold text-white">{showMoney ? money(totalPaid) : '••••'}</div>
-                    {Number(loan.interest_saved || 0) > 0 && <div className="mt-2 text-[11px] text-emerald-300">Interest saved {money(loan.interest_saved)}</div>}
-                  </div>
-                  <div className="flex items-center gap-1 self-center" onClick={(e) => e.stopPropagation()}>
-                    <button onClick={(e) => { e.stopPropagation(); onPay(loan) }} disabled={loan.status === 'closed'} className="rounded-lg bg-gradient-to-r from-cyan-300 to-blue-500 px-3 py-2 text-xs font-semibold text-[#07101c] disabled:opacity-50">Log payment</button>
-                    <button onClick={(e) => { e.stopPropagation(); onEdit(loan) }} className="rounded-lg border border-white/10 p-2 text-slate-500 hover:bg-white/5 hover:text-white"><Pencil size={13} /></button>
-                    <button onClick={(e) => { e.stopPropagation(); onDelete(loan) }} className="rounded-lg border border-white/10 p-2 text-rose-300/70 hover:bg-rose-300/10"><Trash2 size={13} /></button>
-                  </div>
-                </div>
-                {payments.length > 0 && (
-                  <div className="divide-y divide-white/5">
-                    {payments.slice(0, 5).map((p) => {
-                      const acc = accounts.find((a) => a.id === p.account_id)
-                      return (
-                        <div key={p.id} className="grid grid-cols-[1fr_1fr_1fr_auto] items-center gap-3 px-5 py-3 text-sm">
-                          <div className="text-slate-300">{monthAbbr(p.payment_date)} - {paymentTypeLabel(p)}</div>
-                          <div className="text-slate-500">{formatDate(p.payment_date)}{acc ? ` · ${acc.name}` : ''}</div>
-                          <div className="text-right font-medium text-white">{showMoney ? money(p.amount) : '••••'}</div>
-                          <button onClick={() => onDeletePayment(p)} className="rounded-lg p-1.5 text-rose-300/70 hover:bg-rose-300/10"><Trash2 size={13} /></button>
-                        </div>
-                      )
-                    })}
-                    {payments.length > 5 && (
-                      <button onClick={() => setSelectedLoanId(loan.id)} className="w-full px-5 py-2 text-left text-xs text-cyan-200 hover:bg-white/[.02]">+ {payments.length - 5} more payments — view full history</button>
-                    )}
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      )}
-    </div>
-  )
-}
-
-/* ---------------- Bucket List Form ---------------- */
-function BucketForm({ open, onClose, onSaved, editing, toast }) {
-  const initial = editing ? { ...editing, estimated_cost: String(editing.estimated_cost) } : { title: '', estimated_cost: '', priority: 'medium', target_date: '', status: 'wishlist', notes: '' }
-  const [form, setForm] = useState(initial)
-  const [busy, setBusy] = useState(false)
-  useEffect(() => { setForm(initial) }, [editing, open])
-  if (!open) return null
-  const save = async (e) => {
-    e.preventDefault(); setBusy(true)
-    try {
-      const endpoint = editing ? `/api/finance/bucket_list/${editing.id}` : '/api/finance/bucket_list'
-      const payload = { ...form, estimated_cost: Number(form.estimated_cost), target_date: form.target_date || null }
-      const response = await fetch(endpoint, { method: editing ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.error || data.message || 'Could not save')
-      toast.push(editing ? 'Updated' : 'Added to bucket list'); onSaved()
-    } catch (err) { toast.push(err.message, 'error') } finally { setBusy(false) }
-  }
-  return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center" onClick={onClose}>
-      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-3xl border border-white/10 bg-[#141a28] p-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white">{editing ? 'Edit dream' : 'Add to bucket list'}</h2>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-white/5"><X size={18} /></button>
-        </div>
-        <div className="mt-5 grid gap-4">
-          <label className="text-sm text-slate-300">Title
-            <input required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="Trip to Iceland" />
-          </label>
-          <label className="text-sm text-slate-300">Estimated cost
-            <input required type="number" step="0.01" min="0" value={form.estimated_cost} onChange={(e) => setForm({ ...form, estimated_cost: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="250000" />
-          </label>
-          <div className="grid grid-cols-4 gap-2">
-            {[{ v: 'low', l: 'Low' }, { v: 'medium', l: 'Medium' }, { v: 'high', l: 'High' }, { v: 'dream', l: 'Dream' }].map((p) => (
-              <button key={p.v} type="button" onClick={() => setForm({ ...form, priority: p.v })} className={`rounded-xl border px-2 py-2 text-xs font-medium transition ${form.priority === p.v ? 'border-cyan-400/30 bg-cyan-400/15 text-cyan-200' : 'border-white/10 text-slate-400 hover:bg-white/5'}`}>{p.l}</button>
-            ))}
-          </div>
-          <label className="text-sm text-slate-300">Target date
-            <DateInput value={form.target_date || ''} onChange={(e) => setForm({ ...form, target_date: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
-          </label>
-          <label className="text-sm text-slate-300">Status
-            <Select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
-              <option value="wishlist">Wishlist</option><option value="saving">Saving</option><option value="achieved">Achieved</option>
-            </Select>
-          </label>
-          <label className="text-sm text-slate-300">Notes
-            <input value={form.notes || ''} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="Why this matters" />
-          </label>
-        </div>
-        <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : editing ? 'Update' : 'Add to list'}</button>
-      </form>
-    </div>
-  )
-}
-
-/* ---------------- Bucket List View ---------------- */
-function BucketListView({ data, onAdd, onEdit, onDelete, showMoney, onToggleMoney }) {
-  const { bucket_list, transactions } = data
-  // avg monthly savings from last 6 months
-  const now = new Date()
-  const months = new Set()
-  let incomeTotal = 0, expenseTotal = 0
-  for (let i = 0; i < 6; i++) { const d = new Date(now.getFullYear(), now.getMonth() - i, 1); months.add(`${d.getFullYear()}-${d.getMonth()}`) }
-  transactions.forEach((t) => {
-    if (t.type === 'transfer') return
-    const d = new Date(t.date); const key = `${d.getFullYear()}-${d.getMonth()}`
-    if (!months.has(key)) return
-    if (t.type === 'income') incomeTotal += Number(t.amount || 0)
-    if (t.type === 'expense') expenseTotal += Number(t.amount || 0)
-  })
-  const avgMonthlySavings = Math.max(0, (incomeTotal - expenseTotal) / months.size)
-
-  const priorityMeta = {
-    dream: { c: 'bg-violet-400/15 text-violet-200 border-violet-400/30', i: Star },
-    high: { c: 'bg-rose-400/15 text-rose-200 border-rose-400/30', i: Rocket },
-    medium: { c: 'bg-cyan-400/15 text-cyan-200 border-cyan-400/30', i: Target },
-    low: { c: 'bg-slate-400/15 text-slate-300 border-slate-400/30', i: Heart },
-  }
-  const statusMeta = {
-    wishlist: 'bg-slate-500/15 text-slate-300',
-    saving: 'bg-cyan-400/15 text-cyan-200',
-    achieved: 'bg-emerald-400/15 text-emerald-200',
-  }
-
-  return (
-    <div className="space-y-5">
-      <div className="flex items-end justify-between">
-        <div>
-          <div className="mb-2 text-xs uppercase tracking-widest text-cyan-200/70">Dreams with a plan</div>
-          <h1 className="text-3xl font-semibold tracking-tight text-white">Bucket list</h1>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={onAdd} className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 px-4 py-2.5 text-sm font-semibold text-[#07101c]"><Plus size={15} />Add</button>
-          <button onClick={onToggleMoney} className="rounded-xl border border-white/10 p-2.5 text-slate-400 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
-            {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
-          </button>
-        </div>
-      </div>
-
-      <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-cyan-500/5 to-transparent p-5">
-        <div className="flex items-center gap-3 text-sm">
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-cyan-300/15 text-cyan-200"><PiggyBank size={18} /></div>
-          <div>
-            <div className="text-white">Avg monthly savings (last 6 months)</div>
-            <div className="text-xs text-slate-500">Used to estimate months-to-goal for each dream</div>
-          </div>
-          <div className="ml-auto text-right">
-            <div className="text-xl font-semibold text-white">{showMoney ? money(avgMonthlySavings) : '••••'}</div>
-            <div className="text-[11px] text-slate-500">per month</div>
-          </div>
-        </div>
-      </div>
-
-      {bucket_list.length === 0 ? (
-        <div className="rounded-2xl border border-white/10 bg-white/[.035]">
-          <EmptyState icon={Mountain} title="Your list is empty" message="Add the dreams you're building towards — trip, gadget, business, home." cta="Add first dream" onCta={onAdd} />
-        </div>
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {bucket_list.map((b) => {
-            const meta = priorityMeta[b.priority] || priorityMeta.medium
-            const cost = Number(b.estimated_cost || 0)
-            const months = avgMonthlySavings > 0 ? Math.ceil(cost / avgMonthlySavings) : null
-            const years = months ? Math.floor(months / 12) : null
-            const monthsRem = months ? months % 12 : null
-            const timeLabel = months == null ? 'Log income first to estimate' : years > 0 ? `${years}y ${monthsRem}m at current pace` : `${months} month${months === 1 ? '' : 's'} at current pace`
-            return (
-              <div key={b.id} className="group rounded-2xl border border-white/10 bg-white/[.035] p-5">
-                <div className="flex items-start justify-between">
-                  <div className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-widest ${meta.c}`}>
-                    <meta.i size={11} /> {b.priority}
-                  </div>
-                  <div className="flex gap-1 opacity-0 transition group-hover:opacity-100">
-                    <button onClick={() => onEdit(b)} className="rounded-lg p-1.5 text-slate-500 hover:bg-white/5 hover:text-white"><Pencil size={14} /></button>
-                    <button onClick={() => onDelete(b)} className="rounded-lg p-1.5 text-rose-300/70 hover:bg-rose-300/10"><Trash2 size={14} /></button>
-                  </div>
-                </div>
-                <div className="mt-4 text-lg font-semibold text-white">{b.title}</div>
-                <div className="mt-1 text-2xl font-semibold tracking-tight text-white">{showMoney ? money(cost) : '••••'}</div>
-                <div className="mt-3 flex items-center justify-between">
-                  <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-widest ${statusMeta[b.status]}`}>{b.status}</span>
-                  {b.target_date && <span className="text-[11px] text-slate-500">by {formatDate(b.target_date)}</span>}
-                </div>
-                <div className="mt-4 rounded-xl bg-black/20 px-3 py-2 text-xs text-slate-300">
-                  <div className="flex items-center gap-2"><Rocket size={13} className="text-cyan-300" />{timeLabel}</div>
-                </div>
-                {b.notes && <div className="mt-2 text-[11px] text-slate-500">{b.notes}</div>}
-              </div>
-            )
-          })}
-        </div>
-      )}
-    </div>
-  )
-}
-
-/* ---------------- Add Portfolio Funds ---------------- */
-function PortfolioFundsForm({ open, onClose, onSaved, portfolio, accounts, toast }) {
-  const [form, setForm] = useState({ amount: '', account_id: accounts[0]?.id || '', notes: '' })
-  const [busy, setBusy] = useState(false)
-  useEffect(() => { if (open) setForm({ amount: '', account_id: accounts[0]?.id || '', notes: '' }) }, [open, accounts])
-  if (!open || !portfolio) return null
-  const save = async (e) => {
-    e.preventDefault(); setBusy(true)
-    try {
-      const response = await fetch(`/api/finance/portfolios/${portfolio.id}/add_funds`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, amount: Number(form.amount) }) })
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.error || 'Could not add funds')
-      toast.push('Funds added to ' + portfolio.name); onSaved()
-    } catch (err) { toast.push(err.message, 'error') } finally { setBusy(false) }
-  }
-  return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center" onClick={onClose}>
-      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-3xl border border-white/10 bg-[#141a28] p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-white">Add funds</h2>
-            <p className="mt-1 text-xs text-slate-500">{portfolio.name} · current cash {money(portfolio.cash_balance || 0)}</p>
-          </div>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-white/5"><X size={18} /></button>
-        </div>
-        <div className="mt-5 grid gap-4">
-          <label className="text-sm text-slate-300">Amount
-            <input required type="number" step="0.01" min="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="1000" />
-          </label>
-          <label className="text-sm text-slate-300">From account
-            <Select required value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
-              <option value="">Choose account…</option>
-              {accounts.filter((a) => a.type !== 'debit_card').map((a) => <option key={a.id} value={a.id}>{a.name} · {money(a.current_balance)}</option>)}
-            </Select>
-          </label>
-          <label className="text-sm text-slate-300">Notes
-            <input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="Optional" />
-          </label>
-        </div>
-        <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Adding…' : 'Add funds'}</button>
-      </form>
-    </div>
-  )
-}
-
-/* ---------------- Lend / Borrow Form ---------------- */
-function LendForm({ open, onClose, onSaved, editing, accounts, creditCards = [], toast }) {
-  const initial = editing
-    ? { ...editing, amount: String(editing.amount) }
-    : { person_name: '', type: 'lent', amount: '', date: todayISO(), due_date: '', from_account_id: accounts[0]?.id || '', reason: '', notes: '' }
-  const [form, setForm] = useState(initial)
-  const [busy, setBusy] = useState(false)
-  useEffect(() => { setForm(initial) }, [editing, open])
-  if (!open) return null
-  const save = async (e) => {
-    e.preventDefault(); setBusy(true)
-    try {
-      const endpoint = editing ? `/api/finance/lend_borrow/${editing.id}` : '/api/finance/lend_borrow'
-      const payload = { ...form, amount: Number(form.amount), due_date: form.due_date || null }
-      const response = await fetch(endpoint, { method: editing ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.error || data.message || 'Could not save')
-      toast.push(editing ? 'Updated' : 'Recorded'); onSaved()
-    } catch (err) { toast.push(err.message, 'error') } finally { setBusy(false) }
-  }
-  return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center" onClick={onClose}>
-      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-xl rounded-3xl border border-white/10 bg-[#141a28] p-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white">{editing ? 'Edit record' : 'Log lend or borrow'}</h2>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-white/5"><X size={18} /></button>
-        </div>
-        <div className="mt-5 grid grid-cols-2 gap-2">
-          {[{ v: 'lent', l: 'I lent' }, { v: 'borrowed', l: 'I borrowed' }].map((t) => (
-            <button key={t.v} type="button" onClick={() => setForm({ ...form, type: t.v, from_account_id: t.v === 'borrowed' && String(form.from_account_id || '').startsWith('cc:') ? '' : form.from_account_id })} className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${form.type === t.v ? 'border-cyan-400/30 bg-cyan-400/15 text-cyan-200' : 'border-white/10 text-slate-400 hover:bg-white/5'}`}>{t.l}</button>
-          ))}
-        </div>
-        <div className="mt-5 grid gap-4 sm:grid-cols-2">
-          <label className="text-sm text-slate-300 sm:col-span-2">Person name
-            <input required value={form.person_name} onChange={(e) => setForm({ ...form, person_name: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="Rohan" />
-          </label>
-          <label className="text-sm text-slate-300">Amount
-            <input required type="number" step="0.01" min="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
-          </label>
-          <label className="text-sm text-slate-300">Date
-            <DateInput value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
-          </label>
-          <label className="text-sm text-slate-300">{form.type === 'lent' ? 'From account' : 'To account'}
-            <Select value={form.from_account_id || ''} onChange={(e) => setForm({ ...form, from_account_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
-              <option value="">None (skip account impact)</option>
-              {accounts.filter((a) => a.type !== 'debit_card').map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-              {form.type === 'lent' && creditCards.map((c) => <option key={c.id} value={`cc:${c.id}`}>{c.name} (card)</option>)}
-            </Select>
-          </label>
-          <label className="text-sm text-slate-300">Due date (optional)
-            <DateInput value={form.due_date || ''} onChange={(e) => setForm({ ...form, due_date: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
-          </label>
-          <label className="text-sm text-slate-300 sm:col-span-2">Reason
-            <input value={form.reason || ''} onChange={(e) => setForm({ ...form, reason: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="Rent help, exam fees…" />
-          </label>
-          <label className="text-sm text-slate-300 sm:col-span-2">Notes
-            <input value={form.notes || ''} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
-          </label>
-        </div>
-        <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : editing ? 'Update' : 'Save'}</button>
-      </form>
-    </div>
-  )
-}
-
-/* ---------------- Lend / Borrow View ---------------- */
-function LendBorrowView({ data, onAdd, onEdit, onDelete, showMoney, onToggleMoney }) {
-  const { lend_borrow, lend_repayments, accounts } = data
-  const now = new Date()
-  const lent = lend_borrow.filter((l) => l.type === 'lent')
-  const borrowed = lend_borrow.filter((l) => l.type === 'borrowed')
-  const lentPending = lent.reduce((s, l) => s + Math.max(0, Number(l.amount) - Number(l.amount_repaid || 0)), 0)
-  const borrowedPending = borrowed.reduce((s, l) => s + Math.max(0, Number(l.amount) - Number(l.amount_repaid || 0)), 0)
-
-  const card = (l) => {
-    const isLent = l.type === 'lent'
-    const repaid = Number(l.amount_repaid || 0)
-    const pending = Math.max(0, Number(l.amount) - repaid)
-    const pct = Number(l.amount) > 0 ? Math.min(100, Math.round((repaid / Number(l.amount)) * 100)) : 0
-    const overdue = l.due_date && l.status !== 'returned' && new Date(l.due_date) < now
-    const acc = accounts.find((a) => a.id === l.from_account_id)
-    const paymentsForThis = lend_repayments.filter((r) => r.lend_borrow_id === l.id)
-    // Lent = money flowing back to you (green, "+"). Borrowed = money flowing out of you
-    // to settle the debt (rose, "-") — same progress-bar mechanic, opposite direction of cash.
-    return (
-      <div key={l.id} className={`group rounded-2xl border p-5 ${isLent ? 'border-emerald-400/10 bg-emerald-500/[.03]' : 'border-rose-400/10 bg-rose-500/[.03]'}`}>
-        <div className="flex items-start justify-between">
-          <div>
-            <div className="flex items-center gap-2">
-              <div className="text-base font-semibold text-white">{l.person_name}</div>
-              <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-widest ${isLent ? 'bg-emerald-400/15 text-emerald-200' : 'bg-rose-400/15 text-rose-200'}`}>{isLent ? 'lent' : 'borrowed'}</span>
-              <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-widest ${l.status === 'returned' ? 'bg-emerald-400/15 text-emerald-200' : l.status === 'partial' ? 'bg-amber-400/15 text-amber-200' : 'bg-cyan-400/15 text-cyan-200'}`}>{l.status}</span>
-              {overdue && <span className="rounded-full bg-rose-400/15 px-2 py-0.5 text-[10px] uppercase tracking-widest text-rose-200">overdue</span>}
-            </div>
-            <div className="mt-1 text-xs text-slate-500">{l.reason || (isLent ? 'Lent' : 'Borrowed')} · {formatDate(l.date)}{acc ? ` · ${acc.name}` : ''}{l.due_date ? ` · due ${formatDate(l.due_date)}` : ''}</div>
-          </div>
-          <div className="flex gap-1 opacity-0 transition group-hover:opacity-100">
-            <button onClick={() => onEdit(l)} className="rounded-lg p-1.5 text-slate-500 hover:bg-white/5 hover:text-white"><Pencil size={14} /></button>
-            <button onClick={() => onDelete(l)} className="rounded-lg p-1.5 text-rose-300/70 hover:bg-rose-300/10"><Trash2 size={14} /></button>
-          </div>
-        </div>
-        <div className="mt-4 flex items-baseline justify-between">
-          <div>
-            <div className="text-xs text-slate-500">{isLent ? 'They still owe you' : 'You still owe'}</div>
-            <div className="text-2xl font-semibold text-white">{showMoney ? money(pending) : '••••'}</div>
-          </div>
-          <div className="text-right">
-            <div className="text-xs text-slate-500">of {showMoney ? money(l.amount) : '••••'}</div>
-            <div className={`text-[11px] ${isLent ? 'text-emerald-300' : 'text-rose-300'}`}>{isLent ? '+' : '-'}{money(repaid)} {isLent ? 'repaid to you' : 'paid by you'}</div>
-          </div>
-        </div>
-        <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/5">
-          <div className={`h-full rounded-full transition-all ${isLent ? 'bg-emerald-400' : 'bg-rose-400'}`} style={{ width: `${pct}%` }} />
-        </div>
-        {paymentsForThis.length > 0 && (
-          <div className="mt-4 border-t border-white/5 pt-3 text-xs">
-            <div className="text-[10px] uppercase tracking-widest text-slate-500">{isLent ? 'Repayments received' : 'Payments made'} · {paymentsForThis.length} {paymentsForThis.length === 1 ? 'payment' : 'payments'}</div>
-            <div className="mt-1 max-h-32 space-y-1 overflow-y-auto pr-1">
-              {paymentsForThis.map((r, i) => (
-                <div key={r.id} className="flex items-center justify-between text-slate-400">
-                  <span>#{paymentsForThis.length - i} · {formatDate(r.date)}</span><span className={`font-medium ${isLent ? 'text-emerald-300' : 'text-rose-300'}`}>{isLent ? '+' : '-'}{money(r.amount)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    )
-  }
-
-  return (
-    <div className="space-y-5">
-      <div className="flex items-end justify-between">
-        <div>
-          <div className="mb-2 text-xs uppercase tracking-widest text-cyan-200/70">Money between people</div>
-          <h1 className="text-3xl font-semibold tracking-tight text-white">Lend &amp; borrow</h1>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={onAdd} className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 px-4 py-2.5 text-sm font-semibold text-[#07101c]"><Plus size={15} />Log</button>
-          <button onClick={onToggleMoney} className="rounded-xl border border-white/10 p-2.5 text-slate-400 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
-            {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
-          </button>
-        </div>
-      </div>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="rounded-2xl border border-white/10 bg-emerald-500/5 p-5">
-          <div className="text-xs text-slate-400">Total lent (pending)</div>
-          <div className="mt-2 text-2xl font-semibold text-white">{showMoney ? money(lentPending) : '••••••'}</div>
-          <div className="mt-1 text-xs text-emerald-300">{lent.length} people</div>
-        </div>
-        <div className="rounded-2xl border border-white/10 bg-rose-500/5 p-5">
-          <div className="text-xs text-slate-400">Total borrowed (pending)</div>
-          <div className="mt-2 text-2xl font-semibold text-white">{showMoney ? money(borrowedPending) : '••••••'}</div>
-          <div className="mt-1 text-xs text-rose-300">{borrowed.length} people</div>
-        </div>
-      </div>
-      {lend_borrow.length === 0 ? (
-        <div className="rounded-2xl border border-white/10 bg-white/[.035]">
-          <EmptyState icon={Heart} title="Nothing to track" message="Log money you've lent to friends or borrowed from someone." cta="Add first record" onCta={onAdd} />
-        </div>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{lend_borrow.map(card)}</div>
-      )}
-    </div>
+      onImportRow={async (p) => {
+        const { valid, duplicate, categoryLabel, ...payload } = p
+        const res = await fetch('/api/finance/transactions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+        return res.ok
+      }}
+    />
   )
 }
 
@@ -2591,6 +555,25 @@ function ProfileView({ data, user, theme, onThemeChange, onSaveProfile, onAddCat
       </div>
 
       <div className="rounded-2xl border border-white/10 bg-white/[.035] p-5">
+        <div className="text-sm font-semibold text-white">Spending guardrails</div>
+        <div className="mt-3 flex items-center justify-between gap-4 rounded-xl bg-black/20 px-4 py-3">
+          <div>
+            <div className="text-sm text-white">Block transactions when an account is short</div>
+            <div className="mt-0.5 text-xs text-slate-500">When a bank, cash, or debit card doesn't have enough balance: {profile?.block_insufficient_funds !== false ? 'blocked outright' : 'allowed with a "confirm anyway" prompt'}. Credit cards always block past their limit, regardless of this setting.</div>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={profile?.block_insufficient_funds !== false}
+            onClick={() => onSaveProfile({ block_insufficient_funds: profile?.block_insufficient_funds === false })}
+            className={`relative h-6 w-10 shrink-0 rounded-full transition-colors ${profile?.block_insufficient_funds !== false ? 'bg-cyan-400' : 'bg-white/15'}`}
+          >
+            <span className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${profile?.block_insufficient_funds !== false ? 'translate-x-4' : 'translate-x-0'}`} />
+          </button>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-white/10 bg-white/[.035] p-5">
         <div className="flex items-center justify-between">
           <div>
             <div className="text-sm font-semibold text-white">Categories</div>
@@ -2621,629 +604,6 @@ function ProfileView({ data, user, theme, onThemeChange, onSaveProfile, onAddCat
   )
 }
 
-/* ---------------- Credit Card Form ---------------- */
-function CreditCardForm({ open, onClose, onSaved, editing, toast }) {
-  const initial = editing
-    ? { ...editing, credit_limit: String(editing.credit_limit), billing_date: String(editing.billing_date), due_date_offset: String(editing.due_date_offset) }
-    : { name: '', bank: '', last4: '', credit_limit: '', billing_date: '1', due_date_offset: '15', color: '#a78bfa' }
-  const [form, setForm] = useState(initial)
-  const [busy, setBusy] = useState(false)
-  useEffect(() => { setForm(initial) }, [editing, open])
-  if (!open) return null
-  const save = async (e) => {
-    e.preventDefault(); setBusy(true)
-    try {
-      const endpoint = editing ? `/api/finance/credit_cards/${editing.id}` : '/api/finance/credit_cards'
-      const payload = { ...form, credit_limit: Number(form.credit_limit), billing_date: Number(form.billing_date), due_date_offset: Number(form.due_date_offset) }
-      const response = await fetch(endpoint, { method: editing ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.error || data.message || 'Could not save')
-      toast.push(editing ? 'Card updated' : 'Card added'); onSaved()
-    } catch (err) { toast.push(err.message, 'error') } finally { setBusy(false) }
-  }
-  const palette = ['#a78bfa', '#22d3ee', '#f472b6', '#f59e0b', '#34d399', '#60a5fa']
-  return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center" onClick={onClose}>
-      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-lg rounded-3xl border border-white/10 bg-[#141a28] p-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white">{editing ? 'Edit card' : 'Add credit card'}</h2>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-white/5"><X size={18} /></button>
-        </div>
-        <div className="mt-5 grid gap-4 sm:grid-cols-2">
-          <label className="text-sm text-slate-300 sm:col-span-2">Name
-            <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="HDFC MoneyBack" />
-          </label>
-          <label className="text-sm text-slate-300">Bank
-            <input value={form.bank || ''} onChange={(e) => setForm({ ...form, bank: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="HDFC Bank" />
-          </label>
-          <label className="text-sm text-slate-300">Last 4 digits
-            <input maxLength={4} value={form.last4 || ''} onChange={(e) => setForm({ ...form, last4: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="1234" />
-          </label>
-          <label className="text-sm text-slate-300">Credit limit
-            <input required type="number" step="1" min="0" value={form.credit_limit} onChange={(e) => setForm({ ...form, credit_limit: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="200000" />
-          </label>
-          <label className="text-sm text-slate-300">Billing day (1-28)
-            <input required type="number" min="1" max="28" value={form.billing_date} onChange={(e) => setForm({ ...form, billing_date: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
-          </label>
-          <label className="text-sm text-slate-300">Due date offset (days)
-            <input required type="number" min="1" max="30" value={form.due_date_offset} onChange={(e) => setForm({ ...form, due_date_offset: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
-          </label>
-          <div className="text-sm text-slate-300 sm:col-span-2">Colour
-            <div className="mt-2 flex flex-wrap gap-2">
-              {palette.map((c) => (<button key={c} type="button" onClick={() => setForm({ ...form, color: c })} className={`h-8 w-8 rounded-full border-2 transition ${form.color === c ? 'border-white' : 'border-transparent'}`} style={{ background: c }} />))}
-            </div>
-          </div>
-        </div>
-        <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : editing ? 'Update card' : 'Save card'}</button>
-      </form>
-    </div>
-  )
-}
-
-/* ---------------- Credit Card Spend Form ---------------- */
-function CardSpendForm({ open, onClose, onSaved, card, categories, toast }) {
-  const initial = { amount: '', description: '', category_id: '', date: todayISO(), time: new Date().toTimeString().slice(0, 5), notes: '' }
-  const [form, setForm] = useState(initial)
-  const [busy, setBusy] = useState(false)
-  useEffect(() => { if (open) setForm(initial) }, [open])
-  if (!open || !card) return null
-  const save = async (e) => {
-    e.preventDefault(); setBusy(true)
-    try {
-      const response = await fetch('/api/finance/credit_card_transactions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ credit_card_id: card.id, ...form, amount: Number(form.amount) }) })
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.error || 'Could not save')
-      toast.push('Spend logged'); onSaved()
-    } catch (err) { toast.push(err.message, 'error') } finally { setBusy(false) }
-  }
-  const expenseCats = categories.filter((c) => c.type === 'expense')
-  return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center" onClick={onClose}>
-      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-3xl border border-white/10 bg-[#141a28] p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-white">Log spend</h2>
-            <p className="mt-1 text-xs text-slate-500">{card.name} · outstanding {money(card.current_outstanding)}</p>
-          </div>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-white/5"><X size={18} /></button>
-        </div>
-        <div className="mt-5 grid gap-4">
-          <label className="text-sm text-slate-300">Amount
-            <input required type="number" step="0.01" min="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
-          </label>
-          <label className="text-sm text-slate-300">Description
-            <input required value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="Swiggy order" />
-          </label>
-          <label className="text-sm text-slate-300">Category
-            <Select value={form.category_id} onChange={(e) => setForm({ ...form, category_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
-              <option value="">No category</option>
-              {expenseCats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </Select>
-          </label>
-          <label className="text-sm text-slate-300">Date
-            <DateInput value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value, time: new Date().toTimeString().slice(0, 5) })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
-          </label>
-        </div>
-        <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : 'Log spend'}</button>
-      </form>
-    </div>
-  )
-}
-
-/* ---------------- Card Bill Payment ---------------- */
-function CardPayForm({ open, onClose, onSaved, card, accounts, toast }) {
-  const [form, setForm] = useState({ amount: '', account_id: accounts[0]?.id || '', date: todayISO(), notes: '' })
-  const [busy, setBusy] = useState(false)
-  useEffect(() => { if (open && card) setForm({ amount: String(card.current_outstanding || ''), account_id: accounts[0]?.id || '', date: todayISO(), notes: '' }) }, [open, card, accounts])
-  if (!open || !card) return null
-  const save = async (e) => {
-    e.preventDefault(); setBusy(true)
-    try {
-      const response = await fetch(`/api/finance/credit_cards/${card.id}/pay_bill`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, amount: Number(form.amount) }) })
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.error || 'Could not pay')
-      toast.push('Bill paid'); onSaved()
-    } catch (err) { toast.push(err.message, 'error') } finally { setBusy(false) }
-  }
-  return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center" onClick={onClose}>
-      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-3xl border border-white/10 bg-[#141a28] p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-white">Pay bill</h2>
-            <p className="mt-1 text-xs text-slate-500">{card.name} · outstanding {money(card.current_outstanding)}</p>
-          </div>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-white/5"><X size={18} /></button>
-        </div>
-        <div className="mt-5 grid gap-4">
-          <label className="text-sm text-slate-300">Amount
-            <input required type="number" step="0.01" min="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
-          </label>
-          <label className="text-sm text-slate-300">Pay from account
-            <Select required value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
-              <option value="">Choose account…</option>
-              {accounts.filter((a) => a.type !== 'credit_card').map((a) => <option key={a.id} value={a.id}>{a.name} · {money(a.current_balance)}</option>)}
-            </Select>
-          </label>
-          <label className="text-sm text-slate-300">Date
-            <DateInput value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
-          </label>
-        </div>
-        <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Paying…' : 'Pay bill'}</button>
-      </form>
-    </div>
-  )
-}
-
-/* ---------------- Credit Cards View ---------------- */
-function CreditCardsView({ data, onAdd, onEdit, onDelete, onSpend, onPay, onDeleteSpend, showMoney, onToggleMoney }) {
-  const { credit_cards, credit_card_transactions, categories } = data
-  const totalOutstanding = credit_cards.reduce((s, c) => s + Number(c.current_outstanding || 0), 0)
-  const totalLimit = credit_cards.reduce((s, c) => s + Number(c.credit_limit || 0), 0)
-  const overallUtil = totalLimit > 0 ? Math.round((totalOutstanding / totalLimit) * 100) : 0
-
-  const nextDueLabel = (card) => {
-    const now = new Date(); const bd = Number(card.billing_date), offset = Number(card.due_date_offset)
-    let billing = new Date(now.getFullYear(), now.getMonth(), bd)
-    if (now > billing) billing = new Date(now.getFullYear(), now.getMonth() + 1, bd)
-    const due = new Date(billing); due.setDate(due.getDate() + offset)
-    const days = Math.ceil((due - now) / (1000 * 60 * 60 * 24))
-    return { due, days }
-  }
-
-  return (
-    <div className="space-y-5">
-      <div className="flex items-end justify-between">
-        <div>
-          <div className="mb-2 text-xs uppercase tracking-widest text-cyan-200/70">Plastic tracker</div>
-          <h1 className="text-3xl font-semibold tracking-tight text-white">Credit cards</h1>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={onAdd} className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 px-4 py-2.5 text-sm font-semibold text-[#07101c]"><Plus size={15} />Add card</button>
-          <button onClick={onToggleMoney} className="rounded-xl border border-white/10 p-2.5 text-slate-400 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
-            {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
-          </button>
-        </div>
-      </div>
-
-      {credit_cards.length > 0 && (
-        <div className="grid gap-4 sm:grid-cols-3">
-          <StatCard label="Total outstanding" value={showMoney ? money(totalOutstanding) : '••••••'} icon={CreditCard} accent="bg-rose-400/15 text-rose-200" tone="text-rose-300" sub={<span className="text-rose-300">{credit_cards.length} card{credit_cards.length === 1 ? '' : 's'}</span>} />
-          <StatCard label="Total limit" value={showMoney ? money(totalLimit) : '••••••'} icon={Landmark} accent="bg-cyan-300/15 text-cyan-200" sub={<span>Combined limit</span>} />
-          <StatCard label="Overall utilisation" value={`${overallUtil}%`} icon={Target} accent="bg-violet-400/15 text-violet-200" sub={<span className={overallUtil <= 30 ? 'text-emerald-300' : overallUtil <= 60 ? 'text-amber-300' : 'text-rose-300'}>{overallUtil <= 30 ? 'Healthy' : overallUtil <= 60 ? 'Rising' : 'High'}</span>} tone={overallUtil <= 30 ? 'text-emerald-300' : 'text-amber-300'} />
-        </div>
-      )}
-
-      {credit_cards.length === 0 ? (
-        <div className="rounded-2xl border border-white/10 bg-white/[.035]">
-          <EmptyState icon={CreditCard} title="No credit cards yet" message="Track credit card spends, utilisation and pay bills without leaving the app." cta="Add first card" onCta={onAdd} />
-        </div>
-      ) : (
-        <div className="grid gap-6 xl:grid-cols-2">
-          {credit_cards.map((card) => {
-            const util = Number(card.credit_limit) > 0 ? Math.min(100, Math.round((Number(card.current_outstanding) / Number(card.credit_limit)) * 100)) : 0
-            const tone = util >= 80 ? 'bg-rose-400' : util >= 50 ? 'bg-amber-400' : 'bg-emerald-400'
-            const txns = credit_card_transactions.filter((t) => t.credit_card_id === card.id).slice(0, 5)
-            const nd = nextDueLabel(card)
-            return (
-              <div key={card.id} className="rounded-2xl border border-white/10 bg-white/[.035]">
-                <div className="rounded-t-2xl p-5" style={{ background: `linear-gradient(135deg, ${card.color}22, transparent)` }}>
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-11 w-11 items-center justify-center rounded-2xl" style={{ background: `${card.color}33`, color: card.color }}><CreditCard size={20} /></div>
-                      <div>
-                        <div className="text-base font-semibold text-white">{card.name}</div>
-                        <div className="text-xs text-slate-500">{card.bank || 'Bank'}{card.last4 ? ` · •${card.last4}` : ''} · Bill on {card.billing_date} · Due in {nd.days > 0 ? `${nd.days} day${nd.days === 1 ? '' : 's'}` : 'overdue'}</div>
-                      </div>
-                    </div>
-                    <div className="flex gap-1">
-                      <button onClick={() => onEdit(card)} className="rounded-lg p-1.5 text-slate-500 hover:bg-white/5 hover:text-white"><Pencil size={14} /></button>
-                      <button onClick={() => onDelete(card)} className="rounded-lg p-1.5 text-rose-300/70 hover:bg-rose-300/10"><Trash2 size={14} /></button>
-                    </div>
-                  </div>
-                  <div className="mt-5 flex items-baseline justify-between">
-                    <div>
-                      <div className="text-xs text-slate-500">Outstanding</div>
-                      <div className="text-2xl font-semibold text-white">{showMoney ? money(card.current_outstanding) : '••••'}</div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-xs text-slate-500">Limit</div>
-                      <div className="text-sm text-slate-300">{showMoney ? money(card.credit_limit) : '••••'}</div>
-                    </div>
-                  </div>
-                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/5"><div className={`h-full rounded-full ${tone} transition-all`} style={{ width: `${util}%` }} /></div>
-                  <div className="mt-2 flex items-center justify-between text-xs">
-                    <span className={util >= 80 ? 'text-rose-300' : util >= 50 ? 'text-amber-300' : 'text-emerald-300'}>{util}% used</span>
-                    <span className="text-slate-500">₹{new Intl.NumberFormat('en-IN').format(Math.max(0, Number(card.credit_limit) - Number(card.current_outstanding)))} available</span>
-                  </div>
-                  <div className="mt-4 flex gap-2">
-                    <button onClick={() => onSpend(card)} className="flex-1 rounded-xl bg-white/[.06] py-2 text-xs font-semibold text-white hover:bg-white/[.1]">+ Log spend</button>
-                    <button onClick={() => onPay(card)} disabled={Number(card.current_outstanding) <= 0} className="flex-1 rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 py-2 text-xs font-semibold text-[#07101c] disabled:opacity-50">Pay bill</button>
-                  </div>
-                </div>
-                {txns.length > 0 && (
-                  <div className="divide-y divide-white/5 border-t border-white/10">
-                    {txns.map((t) => {
-                      const cat = categories.find((c) => c.id === t.category_id)
-                      return (
-                        <div key={t.id} className="flex items-center justify-between px-5 py-3 text-sm">
-                          <div>
-                            <div className="text-white">{t.description}</div>
-                            <div className="text-[11px] text-slate-500">{cat?.name || 'Uncategorised'} · {formatDateTime(t.date, t.time)}</div>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <div className="text-right">
-                              <div className="font-semibold text-rose-300">-{money(t.amount)}</div>
-                              <div className="text-[10px] uppercase tracking-widest text-slate-500">{t.status}</div>
-                            </div>
-                            <button onClick={() => onDeleteSpend(t)} className="rounded-lg p-1.5 text-rose-300/70 hover:bg-rose-300/10"><Trash2 size={13} /></button>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      )}
-    </div>
-  )
-}
-
-/* ---------------- Scholarship Form ---------------- */
-function ScholarshipForm({ open, onClose, onSaved, editing, accounts, toast }) {
-  const initial = editing
-    ? { ...editing, total_amount: String(editing.total_amount) }
-    : { name: '', total_amount: '', academic_year: '', source: '', status: 'pending', received_date: '', due_date: '', received_to_account_id: '', notes: '' }
-  const [form, setForm] = useState(initial)
-  const [busy, setBusy] = useState(false)
-  useEffect(() => { setForm(initial) }, [editing, open])
-  if (!open) return null
-  const save = async (e) => {
-    e.preventDefault(); setBusy(true)
-    try {
-      const endpoint = editing ? `/api/finance/scholarships/${editing.id}` : '/api/finance/scholarships'
-      const payload = { ...form, total_amount: Number(form.total_amount), received_date: form.received_date || null, due_date: form.due_date || null, received_to_account_id: form.received_to_account_id || null }
-      const response = await fetch(endpoint, { method: editing ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.error || data.message || 'Could not save')
-      toast.push(editing ? 'Updated' : 'Scholarship added'); onSaved()
-    } catch (err) { toast.push(err.message, 'error') } finally { setBusy(false) }
-  }
-  return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center" onClick={onClose}>
-      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-xl rounded-3xl border border-white/10 bg-[#141a28] p-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white">{editing ? 'Edit scholarship' : 'Add scholarship'}</h2>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-white/5"><X size={18} /></button>
-        </div>
-        <div className="mt-5 grid gap-4 sm:grid-cols-2">
-          <label className="text-sm text-slate-300 sm:col-span-2">Name
-            <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="Merit scholarship Q1" />
-          </label>
-          <label className="text-sm text-slate-300">Total amount
-            <input required type="number" step="0.01" min="0" value={form.total_amount} onChange={(e) => setForm({ ...form, total_amount: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
-          </label>
-          <label className="text-sm text-slate-300">Academic year
-            <input value={form.academic_year || ''} onChange={(e) => setForm({ ...form, academic_year: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="2025-26" />
-          </label>
-          <label className="text-sm text-slate-300">Source
-            <input value={form.source || ''} onChange={(e) => setForm({ ...form, source: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="Govt / Foundation / College" />
-          </label>
-          <label className="text-sm text-slate-300">Status
-            <Select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
-              <option value="pending">Pending</option><option value="received">Received</option><option value="paid">Paid to college</option>
-            </Select>
-          </label>
-          <label className="text-sm text-slate-300">Received date
-            <DateInput value={form.received_date || ''} onChange={(e) => setForm({ ...form, received_date: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
-          </label>
-          <label className="text-sm text-slate-300">Due date (to college)
-            <DateInput value={form.due_date || ''} onChange={(e) => setForm({ ...form, due_date: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
-          </label>
-          <label className="text-sm text-slate-300 sm:col-span-2">Received into account (when marked received)
-            <Select value={form.received_to_account_id || ''} onChange={(e) => setForm({ ...form, received_to_account_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
-              <option value="">None</option>
-              {accounts.filter((a) => a.type !== 'debit_card').map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-            </Select>
-          </label>
-          <label className="text-sm text-slate-300 sm:col-span-2">Notes
-            <input value={form.notes || ''} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
-          </label>
-        </div>
-        <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : editing ? 'Update' : 'Save'}</button>
-      </form>
-    </div>
-  )
-}
-
-/* ---------------- Scholarship Pay Form ---------------- */
-function ScholarshipPayForm({ open, onClose, onSaved, scholarship, accounts, toast }) {
-  const initial = { amount: '', paid_to: 'College', payment_date: todayISO(), account_id: scholarship?.received_to_account_id || accounts[0]?.id || '', notes: '' }
-  const [form, setForm] = useState(initial)
-  const [busy, setBusy] = useState(false)
-  useEffect(() => { if (open) setForm({ ...initial, account_id: scholarship?.received_to_account_id || accounts[0]?.id || '' }) }, [open, scholarship, accounts])
-  if (!open || !scholarship) return null
-  const pending = Number(scholarship.total_amount) - Number(scholarship.amount_paid_to_college || 0)
-  const save = async (e) => {
-    e.preventDefault(); setBusy(true)
-    try {
-      const response = await fetch('/api/finance/scholarship_payments', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scholarship_id: scholarship.id, ...form, amount: Number(form.amount) }) })
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.error || 'Could not pay')
-      toast.push('Payment logged'); onSaved()
-    } catch (err) { toast.push(err.message, 'error') } finally { setBusy(false) }
-  }
-  return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center" onClick={onClose}>
-      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-3xl border border-white/10 bg-[#141a28] p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-white">Pay to college</h2>
-            <p className="mt-1 text-xs text-slate-500">{scholarship.name} · pending {money(pending)}</p>
-          </div>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-white/5"><X size={18} /></button>
-        </div>
-        <div className="mt-5 grid gap-4">
-          <label className="text-sm text-slate-300">Amount
-            <input required type="number" step="0.01" min="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
-          </label>
-          <label className="text-sm text-slate-300">Paid to
-            <input value={form.paid_to} onChange={(e) => setForm({ ...form, paid_to: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="College name / bursar" />
-          </label>
-          <label className="text-sm text-slate-300">Date
-            <DateInput value={form.payment_date} onChange={(e) => setForm({ ...form, payment_date: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
-          </label>
-          <label className="text-sm text-slate-300">From account
-            <Select required value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
-              <option value="">Choose account…</option>
-              {accounts.filter((a) => a.type !== 'debit_card').map((a) => <option key={a.id} value={a.id}>{a.name} · {money(a.current_balance)}</option>)}
-            </Select>
-          </label>
-        </div>
-        <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Paying…' : 'Log payment'}</button>
-      </form>
-    </div>
-  )
-}
-
-/* ---------------- Scholarships View ---------------- */
-function ScholarshipsView({ data, onAdd, onEdit, onDelete, onPay, showMoney, onToggleMoney }) {
-  const { scholarships, scholarship_payments, transactions, categories, accounts } = data
-  const totalReceived = scholarships.filter((s) => s.status !== 'pending').reduce((s, x) => s + Number(x.total_amount || 0), 0)
-  const totalPaidCollege = scholarships.reduce((s, x) => s + Number(x.amount_paid_to_college || 0), 0)
-  const pendingToCollege = totalReceived - totalPaidCollege
-
-  // Misuse detection: for each scholarship, look at transactions from its received_to_account after received_date,
-  // any non-scholarship expense counted as potentially misused
-  const misuseWarn = (s) => {
-    if (!s.received_to_account_id || !s.received_date) return null
-    const misused = transactions.filter((t) => t.account_id === s.received_to_account_id && t.type === 'expense' && new Date(t.date) >= new Date(s.received_date) && t.linked_module !== 'scholarship' && t.linked_module !== 'investment')
-    const amount = misused.reduce((a, t) => a + Number(t.amount || 0), 0)
-    return amount > 0 ? { amount, count: misused.length } : null
-  }
-
-  return (
-    <div className="space-y-5">
-      <div className="flex items-end justify-between">
-        <div>
-          <div className="mb-2 text-xs uppercase tracking-widest text-cyan-200/70">Scholarship trail</div>
-          <h1 className="text-3xl font-semibold tracking-tight text-white">Scholarships &amp; fees</h1>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={onAdd} className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 px-4 py-2.5 text-sm font-semibold text-[#07101c]"><Plus size={15} />Add scholarship</button>
-          <button onClick={onToggleMoney} className="rounded-xl border border-white/10 p-2.5 text-slate-400 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
-            {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
-          </button>
-        </div>
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-3">
-        <StatCard label="Received" value={showMoney ? money(totalReceived) : '••••'} icon={ArrowUpRight} accent="bg-emerald-400/15 text-emerald-200" sub={<span>{scholarships.filter((s) => s.status !== 'pending').length} batch(es)</span>} />
-        <StatCard label="Paid to college" value={showMoney ? money(totalPaidCollege) : '••••'} icon={ArrowDownRight} accent="bg-cyan-400/15 text-cyan-200" sub={<span>{scholarship_payments.length} payment(s)</span>} />
-        <StatCard label="Pending to college" value={showMoney ? money(pendingToCollege) : '••••'} icon={Target} accent="bg-amber-400/15 text-amber-200" tone={pendingToCollege > 0 ? 'text-amber-300' : 'text-emerald-300'} sub={<span className={pendingToCollege > 0 ? 'text-amber-300' : 'text-emerald-300'}>{pendingToCollege > 0 ? 'Due to college' : 'All paid'}</span>} />
-      </div>
-
-      {scholarships.length === 0 ? (
-        <div className="rounded-2xl border border-white/10 bg-white/[.035]">
-          <EmptyState icon={ShieldCheck} title="No scholarships yet" message="Log received batches and payments to college, and we'll warn if funds are misused." cta="Add first batch" onCta={onAdd} />
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {scholarships.map((s) => {
-            const paid = Number(s.amount_paid_to_college || 0)
-            const total = Number(s.total_amount || 0)
-            const pct = total > 0 ? Math.min(100, Math.round((paid / total) * 100)) : 0
-            const pending = Math.max(0, total - paid)
-            const acc = accounts.find((a) => a.id === s.received_to_account_id)
-            const warn = misuseWarn(s)
-            return (
-              <div key={s.id} className="group rounded-2xl border border-white/10 bg-white/[.035] p-5">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <div className="text-base font-semibold text-white">{s.name}</div>
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-widest ${s.status === 'paid' ? 'bg-emerald-400/15 text-emerald-200' : s.status === 'received' ? 'bg-cyan-400/15 text-cyan-200' : 'bg-slate-500/15 text-slate-300'}`}>{s.status}</span>
-                    </div>
-                    <div className="mt-1 text-xs text-slate-500">{s.source || '—'} · {s.academic_year || '—'}{acc ? ` · into ${acc.name}` : ''}{s.received_date ? ` · received ${formatDate(s.received_date)}` : ''}{s.due_date ? ` · due ${formatDate(s.due_date)}` : ''}</div>
-                  </div>
-                  <div className="flex gap-2">
-                    <button onClick={() => onPay(s)} disabled={pending <= 0} className="rounded-lg bg-gradient-to-r from-cyan-300 to-blue-500 px-3 py-1.5 text-xs font-semibold text-[#07101c] disabled:opacity-50">Pay to college</button>
-                    <button onClick={() => onEdit(s)} className="rounded-lg border border-white/10 p-1.5 text-slate-500 hover:bg-white/5 hover:text-white"><Pencil size={13} /></button>
-                    <button onClick={() => onDelete(s)} className="rounded-lg border border-white/10 p-1.5 text-rose-300/70 hover:bg-rose-300/10"><Trash2 size={13} /></button>
-                  </div>
-                </div>
-                <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                  <div><div className="text-xs text-slate-500">Total</div><div className="mt-1 text-lg font-semibold text-white">{money(total)}</div></div>
-                  <div><div className="text-xs text-slate-500">Paid to college</div><div className="mt-1 text-lg font-semibold text-emerald-300">{money(paid)}</div></div>
-                  <div><div className="text-xs text-slate-500">Pending</div><div className="mt-1 text-lg font-semibold text-amber-300">{money(pending)}</div></div>
-                </div>
-                <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/5"><div className="h-full rounded-full bg-emerald-400 transition-all" style={{ width: `${pct}%` }} /></div>
-                {warn && (
-                  <div className="mt-4 flex items-center gap-2 rounded-xl border border-amber-300/25 bg-amber-300/5 px-4 py-2.5 text-xs text-amber-200">
-                    <Sparkles size={13} /> Warning: {money(warn.amount)} across {warn.count} non-scholarship expenses from the receiving account since money arrived. Consider paying college first.
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      )}
-    </div>
-  )
-}
-
-/* ---------------- Zopkit Form ---------------- */
-function ZopkitForm({ open, onClose, onSaved, editing, toast }) {
-  const initial = editing
-    ? { ...editing, amount: String(editing.amount), time: editing.time?.slice(0, 5) || new Date().toTimeString().slice(0, 5) }
-    : { type: 'expense', amount: '', description: '', category: 'tools/subscriptions', date: todayISO(), time: new Date().toTimeString().slice(0, 5), added_by: 'self', notes: '' }
-  const [form, setForm] = useState(initial)
-  const [busy, setBusy] = useState(false)
-  useEffect(() => { setForm(initial) }, [editing, open])
-  if (!open) return null
-  const save = async (e) => {
-    e.preventDefault(); setBusy(true)
-    try {
-      const endpoint = editing ? `/api/finance/zopkit_transactions/${editing.id}` : '/api/finance/zopkit_transactions'
-      const response = await fetch(endpoint, { method: editing ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, amount: Number(form.amount) }) })
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.error || 'Could not save')
-      toast.push(editing ? 'Updated' : 'Logged'); onSaved()
-    } catch (err) { toast.push(err.message, 'error') } finally { setBusy(false) }
-  }
-  const cats = ['tools/subscriptions', 'team expenses', 'miscellaneous', 'other']
-  return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center" onClick={onClose}>
-      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-xl rounded-3xl border border-white/10 bg-[#141a28] p-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white">{editing ? 'Edit entry' : 'Log Zopkit transaction'}</h2>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-white/5"><X size={18} /></button>
-        </div>
-        <div className="mt-5 grid grid-cols-2 gap-2">
-          {[{ v: 'expense', l: 'Expense', c: 'bg-rose-400/15 text-rose-200 border-rose-400/30' }, { v: 'income', l: 'Income (from CEO)', c: 'bg-emerald-400/15 text-emerald-200 border-emerald-400/30' }].map((t) => (
-            <button key={t.v} type="button" onClick={() => setForm({ ...form, type: t.v, added_by: t.v === 'income' ? 'ceo' : 'self' })} className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${form.type === t.v ? t.c : 'border-white/10 text-slate-400 hover:bg-white/5'}`}>{t.l}</button>
-          ))}
-        </div>
-        <div className="mt-5 grid gap-4 sm:grid-cols-2">
-          <label className="text-sm text-slate-300">Amount
-            <input required type="number" step="0.01" min="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
-          </label>
-          <label className="text-sm text-slate-300">Category
-            <Select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
-              {cats.map((c) => <option key={c} value={c}>{c}</option>)}
-            </Select>
-          </label>
-          <label className="text-sm text-slate-300 sm:col-span-2">Description
-            <input required value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="Vercel subscription" />
-          </label>
-          <label className="text-sm text-slate-300">Date
-            <DateInput value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value, time: new Date().toTimeString().slice(0, 5) })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
-          </label>
-          <label className="text-sm text-slate-300">Added by
-            <Select value={form.added_by} onChange={(e) => setForm({ ...form, added_by: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
-              <option value="self">Self</option><option value="ceo">CEO</option>
-            </Select>
-          </label>
-          <label className="text-sm text-slate-300 sm:col-span-2">Notes
-            <input value={form.notes || ''} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
-          </label>
-        </div>
-        <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : editing ? 'Update' : 'Save'}</button>
-      </form>
-    </div>
-  )
-}
-
-/* ---------------- Zopkit View ---------------- */
-function ZopkitView({ data, onAdd, onEdit, onDelete, showMoney, onToggleMoney }) {
-  const { zopkit_transactions } = data
-  const now = new Date()
-  const monthKey = `${now.getFullYear()}-${now.getMonth()}`
-  const monthTx = zopkit_transactions.filter((t) => { const d = new Date(t.date); return `${d.getFullYear()}-${d.getMonth()}` === monthKey })
-  const monthIn = monthTx.filter((t) => t.type === 'income').reduce((s, t) => s + Number(t.amount || 0), 0)
-  const monthOut = monthTx.filter((t) => t.type === 'expense').reduce((s, t) => s + Number(t.amount || 0), 0)
-  const totalIn = zopkit_transactions.filter((t) => t.type === 'income').reduce((s, t) => s + Number(t.amount || 0), 0)
-  const totalOut = zopkit_transactions.filter((t) => t.type === 'expense').reduce((s, t) => s + Number(t.amount || 0), 0)
-  const balance = totalIn - totalOut
-
-  const byCategory = {}
-  monthTx.filter((t) => t.type === 'expense').forEach((t) => { const k = t.category || 'other'; byCategory[k] = (byCategory[k] || 0) + Number(t.amount || 0) })
-
-  return (
-    <div className="space-y-5">
-      <div className="flex items-end justify-between">
-        <div>
-          <div className="mb-2 text-xs uppercase tracking-widest text-cyan-200/70">Startup ledger</div>
-          <h1 className="text-3xl font-semibold tracking-tight text-white">Zopkit finance</h1>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={onAdd} className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 px-4 py-2.5 text-sm font-semibold text-[#07101c]"><Plus size={15} />Log</button>
-          <button onClick={onToggleMoney} className="rounded-xl border border-white/10 p-2.5 text-slate-400 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
-            {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
-          </button>
-        </div>
-      </div>
-      <div className="grid gap-4 sm:grid-cols-4">
-        <StatCard label={`In · ${now.toLocaleString('en-IN', { month: 'short' })}`} value={showMoney ? money(monthIn) : '••••'} icon={ArrowUpRight} accent="bg-emerald-400/15 text-emerald-200" sub={<span>{monthTx.filter(t => t.type === 'income').length} entries</span>} />
-        <StatCard label={`Out · ${now.toLocaleString('en-IN', { month: 'short' })}`} value={showMoney ? money(monthOut) : '••••'} icon={ArrowDownRight} accent="bg-rose-400/15 text-rose-200" tone="text-rose-300" sub={<span className="text-rose-300">{monthTx.filter(t => t.type === 'expense').length} entries</span>} />
-        <StatCard label="Net this month" value={showMoney ? money(monthIn - monthOut) : '••••'} icon={Target} accent="bg-cyan-400/15 text-cyan-200" sub={<span className={monthIn - monthOut >= 0 ? 'text-emerald-300' : 'text-rose-300'}>{monthIn - monthOut >= 0 ? 'Positive' : 'Negative'}</span>} tone={monthIn - monthOut >= 0 ? 'text-emerald-300' : 'text-rose-300'} />
-        <StatCard label="Zopkit balance" value={showMoney ? money(balance) : '••••'} icon={Briefcase} accent="bg-violet-400/15 text-violet-200" sub={<span>All-time</span>} />
-      </div>
-
-      {Object.keys(byCategory).length > 0 && (
-        <div className="rounded-2xl border border-white/10 bg-white/[.035] p-5">
-          <div className="mb-3 text-sm font-semibold text-white">This month by category</div>
-          <div className="space-y-2">
-            {Object.entries(byCategory).sort((a, b) => b[1] - a[1]).map(([cat, amt]) => {
-              const pct = monthOut > 0 ? Math.round((amt / monthOut) * 100) : 0
-              return (
-                <div key={cat}>
-                  <div className="flex items-center justify-between text-xs text-slate-400">
-                    <span className="capitalize">{cat}</span><span className="text-white">{money(amt)} · {pct}%</span>
-                  </div>
-                  <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white/5"><div className="h-full rounded-full bg-cyan-400" style={{ width: `${pct}%` }} /></div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
-      <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[.035]">
-        {zopkit_transactions.length === 0 ? (
-          <EmptyState icon={Briefcase} title="No Zopkit entries yet" message="Log the money flowing through your startup — CEO transfers, tools, team ops." cta="Add first entry" onCta={onAdd} />
-        ) : (
-          <div className="divide-y divide-white/5">
-            {zopkit_transactions.map((t) => (
-              <div key={t.id} className="group grid grid-cols-[1.4fr_.9fr_.6fr_auto] items-center gap-4 px-5 py-4">
-                <div className="flex items-center gap-3">
-                  <div className={`flex h-9 w-9 items-center justify-center rounded-xl ${t.type === 'income' ? 'bg-emerald-400/15 text-emerald-200' : 'bg-rose-400/15 text-rose-200'}`}>
-                    {t.type === 'income' ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}
-                  </div>
-                  <div>
-                    <div className="text-sm font-medium text-white">{t.description}</div>
-                    <div className="text-[11px] text-slate-500">{t.category || 'other'} · by {t.added_by}</div>
-                  </div>
-                </div>
-                <div className="text-xs text-slate-500">{formatDateTime(t.date, t.time)}</div>
-                <div className={`text-sm font-semibold ${t.type === 'income' ? 'text-emerald-300' : 'text-rose-300'}`}>{showMoney ? (t.type === 'income' ? '+' : '-') + money(t.amount).replace('-', '') : '••••'}</div>
-                <div className="flex gap-1 opacity-0 transition group-hover:opacity-100">
-                  <button onClick={() => onEdit(t)} className="rounded-lg p-1.5 text-slate-500 hover:bg-white/5 hover:text-white"><Pencil size={13} /></button>
-                  <button onClick={() => onDelete(t)} className="rounded-lg p-1.5 text-rose-300/70 hover:bg-rose-300/10"><Trash2 size={13} /></button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-/* ---------------- Money Rules View + Widget ---------------- */
 function TransactionTicker({ items, categories, accounts, creditCards = [], showMoney }) {
   const boxRef = useRef(null)
   const trackRef = useRef(null)
@@ -3288,70 +648,21 @@ function TransactionTicker({ items, categories, accounts, creditCards = [], show
   )
 }
 
-function MoneyRulesWidget({ rules, onOpen }) {
-  const active = rules.filter((r) => r.is_active).slice(0, 4)
-  return (
-    <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-violet-500/10 via-transparent to-cyan-500/5 p-5">
-      <div className="mb-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-violet-400/15 text-violet-200"><Star size={15} /></div>
-          <div className="text-sm font-semibold text-white">Money rules</div>
-        </div>
-        <button onClick={onOpen} className="text-xs text-cyan-300 hover:underline">Manage</button>
-      </div>
-      {active.length === 0 ? (
-        <button onClick={onOpen} className="w-full rounded-xl border border-dashed border-white/10 py-4 text-sm text-slate-400 hover:bg-white/5">+ Add your first financial rule</button>
-      ) : (
-        <ul className="space-y-2">
-          {active.map((r) => (<li key={r.id} className="flex items-start gap-2 text-sm text-slate-200"><span className="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-violet-300" />{r.rule_text}</li>))}
-        </ul>
-      )}
-    </div>
-  )
-}
-
-function MoneyRulesView({ data, onAdd, onToggle, onEdit, onDelete }) {
-  const { money_rules } = data
-  const [text, setText] = useState('')
-  const submit = async (e) => { e.preventDefault(); if (!text.trim()) return; await onAdd(text.trim()); setText('') }
-  return (
-    <div className="space-y-5">
-      <div>
-        <div className="mb-2 text-xs uppercase tracking-widest text-cyan-200/70">Your compass</div>
-        <h1 className="text-3xl font-semibold tracking-tight text-white">Money rules</h1>
-      </div>
-      <form onSubmit={submit} className="flex gap-2">
-        <input value={text} onChange={(e) => setText(e.target.value)} placeholder="e.g. Save 30% of every paycheck before spending" className="flex-1 rounded-xl border border-white/10 bg-white/[.04] px-4 py-3 text-white outline-none focus:border-cyan-300/50" />
-        <button className="rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 px-5 py-3 text-sm font-semibold text-[#07101c]">+ Add</button>
-      </form>
-      {money_rules.length === 0 ? (
-        <div className="rounded-2xl border border-white/10 bg-white/[.035]">
-          <EmptyState icon={Star} title="No rules yet" message="Write down your personal money principles. They&apos;ll appear on the dashboard as a gentle reminder." />
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {money_rules.map((r, i) => (
-            <div key={r.id} className="group flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[.035] px-4 py-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-violet-400/15 text-xs font-semibold text-violet-200">{i + 1}</div>
-              <div className={`flex-1 text-sm ${r.is_active ? 'text-white' : 'text-slate-500 line-through'}`}>{r.rule_text}</div>
-              <button onClick={() => onToggle(r)} className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${r.is_active ? 'bg-emerald-400/15 text-emerald-200 hover:bg-emerald-400/25' : 'bg-white/[.06] text-slate-400 hover:bg-white/[.1]'}`}>{r.is_active ? 'Active' : 'Off'}</button>
-              <button onClick={() => onDelete(r)} className="rounded-lg p-1.5 text-rose-300/70 opacity-0 transition hover:bg-rose-300/10 group-hover:opacity-100"><Trash2 size={13} /></button>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
 /* ---------------- Views ---------------- */
 function DashboardView({ data, showMoney, onOpenTxForm, setView, onAddRule }) {
-  const { accounts, transactions, categories, holdings = [], loans = [], bucket_list = [], money_rules = [], credit_cards = [], portfolios = [] } = data
+  const { accounts, transactions, categories, holdings = [], loans = [], loan_payments = [], bucket_list = [], money_rules = [], credit_cards = [], portfolios = [] } = data
   const totalBalance = accounts.reduce((s, a) => s + Number(a.current_balance || 0), 0)
   const invested = holdings.reduce((s, h) => s + Number(h.qty) * Number(h.avg_buy_price), 0)
-  const currentInv = holdings.reduce((s, h) => s + Number(h.qty) * Number(h.current_price || h.avg_buy_price), 0)
-  const pnl = currentInv - invested
-  const totalOutstanding = loans.filter((l) => l.status !== 'closed').reduce((s, l) => s + Number(l.outstanding || 0), 0)
+  // Holdings-only figure, used for P&L — cash sitting un-invested in a portfolio has no P&L of
+  // its own. `currentInv` below is the cash-inclusive total (real money either way), used for
+  // net worth and the Portfolio tile's headline value, matching the Balances widget below it.
+  const holdingsValue = holdings.reduce((s, h) => s + Number(h.qty) * Number(h.current_price || h.avg_buy_price), 0)
+  const pnl = holdingsValue - invested
+  const currentInv = holdingsValue + portfolios.reduce((s, p) => s + Number(p.cash_balance || 0), 0)
+  // Same live figure (today's not-yet-billed interest included) the Loans module itself shows —
+  // using the stale, as-of-last-payment `outstanding` here would make this number silently drift
+  // from what the Loans page displays for the same loan.
+  const totalOutstanding = loans.filter((l) => l.status !== 'closed').reduce((s, l) => s + liveOutstanding(l, loan_payments.filter((p) => p.loan_id === l.id)), 0)
   const netWorth = totalBalance + currentInv - totalOutstanding
   // Monthly aggregation for last 6 months
   const now = new Date()
@@ -3384,7 +695,7 @@ function DashboardView({ data, showMoney, onOpenTxForm, setView, onAddRule }) {
     })),
     ...portfolios.map((p) => {
       const value = holdings.filter((h) => h.portfolio_id === p.id).reduce((s, h) => s + Number(h.qty) * Number(h.current_price || h.avg_buy_price), 0) + Number(p.cash_balance || 0)
-      return { id: `port-${p.id}`, name: p.name, sub: 'Investment', amount: value, icon: TrendingUp, color: '#a78bfa', debt: false }
+      return { id: `port-${p.id}`, name: p.name, sub: 'Investment', amount: value, icon: TrendingUp, color: p.color || '#a78bfa', debt: false }
     }),
   ]
 
@@ -3919,108 +1230,6 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onImport, 
   )
 }
 
-function AccountsView({ data, onAdd, onEdit, onDelete, showMoney, onToggleMoney }) {
-  const { accounts } = data
-  return (
-    <div className="space-y-5">
-      <div className="flex items-end justify-between">
-        <div>
-          <div className="mb-2 text-xs uppercase tracking-widest text-cyan-200/70">Where the money lives</div>
-          <h1 className="text-3xl font-semibold tracking-tight text-white">Accounts</h1>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={onAdd} className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 px-4 py-2.5 text-sm font-semibold text-[#07101c]"><Plus size={15} />Add account</button>
-          <button onClick={onToggleMoney} className="rounded-xl border border-white/10 p-2.5 text-slate-400 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
-            {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
-          </button>
-        </div>
-      </div>
-      {accounts.length === 0 ? (
-        <div className="rounded-2xl border border-white/10 bg-white/[.035]">
-          <EmptyState icon={Landmark} title="No accounts yet" message="Add a bank account or cash to start tracking balances." cta="Add account" onCta={onAdd} />
-        </div>
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {accounts.map((a) => {
-            const isDebitCard = a.type === 'debit_card'
-            const linked = isDebitCard ? accounts.find((x) => x.id === a.linked_account_id) : null
-            return (
-              <div key={a.id} className="group rounded-2xl border border-white/10 bg-white/[.035] p-5">
-                <div className="flex items-start justify-between">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl" style={{ background: `${a.color || '#22d3ee'}22`, color: a.color || '#22d3ee' }}>
-                    {isDebitCard ? <CreditCard size={18} /> : a.type === 'cash' ? <Wallet size={18} /> : <Landmark size={18} />}
-                  </div>
-                  <div className="flex gap-1 opacity-0 transition group-hover:opacity-100">
-                    <button onClick={() => onEdit(a)} className="rounded-lg p-1.5 text-slate-500 hover:bg-white/5 hover:text-white"><Pencil size={14} /></button>
-                    <button onClick={() => onDelete(a)} className="rounded-lg p-1.5 text-rose-300/70 hover:bg-rose-300/10"><Trash2 size={14} /></button>
-                  </div>
-                </div>
-                <div className="mt-5">
-                  <div className="text-sm font-semibold text-white">{a.name}</div>
-                  <div className="text-xs capitalize text-slate-500">{a.type.replace('_', ' ')}{a.bank_name ? ` · ${a.bank_name}` : ''}{a.account_number_last4 ? ` · •${a.account_number_last4}` : ''}</div>
-                </div>
-                {isDebitCard ? (
-                  <>
-                    <div className="mt-4 text-2xl font-semibold tracking-tight text-white">{showMoney ? money(linked?.current_balance || 0) : '••••••'}</div>
-                    <div className="mt-1 text-[11px] text-slate-500">Linked to {linked?.name || 'deleted account'}</div>
-                  </>
-                ) : (
-                  <>
-                    <div className="mt-4 text-2xl font-semibold tracking-tight text-white">{showMoney ? money(a.current_balance) : '••••••'}</div>
-                    <div className="mt-1 text-[11px] text-slate-500">Opening {money(a.opening_balance)}</div>
-                  </>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function CategoriesView({ data, onAdd, onEdit, onDelete }) {
-  const { categories } = data
-  const grouped = { income: categories.filter((c) => c.type === 'income'), expense: categories.filter((c) => c.type === 'expense') }
-  return (
-    <div className="space-y-5">
-      <div className="flex items-end justify-between">
-        <div>
-          <div className="mb-2 text-xs uppercase tracking-widest text-cyan-200/70">Group your spending</div>
-          <h1 className="text-3xl font-semibold tracking-tight text-white">Categories</h1>
-        </div>
-        <button onClick={onAdd} className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 px-4 py-2.5 text-sm font-semibold text-[#07101c]"><Plus size={15} />Add category</button>
-      </div>
-      <div className="grid gap-6 md:grid-cols-2">
-        {['income', 'expense'].map((k) => (
-          <div key={k} className="rounded-2xl border border-white/10 bg-white/[.035] p-5">
-            <div className="mb-4 flex items-center justify-between">
-              <div className="text-sm font-semibold capitalize text-white">{k}</div>
-              <div className="text-xs text-slate-500">{grouped[k].length}</div>
-            </div>
-            {grouped[k].length === 0 ? <div className="py-6 text-center text-sm text-slate-500">No {k} categories yet.</div> : (
-              <div className="space-y-2">
-                {grouped[k].map((c) => (
-                  <div key={c.id} className="group flex items-center justify-between rounded-xl bg-white/[.03] px-3 py-2.5">
-                    <div className="flex items-center gap-3">
-                      <div className="h-8 w-8 rounded-lg" style={{ background: `${c.color || '#94a3b8'}22`, color: c.color }} />
-                      <div className="text-sm text-white">{c.name}</div>
-                    </div>
-                    <div className="flex gap-1 opacity-0 transition group-hover:opacity-100">
-                      <button onClick={() => onEdit(c)} className="rounded-lg p-1.5 text-slate-500 hover:bg-white/5 hover:text-white"><Pencil size={14} /></button>
-                      <button onClick={() => onDelete(c)} className="rounded-lg p-1.5 text-rose-300/70 hover:bg-rose-300/10"><Trash2 size={14} /></button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
 function InsightsView({ data }) {
   const { transactions, categories } = data
   const now = new Date()
@@ -4130,11 +1339,12 @@ function InsightsView({ data }) {
 function Shell({ user, onLogout }) {
   const [view, setView] = useState('dashboard')
   const [showMoney, setShowMoney] = useState(true)
-  const [data, setData] = useState({ accounts: [], categories: [], transactions: [], budgets: [], portfolios: [], holdings: [], sips: [], loans: [], loan_payments: [], bucket_list: [], lend_borrow: [], lend_repayments: [], credit_cards: [], credit_card_transactions: [], scholarships: [], scholarship_payments: [], zopkit_transactions: [], money_rules: [], recurring_transactions: [], profile: null })
+  const [data, setData] = useState({ accounts: [], categories: [], transactions: [], budgets: [], portfolios: [], holdings: [], sips: [], kite_orders: [], loans: [], loan_payments: [], bucket_list: [], lend_borrow: [], lend_repayments: [], credit_cards: [], credit_card_transactions: [], scholarships: [], scholarship_payments: [], zopkit_transactions: [], money_rules: [], recurring_transactions: [], profile: null })
   const [loading, setLoading] = useState(true)
 
   const toast = useToast()
   const confirm = useConfirm()
+  const prompt = usePrompt()
 
   const [txFormOpen, setTxFormOpen] = useState(false)
   const [txEditing, setTxEditing] = useState(null)
@@ -4150,6 +1360,11 @@ function Shell({ user, onLogout }) {
   const [holdingFormOpen, setHoldingFormOpen] = useState(false)
   const [holdingEditing, setHoldingEditing] = useState(null)
   const [holdingDefaultPortfolio, setHoldingDefaultPortfolio] = useState('')
+  const [otherInvestmentFormOpen, setOtherInvestmentFormOpen] = useState(false)
+  const [otherInvestmentEditing, setOtherInvestmentEditing] = useState(null)
+  const [otherInvestmentPortfolioId, setOtherInvestmentPortfolioId] = useState('')
+  const [bulkImportOpen, setBulkImportOpen] = useState(false)
+  const [bulkImportPortfolio, setBulkImportPortfolio] = useState(null)
   const [loanFormOpen, setLoanFormOpen] = useState(false)
   const [loanEditing, setLoanEditing] = useState(null)
   const [loanPayOpen, setLoanPayOpen] = useState(false)
@@ -4160,6 +1375,10 @@ function Shell({ user, onLogout }) {
   const [lendEditing, setLendEditing] = useState(null)
   const [fundsFormOpen, setFundsFormOpen] = useState(false)
   const [fundsPortfolio, setFundsPortfolio] = useState(null)
+  const [withdrawFormOpen, setWithdrawFormOpen] = useState(false)
+  const [withdrawPortfolio, setWithdrawPortfolio] = useState(null)
+  const [sipFormOpen, setSipFormOpen] = useState(false)
+  const [sipEditing, setSipEditing] = useState(null)
   const [theme, setTheme] = useState('dark')
   const [cardFormOpen, setCardFormOpen] = useState(false)
   const [cardEditing, setCardEditing] = useState(null)
@@ -4172,6 +1391,7 @@ function Shell({ user, onLogout }) {
   const [scholarshipPayOpen, setScholarshipPayOpen] = useState(false)
   const [scholarshipPayTarget, setScholarshipPayTarget] = useState(null)
   const [pricesLoading, setPricesLoading] = useState(false)
+  const [kiteSyncBusy, setKiteSyncBusy] = useState(false)
   const [zopkitFormOpen, setZopkitFormOpen] = useState(false)
   const [zopkitEditing, setZopkitEditing] = useState(null)
   const [recurringManagerOpen, setRecurringManagerOpen] = useState(false)
@@ -4185,7 +1405,7 @@ function Shell({ user, onLogout }) {
       const result = await response.json()
       setData({
         accounts: result.accounts || [], categories: result.categories || [], transactions: result.transactions || [], budgets: result.budgets || [],
-        portfolios: result.portfolios || [], holdings: result.holdings || [], sips: result.sips || [],
+        portfolios: result.portfolios || [], holdings: result.holdings || [], sips: result.sips || [], other_investments: result.other_investments || [], kite_orders: result.kite_orders || [],
         loans: result.loans || [], loan_payments: result.loan_payments || [], bucket_list: result.bucket_list || [],
         lend_borrow: result.lend_borrow || [], lend_repayments: result.lend_repayments || [],
         credit_cards: result.credit_cards || [], credit_card_transactions: result.credit_card_transactions || [],
@@ -4245,8 +1465,11 @@ function Shell({ user, onLogout }) {
   const openHoldingEdit = (h) => { setHoldingEditing(h); setHoldingFormOpen(true) }
   const closeHoldingForm = () => { setHoldingFormOpen(false); setHoldingEditing(null) }
   const onHoldingSaved = async () => { closeHoldingForm(); await refresh() }
+  const openBulkImport = (p) => { setBulkImportPortfolio(p); setBulkImportOpen(true) }
+  const closeBulkImport = () => { setBulkImportOpen(false); setBulkImportPortfolio(null) }
+  const onBulkImported = async () => { closeBulkImport(); await refresh() }
   const deletePortfolio = async (p) => {
-    if (!(await confirm.ask(`Delete portfolio "${p.name}"? Its holdings will be removed too.`))) return
+    if (!(await confirm.ask(`Delete portfolio "${p.name}"? Its holdings and other investments will be removed too — SIPs will just be unlinked, not deleted.`))) return
     const response = await fetch(`/api/finance/portfolios/${p.id}`, { method: 'DELETE' })
     if (response.ok) { toast.push('Portfolio deleted'); await refresh() } else { toast.push('Delete failed', 'error') }
   }
@@ -4255,11 +1478,30 @@ function Shell({ user, onLogout }) {
     const response = await fetch(`/api/finance/holdings/${h.id}`, { method: 'DELETE' })
     if (response.ok) { toast.push('Holding removed'); await refresh() } else { toast.push('Delete failed', 'error') }
   }
-  const refreshHoldingPrice = async (h) => {
-    const price = window.prompt(`Update current price for ${h.symbol}`, String(h.current_price || h.avg_buy_price))
-    if (!price) return
+  const openOtherInvestmentForm = (portfolioId) => { setOtherInvestmentEditing(null); setOtherInvestmentPortfolioId(portfolioId); setOtherInvestmentFormOpen(true) }
+  const openOtherInvestmentEdit = (o) => { setOtherInvestmentEditing(o); setOtherInvestmentPortfolioId(o.portfolio_id); setOtherInvestmentFormOpen(true) }
+  const closeOtherInvestmentForm = () => { setOtherInvestmentFormOpen(false); setOtherInvestmentEditing(null) }
+  const onOtherInvestmentSaved = async () => { closeOtherInvestmentForm(); await refresh() }
+  const deleteOtherInvestment = async (o) => {
+    if (!(await confirm.ask(`Remove "${o.name}"?`))) return
+    const response = await fetch(`/api/finance/other_investments/${o.id}`, { method: 'DELETE' })
+    if (response.ok) { toast.push('Investment removed'); await refresh() } else { toast.push('Delete failed', 'error') }
+  }
+  // Manual override — the price you type in directly, distinct from a live fetch below.
+  const onManualPriceEntry = async (h) => {
+    const price = await prompt.ask(`Update current price for ${h.symbol}`, { defaultValue: h.current_price || h.avg_buy_price, inputType: 'number', confirmLabel: 'Update' })
+    if (!price || !Number.isFinite(Number(price))) return
     const response = await fetch(`/api/finance/holdings/${h.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ current_price: Number(price), last_price_updated_at: new Date().toISOString() }) })
     if (response.ok) { toast.push(`${h.symbol} updated`); await refresh() } else { toast.push('Update failed', 'error') }
+  }
+  // Live fetch, scoped to just this one holding — reuses the same endpoint the toolbar's
+  // "Refresh prices" button calls for everything, just with a single-symbol array.
+  const onRefreshRowPrice = async (h) => {
+    try {
+      const response = await fetch('/api/finance/prices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ symbols: [{ symbol: h.symbol, exchange: h.exchange }] }) })
+      const result = await response.json()
+      if (result.prices?.[h.symbol]) { toast.push(`${h.symbol} refreshed via ${result.kite_active ? 'Kite live' : 'Yahoo'}`); await refresh() } else { toast.push(`No live price found for ${h.symbol}`, 'error') }
+    } catch (e) { toast.push('Price fetch failed', 'error') }
   }
 
   // Loans
@@ -4309,11 +1551,32 @@ function Shell({ user, onLogout }) {
   const openFundsForm = (p) => { setFundsPortfolio(p); setFundsFormOpen(true) }
   const closeFundsForm = () => { setFundsFormOpen(false); setFundsPortfolio(null) }
   const onFundsSaved = async () => { closeFundsForm(); await refresh() }
+  const openWithdrawForm = (p) => { setWithdrawPortfolio(p); setWithdrawFormOpen(true) }
+  const closeWithdrawForm = () => { setWithdrawFormOpen(false); setWithdrawPortfolio(null) }
+  const onWithdrawSaved = async () => { closeWithdrawForm(); await refresh() }
 
-  // Profile
+  // SIPs
+  const openSipForm = (s = null) => { setSipEditing(s); setSipFormOpen(true) }
+  const closeSipForm = () => { setSipFormOpen(false); setSipEditing(null) }
+  const onSipSaved = async () => { closeSipForm(); await refresh() }
+  const deleteSip = async (s) => {
+    if (!(await confirm.ask(`Delete SIP "${s.fund_name}"?`))) return
+    const response = await fetch(`/api/finance/sips/${s.id}`, { method: 'DELETE' })
+    if (response.ok) { toast.push('SIP deleted'); await refresh() } else { toast.push('Delete failed', 'error') }
+  }
+
+  // Profile — the PATCH response already returns the full updated row, so this updates just
+  // that slice of `data` directly instead of paying for a full refresh() (a 19-table re-fetch)
+  // to reflect what's typically a single changed field, like the guardrails toggle.
   const onSaveProfile = async (payload) => {
     const response = await fetch('/api/finance/profile', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-    if (response.ok) { toast.push('Profile saved'); await refresh() } else { toast.push('Could not save', 'error') }
+    if (response.ok) {
+      const updated = await response.json()
+      setData((d) => ({ ...d, profile: updated }))
+      toast.push('Profile saved')
+    } else {
+      toast.push('Could not save', 'error')
+    }
   }
   useEffect(() => { if (data.profile?.theme) setTheme(data.profile.theme) }, [data.profile])
   const onThemeChange = async (t) => { setTheme(t); await fetch('/api/finance/profile', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ theme: t }) }); toast.push(`Theme: ${t}`, 'info') }
@@ -4392,6 +1655,38 @@ function Shell({ user, onLogout }) {
     if (response.ok) { toast.push('Rule deleted'); await refresh() }
   }
   const connectKite = () => { window.location.href = '/api/kite/login' }
+  const linkPortfolioKite = async (p) => {
+    setKiteSyncBusy(true)
+    try {
+      const response = await fetch(`/api/finance/portfolios/${p.id}/link_kite`, { method: 'POST' })
+      const result = await response.json()
+      if (response.ok) { toast.push(`Linked · ${result.added} holding${result.added === 1 ? '' : 's'} synced from Kite`); await refresh() }
+      else { toast.push(result.error || 'Link failed', 'error'); await refresh() }
+    } finally { setKiteSyncBusy(false) }
+  }
+  const unlinkPortfolioKite = async (p) => {
+    if (!(await confirm.ask(`Unlink "${p.name}" from Kite? Its holdings stay, but you'll manage them manually from here on.`))) return
+    const response = await fetch(`/api/finance/portfolios/${p.id}/unlink_kite`, { method: 'POST' })
+    if (response.ok) { toast.push('Unlinked from Kite'); await refresh() } else { toast.push('Unlink failed', 'error') }
+  }
+  const syncPortfolioKite = async (p) => {
+    setKiteSyncBusy(true)
+    try {
+      const response = await fetch(`/api/finance/portfolios/${p.id}/sync_kite`, { method: 'POST' })
+      const result = await response.json()
+      if (response.ok) { toast.push(`Synced · ${result.added} added, ${result.updated} updated, ${result.removed} removed`); await refresh() }
+      else { toast.push(result.error || 'Sync failed', 'error') }
+    } finally { setKiteSyncBusy(false) }
+  }
+  const syncSipsKite = async () => {
+    setKiteSyncBusy(true)
+    try {
+      const response = await fetch('/api/finance/sips/sync_kite', { method: 'POST' })
+      const result = await response.json()
+      if (response.ok) { toast.push(`Mutual funds synced · ${result.added} added, ${result.updated} updated, ${result.removed} removed`); await refresh() }
+      else { toast.push(result.error || 'Sync failed', 'error') }
+    } finally { setKiteSyncBusy(false) }
+  }
 
   const deleteTx = async (t) => {
     if (!(await confirm.ask('Delete this transaction? Balances will be recomputed.'))) return
@@ -4439,6 +1734,7 @@ function Shell({ user, onLogout }) {
     <div className="min-h-screen bg-[#080b12] text-slate-100">
       {toast.view}
       {confirm.view}
+      {prompt.view}
       <div className="mx-auto flex min-h-screen max-w-[1480px]">
         {/* Sidebar */}
         <aside className="hidden w-64 shrink-0 flex-col border-r border-white/5 px-5 py-6 lg:flex lg:sticky lg:top-0 lg:h-screen lg:self-start lg:overflow-y-auto">
@@ -4487,16 +1783,16 @@ function Shell({ user, onLogout }) {
             <div className={fitScreen ? 'min-h-0 flex-1 lg:overflow-y-auto' : ''}>
               {view === 'dashboard' && <DashboardView data={data} showMoney={showMoney} onOpenTxForm={() => openTxForm()} setView={setView} />}
               {view === 'transactions' && <TransactionsView data={data} onOpenTxForm={() => openTxForm()} onEditTx={openTxForm} onDeleteTx={deleteTx} onImport={() => setCsvOpen(true)} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onOpenRecurring={openRecurringManager} />}
-              {view === 'accounts' && <AccountsView data={data} onAdd={() => openAccForm()} onEdit={openAccForm} onDelete={deleteAccount} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
+              {view === 'accounts' && <AccountsView data={data} onAdd={() => openAccForm()} onEdit={openAccForm} onDelete={deleteAccount} onDeleteTx={deleteTx} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'categories' && <CategoriesView data={data} onAdd={() => openCatForm()} onEdit={openCatForm} onDelete={deleteCategory} />}
               {view === 'budgets' && <BudgetsView data={data} onAdd={() => openBudgetForm()} onEdit={openBudgetForm} onDelete={deleteBudget} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
-              {view === 'investments' && <InvestmentsView data={data} onAddPortfolio={() => openPortfolioForm()} onEditPortfolio={openPortfolioForm} onDeletePortfolio={deletePortfolio} onAddHolding={openHoldingForm} onEditHolding={openHoldingEdit} onDeleteHolding={deleteHolding} onRefreshPrice={refreshHoldingPrice} onRefreshAll={refreshAllPrices} pricesLoading={pricesLoading} onAddFunds={openFundsForm} onConnectKite={connectKite} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
-              {view === 'cards' && <CreditCardsView data={data} onAdd={() => openCardForm()} onEdit={openCardForm} onDelete={deleteCard} onSpend={openCardSpend} onPay={openCardPay} onDeleteSpend={deleteCardSpend} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
+              {view === 'investments' && <InvestmentsView data={data} onAddPortfolio={() => openPortfolioForm()} onEditPortfolio={openPortfolioForm} onDeletePortfolio={deletePortfolio} onAddHolding={openHoldingForm} onBulkImport={openBulkImport} onEditHolding={openHoldingEdit} onDeleteHolding={deleteHolding} onRefreshRowPrice={onRefreshRowPrice} onManualPriceEntry={onManualPriceEntry} onRefreshAll={refreshAllPrices} pricesLoading={pricesLoading} onAddFunds={openFundsForm} onWithdrawFunds={openWithdrawForm} onConnectKite={connectKite} onLinkKite={linkPortfolioKite} onUnlinkKite={unlinkPortfolioKite} onSyncKite={syncPortfolioKite} kiteSyncBusy={kiteSyncBusy} onAddSip={openSipForm} onEditSip={openSipForm} onDeleteSip={deleteSip} onSyncSipsKite={syncSipsKite} onAddOtherInvestment={openOtherInvestmentForm} onEditOtherInvestment={openOtherInvestmentEdit} onDeleteOtherInvestment={deleteOtherInvestment} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
+              {view === 'cards' && <CreditCardsView data={data} onAdd={() => openCardForm()} onEdit={openCardForm} onDelete={deleteCard} onSpend={openCardSpend} onPay={openCardPay} onDeleteSpend={deleteCardSpend} onDeleteTx={deleteTx} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'scholarships' && <ScholarshipsView data={data} onAdd={() => openScholarshipForm()} onEdit={openScholarshipForm} onDelete={deleteScholarship} onPay={openScholarshipPay} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'zopkit' && <ZopkitView data={data} onAdd={() => openZopkitForm()} onEdit={openZopkitForm} onDelete={deleteZopkit} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'rules' && <MoneyRulesView data={data} onAdd={addRule} onToggle={toggleRule} onEdit={() => {}} onDelete={deleteRule} />}
               {view === 'loans' && <LoansView data={data} onAdd={() => openLoanForm()} onEdit={openLoanForm} onDelete={deleteLoan} onPay={openLoanPay} onDeletePayment={deleteLoanPayment} onSync={syncLoanOutstanding} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
-              {view === 'lend' && <LendBorrowView data={data} onAdd={() => openLendForm()} onEdit={openLendForm} onDelete={deleteLend} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
+              {view === 'lend' && <LendBorrowView data={data} onAdd={() => openLendForm()} onEdit={openLendForm} onDelete={deleteLend} onDeleteTx={deleteTx} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'bucket' && <BucketListView data={data} onAdd={() => openBucketForm()} onEdit={openBucketForm} onDelete={deleteBucket} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'insights' && <InsightsView data={data} />}
               {view === 'profile' && <ProfileView data={data} user={user} theme={theme} onThemeChange={onThemeChange} onSaveProfile={onSaveProfile} onAddCategory={() => openCatForm()} onEditCategory={openCatForm} onDeleteCategory={deleteCategory} onLogout={onLogout} />}
@@ -4522,7 +1818,7 @@ function Shell({ user, onLogout }) {
       </nav>
 
       {/* Modals */}
-      <TransactionForm open={txFormOpen} onClose={closeTxForm} onSaved={onTxSaved} editing={txEditing} accounts={data.accounts} categories={data.categories} creditCards={data.credit_cards} lendBorrow={data.lend_borrow} loans={data.loans} onAddAccount={() => { closeTxForm(); openAccForm() }} onAddCategory={() => openCatForm()} toast={toast} />
+      <TransactionForm open={txFormOpen} onClose={closeTxForm} onSaved={onTxSaved} editing={txEditing} accounts={data.accounts} categories={data.categories} creditCards={data.credit_cards} lendBorrow={data.lend_borrow} loans={data.loans} onAddAccount={() => { closeTxForm(); openAccForm() }} onAddCategory={() => openCatForm()} toast={toast} profile={data.profile} />
       <AccountForm open={accFormOpen} onClose={closeAccForm} onSaved={onAccSaved} editing={accEditing} accounts={data.accounts} toast={toast} />
       <CategoryForm open={catFormOpen} onClose={closeCatForm} onSaved={onCatSaved} editing={catEditing} toast={toast} />
       <RecurringManager open={recurringManagerOpen} onClose={closeRecurringManager} rules={data.recurring_transactions} onAdd={() => openRecurringForm()} onEdit={openRecurringForm} onToggle={toggleRecurring} onDelete={deleteRecurring} showMoney={showMoney} />
@@ -4530,12 +1826,16 @@ function Shell({ user, onLogout }) {
       <BudgetForm open={budgetFormOpen} onClose={closeBudgetForm} onSaved={onBudgetSaved} editing={budgetEditing} categories={data.categories} toast={toast} />
       <CsvImport open={csvOpen} onClose={() => setCsvOpen(false)} onImported={async () => { setCsvOpen(false); await refresh() }} accounts={data.accounts} categories={data.categories} transactions={data.transactions} toast={toast} />
       <PortfolioForm open={portfolioFormOpen} onClose={closePortfolioForm} onSaved={onPortfolioSaved} editing={portfolioEditing} accounts={data.accounts} toast={toast} />
-      <HoldingForm open={holdingFormOpen} onClose={closeHoldingForm} onSaved={onHoldingSaved} editing={holdingEditing} portfolios={data.portfolios} defaultPortfolioId={holdingDefaultPortfolio} toast={toast} />
+      <HoldingForm open={holdingFormOpen} onClose={closeHoldingForm} onSaved={onHoldingSaved} editing={holdingEditing} portfolios={data.portfolios} defaultPortfolioId={holdingDefaultPortfolio} profile={data.profile} toast={toast} />
+      <OtherInvestmentForm open={otherInvestmentFormOpen} onClose={closeOtherInvestmentForm} onSaved={onOtherInvestmentSaved} editing={otherInvestmentEditing} portfolioId={otherInvestmentPortfolioId} toast={toast} />
+      <HoldingsBulkImport open={bulkImportOpen} onClose={closeBulkImport} onImported={onBulkImported} portfolio={bulkImportPortfolio} toast={toast} />
       <LoanForm open={loanFormOpen} onClose={closeLoanForm} onSaved={onLoanSaved} editing={loanEditing} accounts={data.accounts} toast={toast} />
       <LoanPaymentForm open={loanPayOpen} onClose={closeLoanPay} onSaved={onLoanPaid} loan={loanPayLoan} accounts={data.accounts} creditCards={data.credit_cards} toast={toast} />
       <BucketForm open={bucketFormOpen} onClose={closeBucketForm} onSaved={onBucketSaved} editing={bucketEditing} toast={toast} />
       <LendForm open={lendFormOpen} onClose={closeLendForm} onSaved={onLendSaved} editing={lendEditing} accounts={data.accounts} creditCards={data.credit_cards} toast={toast} />
       <PortfolioFundsForm open={fundsFormOpen} onClose={closeFundsForm} onSaved={onFundsSaved} portfolio={fundsPortfolio} accounts={data.accounts} toast={toast} />
+      <WithdrawFundsForm open={withdrawFormOpen} onClose={closeWithdrawForm} onSaved={onWithdrawSaved} portfolio={withdrawPortfolio} accounts={data.accounts} toast={toast} />
+      <SipForm open={sipFormOpen} onClose={closeSipForm} onSaved={onSipSaved} editing={sipEditing} portfolios={data.portfolios} toast={toast} />
       <CreditCardForm open={cardFormOpen} onClose={closeCardForm} onSaved={onCardSaved} editing={cardEditing} toast={toast} />
       <CardSpendForm open={cardSpendOpen} onClose={closeCardSpend} onSaved={onCardSpendSaved} card={cardSpendTarget} categories={data.categories} toast={toast} />
       <CardPayForm open={cardPayOpen} onClose={closeCardPay} onSaved={onCardPaid} card={cardPayTarget} accounts={data.accounts} toast={toast} />

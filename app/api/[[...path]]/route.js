@@ -2,173 +2,16 @@ import { NextResponse } from 'next/server'
 import crypto from 'crypto'
 import { getRouteClient, applyCookies } from '@/lib/supabase/server'
 import { calcEmi, projectSchedule, totalInterest, accrueInterest, daysBetween } from '@/lib/amortization'
-
-function handleCORS(response, cookiesToSet = []) {
-  applyCookies(response, cookiesToSet)
-  response.headers.set('Access-Control-Allow-Origin', process.env.NEXT_PUBLIC_BASE_URL || '*')
-  response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS')
-  response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization')
-  response.headers.set('Access-Control-Allow-Credentials', 'true')
-  return response
-}
-
-async function currentUser(supabase) {
-  const { data } = await supabase.auth.getUser()
-  return data?.user || null
-}
-
-const safeFields = {
-  accounts: ['name', 'type', 'bank_name', 'account_number_last4', 'opening_balance', 'currency', 'color', 'icon', 'is_active', 'linked_account_id'],
-  categories: ['name', 'type', 'icon', 'color', 'is_default'],
-  transactions: ['account_id', 'category_id', 'amount', 'type', 'description', 'date', 'time', 'notes', 'linked_module', 'linked_module_id', 'transfer_group_id', 'transfer_direction', 'attachment_path', 'attachment_name'],
-  recurring_transactions: ['account_id', 'category_id', 'type', 'amount', 'description', 'notes', 'frequency', 'day_of_month', 'next_due_date', 'is_active'],
-  budgets: ['category_id', 'amount', 'period', 'start_date'],
-  portfolios: ['name', 'broker', 'demat_account_id', 'cash_balance'],
-  holdings: ['portfolio_id', 'symbol', 'exchange', 'company_name', 'qty', 'avg_buy_price', 'current_price', 'last_price_updated_at'],
-  sips: ['fund_name', 'folio_number', 'monthly_amount', 'start_date', 'units_held', 'nav', 'current_value'],
-  loans: ['name', 'lender', 'principal', 'interest_rate', 'tenure_months', 'emi_amount', 'start_date', 'total_interest', 'status', 'paid_from_account_id', 'outstanding', 'interest_saved', 'emi_due_day'],
-  loan_payments: ['loan_id', 'amount', 'type', 'payment_date', 'account_id', 'interest_saved', 'interest_portion', 'prepay_mode', 'outstanding_before', 'emi_before', 'linked_transaction_id', 'notes'],
-  bucket_list: ['title', 'estimated_cost', 'priority', 'target_date', 'status', 'notes'],
-  lend_borrow: ['person_name', 'type', 'amount', 'date', 'due_date', 'from_account_id', 'reason', 'status', 'notes'],
-  lend_repayments: ['lend_borrow_id', 'amount', 'date', 'account_id', 'linked_transaction_id', 'notes'],
-  profiles: ['full_name', 'age', 'avatar_url', 'theme', 'currency', 'kite_access_token', 'kite_access_token_at'],
-  credit_cards: ['name', 'bank', 'last4', 'credit_limit', 'billing_date', 'due_date_offset', 'current_outstanding', 'color'],
-  credit_card_transactions: ['credit_card_id', 'amount', 'description', 'category_id', 'date', 'time', 'status', 'linked_transaction_id'],
-  scholarships: ['name', 'total_amount', 'academic_year', 'source', 'status', 'received_date', 'due_date', 'received_to_account_id', 'amount_paid_to_college', 'notes'],
-  scholarship_payments: ['scholarship_id', 'amount', 'paid_to', 'payment_date', 'account_id', 'notes'],
-  zopkit_transactions: ['type', 'amount', 'description', 'category', 'date', 'time', 'added_by', 'notes'],
-  money_rules: ['rule_text', 'icon', 'order_index', 'is_active'],
-}
-
-function pickFields(table, source) {
-  return Object.fromEntries((safeFields[table] || []).filter((field) => source[field] !== undefined).map((field) => [field, source[field]]))
-}
-
-// Records a repayment against a lend/borrow record and bumps amount_repaid — used for
-// both directions (income repaying money lent out, expense repaying money borrowed).
-// Guarded against the record's own origination transaction (lend_borrow.linked_transaction_id)
-// so editing/re-saving that transaction is never mistaken for a repayment.
-async function applyLendRepayment(supabase, userId, transactionId, lendBorrowId, amount, extra) {
-  const { data: lb } = await supabase.from('lend_borrow').select('*').eq('id', lendBorrowId).eq('user_id', userId).maybeSingle()
-  if (!lb || lb.linked_transaction_id === transactionId) return
-  await supabase.from('lend_repayments').insert({ lend_borrow_id: lendBorrowId, user_id: userId, amount, linked_transaction_id: transactionId, ...extra })
-  const newRepaid = Number(lb.amount_repaid || 0) + Number(amount)
-  const newStatus = newRepaid >= Number(lb.amount) ? 'returned' : newRepaid > 0 ? 'partial' : 'pending'
-  await supabase.from('lend_borrow').update({ amount_repaid: newRepaid, status: newStatus }).eq('id', lendBorrowId).eq('user_id', userId)
-}
-
-async function reverseLendRepayment(supabase, userId, transactionId, lendBorrowId, amount) {
-  const { data: lb } = await supabase.from('lend_borrow').select('*').eq('id', lendBorrowId).eq('user_id', userId).maybeSingle()
-  if (!lb || lb.linked_transaction_id === transactionId) return
-  await supabase.from('lend_repayments').delete().eq('linked_transaction_id', transactionId).eq('user_id', userId)
-  const newRepaid = Math.max(0, Number(lb.amount_repaid || 0) - Number(amount))
-  const newStatus = newRepaid >= Number(lb.amount) ? 'returned' : newRepaid > 0 ? 'partial' : 'pending'
-  await supabase.from('lend_borrow').update({ amount_repaid: newRepaid, status: newStatus }).eq('id', lendBorrowId).eq('user_id', userId)
-}
-
-function applyOrder(query, table) {
-  if (table === 'transactions' || table === 'credit_card_transactions' || table === 'zopkit_transactions') {
-    return query.order('date', { ascending: false }).order('time', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false })
-  }
-  if (table === 'lend_borrow' || table === 'lend_repayments') return query.order('date', { ascending: false })
-  if (table === 'loan_payments' || table === 'scholarship_payments') return query.order('payment_date', { ascending: false })
-  if (table === 'categories') return query.order('type', { ascending: true }).order('name', { ascending: true })
-  if (table === 'money_rules') return query.order('order_index', { ascending: true }).order('created_at', { ascending: true })
-  if (table === 'accounts' || table === 'portfolios' || table === 'holdings' || table === 'credit_cards') return query.order('created_at', { ascending: true })
-  if (table === 'recurring_transactions') return query.order('next_due_date', { ascending: true })
-  return query.order('created_at', { ascending: false })
-}
-
-const DEFAULT_CATEGORIES = [
-  { name: 'Salary', type: 'income', icon: 'wallet', color: '#34d399' },
-  { name: 'Freelance', type: 'income', icon: 'briefcase', color: '#22d3ee' },
-  { name: 'Interest', type: 'income', icon: 'trending-up', color: '#4ade80' },
-  { name: 'Food & dining', type: 'expense', icon: 'utensils', color: '#fb7185' },
-  { name: 'Home', type: 'expense', icon: 'home', color: '#f59e0b' },
-  { name: 'Transport', type: 'expense', icon: 'car', color: '#60a5fa' },
-  { name: 'Investment', type: 'expense', icon: 'trending-up', color: '#a78bfa' },
-  { name: 'Shopping', type: 'expense', icon: 'shopping-bag', color: '#f472b6' },
-  { name: 'Bills & utilities', type: 'expense', icon: 'zap', color: '#facc15' },
-  { name: 'Health', type: 'expense', icon: 'heart', color: '#ef4444' },
-  { name: 'Entertainment', type: 'expense', icon: 'music', color: '#c084fc' },
-  { name: 'Loan / Debt', type: 'expense', icon: 'landmark', color: '#f97316' },
-  { name: 'Loan / Debt', type: 'income', icon: 'landmark', color: '#f97316' },
-  { name: 'Lended', type: 'expense', icon: 'heart', color: '#38bdf8' },
-]
-
-async function syncProfileFromAuth(supabase, user) {
-  const meta = user.user_metadata || {}
-  const googleAvatar = meta.avatar_url || meta.picture
-  const googleName = meta.full_name || meta.name
-  if (!googleAvatar && !googleName) return
-  const { data: profile } = await supabase.from('profiles').select('full_name, avatar_url').eq('id', user.id).maybeSingle()
-  if (!profile) return
-  const patch = {}
-  if (!profile.avatar_url && googleAvatar) patch.avatar_url = googleAvatar
-  if (!profile.full_name && googleName) patch.full_name = googleName
-  if (Object.keys(patch).length > 0) {
-    await supabase.from('profiles').update(patch).eq('id', user.id)
-  }
-}
-
-async function ensureDefaults(supabase, userId) {
-  const { data: existing } = await supabase.from('categories').select('id').eq('user_id', userId).limit(1)
-  if (existing && existing.length > 0) return
-  const rows = DEFAULT_CATEGORIES.map((c) => ({ ...c, user_id: userId, is_default: true }))
-  await supabase.from('categories').insert(rows)
-}
-
-// Finds (or, for accounts predating this category, creates) a category by name — used to
-// silently tag loan-payment transactions as "Loan / Debt" instead of leaving them Uncategorised,
-// without needing the loan payment form to ask the user to pick one every time.
-async function ensureCategory(supabase, userId, name, type) {
-  const { data: existing } = await supabase.from('categories').select('id').eq('user_id', userId).eq('name', name).eq('type', type).maybeSingle()
-  if (existing) return existing.id
-  const { data: created } = await supabase.from('categories').insert({ user_id: userId, name, type, icon: 'landmark', color: '#f97316', is_default: true }).select('id').maybeSingle()
-  return created?.id || null
-}
-
-function addInterval(dateStr, frequency) {
-  const d = new Date(`${dateStr}T00:00:00`)
-  if (frequency === 'weekly') d.setDate(d.getDate() + 7)
-  else if (frequency === 'yearly') d.setFullYear(d.getFullYear() + 1)
-  else d.setMonth(d.getMonth() + 1)
-  return d.toISOString().slice(0, 10)
-}
-
-// No cron/background-job infra exists in this app, so recurring rules (rent, salary, SIPs,
-// subscriptions) are caught up lazily — every time the summary endpoint is hit, any rule whose
-// next_due_date has already passed gets its missed occurrences generated as real transactions,
-// stepping forward until it's caught up to today. Capped at 60 iterations per rule as a guard
-// against a corrupted/very old next_due_date generating an unbounded backlog in one request.
-async function generateDueRecurring(supabase, userId) {
-  const today = new Date().toISOString().slice(0, 10)
-  const { data: due } = await supabase.from('recurring_transactions').select('*').eq('user_id', userId).eq('is_active', true).lte('next_due_date', today)
-  if (!due || due.length === 0) return
-  for (const rule of due) {
-    let nextDue = rule.next_due_date
-    let lastGenerated = rule.last_generated_date
-    let guard = 0
-    while (nextDue <= today && guard < 60) {
-      await supabase.from('transactions').insert({
-        user_id: userId, account_id: rule.account_id, category_id: rule.category_id, amount: rule.amount,
-        type: rule.type, description: rule.description, date: nextDue, notes: rule.notes,
-        recurring_source_id: rule.id,
-      })
-      lastGenerated = nextDue
-      nextDue = addInterval(nextDue, rule.frequency)
-      guard++
-    }
-    await supabase.from('recurring_transactions').update({ next_due_date: nextDue, last_generated_date: lastGenerated }).eq('id', rule.id).eq('user_id', userId)
-  }
-}
-
-function randomUUID() {
-  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID()
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0; const v = c === 'x' ? r : (r & 0x3) | 0x8; return v.toString(16)
-  })
-}
+import { handleCORS } from '@/lib/server/cors'
+import { currentUser } from '@/lib/server/auth'
+import { safeFields, pickFields } from '@/lib/server/safeFields'
+import { applyOrder } from '@/lib/server/applyOrder'
+import { ensureDefaults, ensureCategory } from '@/lib/server/services/categories'
+import { applyLendRepayment, reverseLendRepayment } from '@/lib/server/services/lendRepayment'
+import { addInterval, generateDueRecurring } from '@/lib/server/services/recurring'
+import { syncProfileFromAuth } from '@/lib/server/services/profile'
+import { syncPortfolioFromKite, syncMutualFundsFromKite, syncKiteOrders, isKiteTokenFresh } from '@/lib/server/services/kiteSync'
+import { randomUUID } from '@/lib/server/randomUUID'
 
 export async function OPTIONS() {
   return handleCORS(new NextResponse(null, { status: 200 }))
@@ -230,13 +73,11 @@ async function handleRoute(request, { params }) {
     if (route === '/finance/summary' && method === 'GET') {
       const user = await currentUser(supabase)
       if (!user) return cors(NextResponse.json({ error: 'Not authenticated' }, { status: 401 }))
-      await ensureDefaults(supabase, user.id).catch(() => {})
-      await generateDueRecurring(supabase, user.id).catch(() => {})
       const readAll = async (table) => {
         const { data } = await applyOrder(supabase.from(table).select('*').eq('user_id', user.id), table)
         return data || []
       }
-      const [accounts, categories, transactions, budgets, portfolios, holdings, sips, loans, loan_payments, bucket_list, lend_borrow, lend_repayments, credit_cards, credit_card_transactions, scholarships, scholarship_payments, zopkit_transactions, money_rules, recurring_transactions, profile] = await Promise.all([
+      let [accounts, categories, transactions, budgets, portfolios, holdings, sips, other_investments, kite_orders, loans, loan_payments, bucket_list, lend_borrow, lend_repayments, credit_cards, credit_card_transactions, scholarships, scholarship_payments, zopkit_transactions, money_rules, recurring_transactions, profile] = await Promise.all([
         readAll('accounts'),
         readAll('categories'),
         readAll('transactions'),
@@ -244,6 +85,8 @@ async function handleRoute(request, { params }) {
         readAll('portfolios'),
         readAll('holdings'),
         readAll('sips'),
+        readAll('other_investments'),
+        readAll('kite_orders'),
         readAll('loans'),
         readAll('loan_payments'),
         readAll('bucket_list'),
@@ -258,7 +101,58 @@ async function handleRoute(request, { params }) {
         readAll('recurring_transactions'),
         supabase.from('profiles').select('*').eq('id', user.id).maybeSingle().then((r) => r.data),
       ])
-      return cors(NextResponse.json({ accounts, categories, transactions, budgets, portfolios, holdings, sips, loans, loan_payments, bucket_list, lend_borrow, lend_repayments, credit_cards, credit_card_transactions, scholarships, scholarship_payments, zopkit_transactions, money_rules, recurring_transactions, profile }))
+      // Both of these are rare-path side effects (first-ever use of the app; a recurring rule
+      // that's genuinely due) checked against data already in hand, instead of two unconditional
+      // extra round trips paid serially on *every* summary fetch — which is what made every
+      // single save/edit/delete/toggle across the app feel sluggish, since every mutation calls
+      // this same endpoint to refresh.
+      if (categories.length === 0) {
+        await ensureDefaults(supabase, user.id).catch(() => {})
+        categories = await readAll('categories')
+      }
+      const today = new Date().toISOString().slice(0, 10)
+      if (recurring_transactions.some((r) => r.is_active && r.next_due_date <= today)) {
+        await generateDueRecurring(supabase, user.id).catch(() => {})
+        ;[transactions, recurring_transactions] = await Promise.all([readAll('transactions'), readAll('recurring_transactions')])
+      }
+      const kiteTokenFresh = isKiteTokenFresh(profile?.kite_access_token, profile?.kite_access_token_at)
+      const staleSince = (iso) => !iso || Date.now() - new Date(iso).getTime() > 30 * 60 * 1000
+      // Same "check on read, act if due" shape as the recurring-transactions block above — no
+      // webhook, just opportunistically re-syncing whenever the user has the app open, which is
+      // when they'd actually look at it. Each of the three tracks its own staleness clock and
+      // runs independently — MF and orders are user-level (no portfolio to "link" the way
+      // equities need one), so neither should depend on a stock portfolio being linked to Kite.
+      const kiteLinkedPortfolio = portfolios.find((p) => p.kite_linked)
+      const equityStale = kiteTokenFresh && kiteLinkedPortfolio && staleSince(kiteLinkedPortfolio.last_kite_sync_at)
+      // MF/orders each stamp their own profiles.kite_*_synced_at on every attempt (even a
+      // zero-result one), so staleness here never depends on row data existing — a user with
+      // genuinely no MF holdings or no orders that day still only gets checked every 30 min.
+      const mfStale = kiteTokenFresh && staleSince(profile?.kite_mf_synced_at)
+      const ordersStale = kiteTokenFresh && staleSince(profile?.kite_orders_synced_at)
+      if (equityStale || mfStale || ordersStale) {
+        // Each call is independently best-effort so one failing (e.g. no MF holdings, a
+        // transient Kite hiccup) never blocks the others.
+        await Promise.all([
+          equityStale ? syncPortfolioFromKite(supabase, user.id, kiteLinkedPortfolio.id).catch(() => {}) : null,
+          mfStale ? syncMutualFundsFromKite(supabase, user.id).catch(() => {}) : null,
+          ordersStale ? syncKiteOrders(supabase, user.id).catch(() => {}) : null,
+        ])
+        ;[portfolios, holdings, sips, kite_orders] = await Promise.all([readAll('portfolios'), readAll('holdings'), readAll('sips'), readAll('kite_orders')])
+        // mfStale/ordersStale update profiles.kite_*_synced_at directly — re-read so the
+        // response (and the "last synced" banner it feeds) reflects what just happened rather
+        // than the pre-sync snapshot from the very top of this handler.
+        profile = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle().then((r) => r.data)
+      }
+      // The raw Kite bearer token never needs to reach the browser — the client only ever
+      // checks whether it's present and still fresh, which is exactly what kite_connected is.
+      let profileSafe = profile
+      if (profile) {
+        const { kite_access_token, ...rest } = profile
+        // kite_connected only proves a token exists and is recent; kite_broken is the real
+        // "did the last actual API call work" signal, set by the sync services themselves.
+        profileSafe = { ...rest, kite_connected: !!kiteTokenFresh, kite_broken: !!profile.kite_last_error }
+      }
+      return cors(NextResponse.json({ accounts, categories, transactions, budgets, portfolios, holdings, sips, other_investments, kite_orders, loans, loan_payments, bucket_list, lend_borrow, lend_repayments, credit_cards, credit_card_transactions, scholarships, scholarship_payments, zopkit_transactions, money_rules, recurring_transactions, profile: profileSafe }))
     }
 
     // ---- PRICES: Yahoo Finance fallback (public); Kite when creds set ----
@@ -270,12 +164,7 @@ async function handleRoute(request, { params }) {
       let kiteToken = process.env.KITE_ACCESS_TOKEN
       let kiteSource = 'env'
       const { data: profile } = await supabase.from('profiles').select('kite_access_token,kite_access_token_at').eq('id', user.id).maybeSingle()
-      if (profile?.kite_access_token) {
-        const issuedAt = profile.kite_access_token_at ? new Date(profile.kite_access_token_at) : null
-        const now = new Date()
-        const stillFresh = issuedAt && (now.getTime() - issuedAt.getTime() < 20 * 60 * 60 * 1000)
-        if (stillFresh) { kiteToken = profile.kite_access_token; kiteSource = 'user' }
-      }
+      if (isKiteTokenFresh(profile?.kite_access_token, profile?.kite_access_token_at)) { kiteToken = profile.kite_access_token; kiteSource = 'user' }
       const out = {}
       let usedKite = false
       if (kiteKey && kiteToken && symbols.length > 0) {
@@ -336,7 +225,20 @@ async function handleRoute(request, { params }) {
           if (kr.ok && kd?.data?.access_token) {
             accessToken = kd.data.access_token
             if (user_id) {
-              await supabase.from('profiles').update({ kite_access_token: accessToken, kite_access_token_at: new Date().toISOString() }).eq('id', user_id)
+              // Optimistically cleared on a clean login — if something's still actually wrong,
+              // the sync calls right below will re-set it immediately.
+              await supabase.from('profiles').update({ kite_access_token: accessToken, kite_access_token_at: new Date().toISOString(), kite_last_error: null }).eq('id', user_id)
+              // Best-effort — a stale-token banner on next load is fine if this hiccups, but a
+              // successful connect shouldn't need a manual "Sync now" click to feel finished.
+              // MF/orders fire regardless of whether a stock portfolio is linked — they're
+              // user-level, not tied to one — equity only fires if there's actually a linked
+              // portfolio to sync into.
+              const { data: linked } = await supabase.from('portfolios').select('id').eq('user_id', user_id).eq('kite_linked', true).maybeSingle()
+              await Promise.all([
+                linked ? syncPortfolioFromKite(supabase, user_id, linked.id).catch(() => {}) : null,
+                syncMutualFundsFromKite(supabase, user_id).catch(() => {}),
+                syncKiteOrders(supabase, user_id).catch(() => {}),
+              ])
             }
           } else {
             exchangeError = kd?.message || JSON.stringify(kd)
@@ -344,8 +246,8 @@ async function handleRoute(request, { params }) {
         } catch (e) { exchangeError = String(e) }
       }
       const ok = !!accessToken
-      const html = `<!doctype html><html><head><title>Kite login</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{background:#080b12;color:#e2e8f0;font-family:system-ui;padding:40px;text-align:center;max-width:640px;margin:0 auto}code{background:#1e293b;padding:6px 10px;border-radius:6px;color:#67e8f9;word-break:break-all}h1{margin-bottom:4px}p{color:#94a3b8;font-size:14px;line-height:1.6}a{display:inline-block;margin-top:24px;background:linear-gradient(90deg,#67e8f9,#3b82f6);color:#07101c;padding:12px 24px;border-radius:12px;font-weight:600;text-decoration:none}</style></head><body><h1>${ok ? '✅ Kite connected' : status === 'success' && !user_id ? '⚠️ Sign in first' : '⚠️ Kite connection failed'}</h1>${ok ? `<p>Live NSE/BSE prices are now active for your account. You&#39;ll need to reconnect tomorrow after 6 AM IST when Zerodha rotates the token.</p>` : !user_id ? `<p>Please sign in to Personal Finance, then click <b>Connect Kite</b> from Investments and try again.</p>` : `<p>${exchangeError ? 'Kite said: <code>' + exchangeError.slice(0, 300) + '</code>' : 'No request_token received.'}</p>`}<a href="/">Back to Personal Finance</a></body></html>`
-      return applyCookies(new NextResponse(html, { status: 200, headers: { 'Content-Type': 'text/html' } }), cookiesToSet)
+      const html = `<!doctype html><html><head><meta charset="utf-8"><title>Kite login</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{background:#080b12;color:#e2e8f0;font-family:system-ui;padding:40px;text-align:center;max-width:640px;margin:0 auto}code{background:#1e293b;padding:6px 10px;border-radius:6px;color:#67e8f9;word-break:break-all}h1{margin-bottom:4px}p{color:#94a3b8;font-size:14px;line-height:1.6}a{display:inline-block;margin-top:24px;background:linear-gradient(90deg,#67e8f9,#3b82f6);color:#07101c;padding:12px 24px;border-radius:12px;font-weight:600;text-decoration:none}</style></head><body><h1>${ok ? '✅ Kite connected' : status === 'success' && !user_id ? '⚠️ Sign in first' : '⚠️ Kite connection failed'}</h1>${ok ? `<p>Live NSE/BSE prices are now active for your account. You&#39;ll need to reconnect tomorrow after 6 AM IST when Zerodha rotates the token.</p>` : !user_id ? `<p>Please sign in to Personal Finance, then click <b>Connect Kite</b> from Investments and try again.</p>` : `<p>${exchangeError ? 'Kite said: <code>' + exchangeError.slice(0, 300) + '</code>' : 'No request_token received.'}</p>`}<a href="/">Back to Personal Finance</a></body></html>`
+      return applyCookies(new NextResponse(html, { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } }), cookiesToSet)
     }
     if (route === '/kite/postback' && (method === 'POST' || method === 'GET')) {
       try { const body = method === 'POST' ? await request.json().catch(() => null) : null; console.log('[kite/postback]', body) } catch {}
@@ -423,7 +325,8 @@ async function handleRoute(request, { params }) {
       const { data: card } = await supabase.from('credit_cards').select('*').eq('id', cardId).eq('user_id', user.id).maybeSingle()
       if (!card) return cors(NextResponse.json({ error: 'Card not found' }, { status: 404 }))
       const now = new Date()
-      const txPayload = { user_id: user.id, account_id: body.account_id, amount, type: 'expense', description: `Credit card bill · ${card.name}`, date: body.date || now.toISOString().slice(0, 10), time: now.toTimeString().slice(0, 5), notes: body.notes || null }
+      const billCategoryId = await ensureCategory(supabase, user.id, 'Credit card bill', 'expense')
+      const txPayload = { user_id: user.id, account_id: body.account_id, amount, type: 'expense', description: `Credit card bill · ${card.name}`, category_id: billCategoryId, date: body.date || now.toISOString().slice(0, 10), time: now.toTimeString().slice(0, 5), notes: body.notes || null }
       const { data: tx } = await supabase.from('transactions').insert(txPayload).select().single()
       const newOutstanding = Math.max(0, Number(card.current_outstanding || 0) - amount)
       await supabase.from('credit_cards').update({ current_outstanding: newOutstanding }).eq('id', cardId).eq('user_id', user.id)
@@ -478,24 +381,9 @@ async function handleRoute(request, { params }) {
       return cors(NextResponse.json(updated))
     }
 
-    // ---- PORTFOLIO: add funds ----
-    const addFundsMatch = route.match(/^\/finance\/portfolios\/([^/]+)\/add_funds$/)
-    if (addFundsMatch && method === 'POST') {
-      const user = await currentUser(supabase)
-      if (!user) return cors(NextResponse.json({ error: 'Not authenticated' }, { status: 401 }))
-      const portfolioId = addFundsMatch[1]
-      const body = await request.json()
-      const amount = Number(body.amount)
-      if (!(amount > 0) || !body.account_id) return cors(NextResponse.json({ error: 'amount and account_id required' }, { status: 400 }))
-      const { data: p } = await supabase.from('portfolios').select('*').eq('id', portfolioId).eq('user_id', user.id).maybeSingle()
-      if (!p) return cors(NextResponse.json({ error: 'Portfolio not found' }, { status: 404 }))
-      const now = new Date()
-      const txPayload = { user_id: user.id, account_id: body.account_id, amount, type: 'expense', description: `Funded ${p.name}`, date: body.date || now.toISOString().slice(0, 10), time: body.time || now.toTimeString().slice(0, 5), linked_module: 'investment', linked_module_id: portfolioId, notes: body.notes || null }
-      await supabase.from('transactions').insert(txPayload)
-      const newCash = Number(p.cash_balance || 0) + amount
-      await supabase.from('portfolios').update({ cash_balance: newCash }).eq('id', portfolioId).eq('user_id', user.id)
-      return cors(NextResponse.json({ cash_balance: newCash }))
-    }
+    // ---- PORTFOLIO: add_funds / withdraw_funds now live at
+    // app/api/finance/portfolios/[id]/add_funds/route.js and .../withdraw_funds/route.js —
+    // real per-resource route files take precedence over this catch-all automatically.
 
     // ---- LOAN PAYMENT with side effects ----
     if (route === '/finance/loan_payments' && method === 'POST') {
@@ -673,12 +561,14 @@ async function handleRoute(request, { params }) {
     }
 
     // ---- FINANCE CRUD (accounts, categories, transactions, budgets, portfolios, holdings, sips, loans, loan_payments, bucket_list, lend_borrow, lend_repayments, credit_cards, credit_card_transactions, scholarships, scholarship_payments) ----
-    const collectionMatch = route.match(/^\/finance\/(accounts|categories|transactions|budgets|portfolios|holdings|sips|loans|loan_payments|bucket_list|lend_borrow|lend_repayments|credit_cards|credit_card_transactions|scholarships|scholarship_payments|zopkit_transactions|money_rules|recurring_transactions)(?:\/([^/]+))?$/)
+    // Only tables with bespoke logic living at this same base path (or, for transactions, the
+    // central cross-domain hub) still route through here — every other table has a real,
+    // dedicated route file under app/api/finance/<table>/ now (see lib/server/genericCrud.js).
+    const collectionMatch = route.match(/^\/finance\/(transactions|loan_payments|credit_card_transactions|scholarship_payments)(?:\/([^/]+))?$/)
     if (collectionMatch) {
       const [, table, id] = collectionMatch
       const user = await currentUser(supabase)
       if (!user) return cors(NextResponse.json({ error: 'Not authenticated' }, { status: 401 }))
-      if (table === 'categories') await ensureDefaults(supabase, user.id).catch(() => {})
 
       if (method === 'GET') {
         if (id) {
@@ -716,15 +606,7 @@ async function handleRoute(request, { params }) {
           return cors(NextResponse.json(created))
         }
         const payload = { ...pickFields(table, body), user_id: user.id }
-        if (table === 'accounts' && payload.opening_balance !== undefined) payload.current_balance = payload.opening_balance
-        if (table === 'loans' && payload.principal !== undefined && payload.outstanding === undefined) payload.outstanding = payload.principal
         if (table === 'transactions' && !payload.time) payload.time = new Date().toTimeString().slice(0, 5)
-        // "cc:<id>" in from_account_id means this lend was funded on a credit card — not a real
-        // accounts.id, so it can't go into this (uuid, FK) column. The side-effect below still
-        // reads the original "cc:<id>" off `body` (untouched), so card funding is still applied.
-        if (table === 'lend_borrow' && typeof payload.from_account_id === 'string' && payload.from_account_id.startsWith('cc:')) {
-          payload.from_account_id = null
-        }
         const { data: created, error } = await supabase.from(table).insert(payload).select().single()
         if (error) return cors(NextResponse.json({ error: error.message }, { status: 400 }))
 
@@ -744,47 +626,6 @@ async function handleRoute(request, { params }) {
             const newOutstanding = Math.max(0, Number(card.current_outstanding || 0) + delta)
             await supabase.from('credit_cards').update({ current_outstanding: newOutstanding }).eq('id', body.linked_module_id).eq('user_id', user.id)
           }
-        }
-
-        // Side-effect: creating a holding decrements portfolio cash_balance
-        if (table === 'holdings' && created?.id && payload.portfolio_id) {
-          const cost = Number(payload.qty || 0) * Number(payload.avg_buy_price || 0)
-          const { data: p } = await supabase.from('portfolios').select('cash_balance').eq('id', payload.portfolio_id).eq('user_id', user.id).maybeSingle()
-          if (p) await supabase.from('portfolios').update({ cash_balance: Number(p.cash_balance || 0) - cost }).eq('id', payload.portfolio_id).eq('user_id', user.id)
-        }
-
-        // Side-effect: creating a lend_borrow of type 'lent' from an account → deduct via expense transaction.
-        // "cc:<id>" means funded on a credit card instead of a bank/cash account — no money leaves
-        // a bank account, the card's outstanding balance goes up instead.
-        if (table === 'lend_borrow' && created?.id && body.from_account_id && body.type === 'lent') {
-          const amount = Number(body.amount)
-          const nowStr = new Date().toTimeString().slice(0, 5)
-          const lentCategoryId = await ensureCategory(supabase, user.id, 'Lended', 'expense')
-          const lentCardId = typeof body.from_account_id === 'string' && body.from_account_id.startsWith('cc:') ? body.from_account_id.slice(3) : null
-          const txPayload = { user_id: user.id, account_id: lentCardId ? null : body.from_account_id, amount, type: 'expense', description: `Lent to ${body.person_name}`, date: body.date || new Date().toISOString().slice(0, 10), time: nowStr, category_id: lentCategoryId, linked_module: lentCardId ? 'credit_card' : 'lend', linked_module_id: lentCardId || created.id, notes: body.notes || null }
-          const { data: tx } = await supabase.from('transactions').insert(txPayload).select().single()
-          if (tx?.id) await supabase.from('lend_borrow').update({ linked_transaction_id: tx.id }).eq('id', created.id).eq('user_id', user.id)
-          if (lentCardId) {
-            const { data: card } = await supabase.from('credit_cards').select('current_outstanding').eq('id', lentCardId).eq('user_id', user.id).maybeSingle()
-            if (card) await supabase.from('credit_cards').update({ current_outstanding: Number(card.current_outstanding || 0) + amount }).eq('id', lentCardId).eq('user_id', user.id)
-          }
-        }
-        // Side-effect: borrowed money → income into account
-        if (table === 'lend_borrow' && created?.id && body.from_account_id && body.type === 'borrowed') {
-          const amount = Number(body.amount)
-          const nowStr = new Date().toTimeString().slice(0, 5)
-          const borrowedCategoryId = await ensureCategory(supabase, user.id, 'Loan / Debt', 'income')
-          const txPayload = { user_id: user.id, account_id: body.from_account_id, amount, type: 'income', description: `Borrowed from ${body.person_name}`, date: body.date || new Date().toISOString().slice(0, 10), time: nowStr, category_id: borrowedCategoryId, linked_module: 'lend', linked_module_id: created.id, notes: body.notes || null }
-          const { data: tx } = await supabase.from('transactions').insert(txPayload).select().single()
-          if (tx?.id) await supabase.from('lend_borrow').update({ linked_transaction_id: tx.id }).eq('id', created.id).eq('user_id', user.id)
-        }
-
-        // Side-effect: scholarship marked as received with an account → income transaction
-        if (table === 'scholarships' && created?.id && payload.status === 'received' && payload.received_to_account_id) {
-          const now = new Date()
-          const txPayload = { user_id: user.id, account_id: payload.received_to_account_id, amount: Number(payload.total_amount), type: 'income', description: `${payload.name} received`, date: payload.received_date || now.toISOString().slice(0, 10), time: now.toTimeString().slice(0, 5), linked_module: 'scholarship', linked_module_id: created.id, notes: payload.notes || null }
-          const { data: tx } = await supabase.from('transactions').insert(txPayload).select().single()
-          if (tx?.id) await supabase.from('scholarships').update({ linked_transaction_id: tx.id }).eq('id', created.id).eq('user_id', user.id)
         }
 
         return cors(NextResponse.json(created))
@@ -869,28 +710,6 @@ async function handleRoute(request, { params }) {
           // Reverse the lend/borrow repayment this transaction had recorded
           if (row?.linked_module === 'lend' && row.linked_module_id) {
             await reverseLendRepayment(supabase, user.id, id, row.linked_module_id, row.amount)
-          }
-        }
-        // Deleting a holding → refund cost back to portfolio cash
-        if (table === 'holdings') {
-          const { data: h } = await supabase.from('holdings').select('*').eq('id', id).eq('user_id', user.id).maybeSingle()
-          if (h) {
-            const { data: p } = await supabase.from('portfolios').select('cash_balance').eq('id', h.portfolio_id).eq('user_id', user.id).maybeSingle()
-            if (p) await supabase.from('portfolios').update({ cash_balance: Number(p.cash_balance || 0) + Number(h.qty) * Number(h.avg_buy_price) }).eq('id', h.portfolio_id).eq('user_id', user.id)
-          }
-        }
-        // Deleting a lend_borrow → remove linked transaction (bank/cash balance restores
-        // automatically via the DB trigger; a card's outstanding isn't trigger-managed, so
-        // that has to be reversed by hand here first).
-        if (table === 'lend_borrow') {
-          const { data: lb } = await supabase.from('lend_borrow').select('linked_transaction_id').eq('id', id).eq('user_id', user.id).maybeSingle()
-          if (lb?.linked_transaction_id) {
-            const { data: linkedTx } = await supabase.from('transactions').select('linked_module, linked_module_id, amount').eq('id', lb.linked_transaction_id).eq('user_id', user.id).maybeSingle()
-            if (linkedTx?.linked_module === 'credit_card' && linkedTx.linked_module_id) {
-              const { data: card } = await supabase.from('credit_cards').select('current_outstanding').eq('id', linkedTx.linked_module_id).eq('user_id', user.id).maybeSingle()
-              if (card) await supabase.from('credit_cards').update({ current_outstanding: Math.max(0, Number(card.current_outstanding || 0) - Number(linkedTx.amount)) }).eq('id', linkedTx.linked_module_id).eq('user_id', user.id)
-            }
-            await supabase.from('transactions').delete().eq('id', lb.linked_transaction_id).eq('user_id', user.id)
           }
         }
         const { error } = await supabase.from(table).delete().eq('id', id).eq('user_id', user.id)

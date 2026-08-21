@@ -1,0 +1,1 @@
+ALTER TABLE "profiles" ADD COLUMN "block_insufficient_funds" boolean DEFAULT true NOT NULL;

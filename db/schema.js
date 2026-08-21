@@ -122,8 +122,11 @@ export const portfolios = pgTable('portfolios', {
   broker: text('broker').notNull().default('other'),
   dematAccountId: uuid('demat_account_id').references(() => accounts.id, { onDelete: 'set null' }),
   cashBalance: numeric('cash_balance', { precision: 14, scale: 2 }).notNull().default('0'),
+  color: text('color'),
+  kiteLinked: boolean('kite_linked').notNull().default(false),
+  lastKiteSyncAt: timestamp('last_kite_sync_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [index('portfolios_user_id_idx').on(t.userId)])
+}, (t) => [check('portfolios_cash_balance_check', sql`${t.cashBalance} >= 0`), index('portfolios_user_id_idx').on(t.userId)])
 
 export const holdings = pgTable('holdings', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -136,12 +139,19 @@ export const holdings = pgTable('holdings', {
   avgBuyPrice: numeric('avg_buy_price', { precision: 14, scale: 2 }).notNull().default('0'),
   currentPrice: numeric('current_price', { precision: 14, scale: 2 }).notNull().default('0'),
   lastPriceUpdatedAt: timestamp('last_price_updated_at', { withTimezone: true }),
+  source: text('source').notNull().default('manual'),
+  kiteInstrumentToken: text('kite_instrument_token'),
+  assetType: text('asset_type').notNull().default('equity'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [index('holdings_user_id_idx').on(t.userId), index('holdings_portfolio_idx').on(t.portfolioId)])
+}, (t) => [check('holdings_source_check', sql`${t.source} in ('manual','kite','import')`), check('holdings_asset_type_check', sql`${t.assetType} in ('equity','gold')`), index('holdings_user_id_idx').on(t.userId), index('holdings_portfolio_idx').on(t.portfolioId)])
 
 export const sips = pgTable('sips', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
+  // Nullable — plenty of SIPs won't belong to any portfolio. Kite-synced rows get this stamped
+  // automatically to whichever portfolio is currently kite_linked; manual ones can optionally
+  // pick one too. Purely a display/grouping label — never affects a portfolio's cash_balance.
+  portfolioId: uuid('portfolio_id').references(() => portfolios.id, { onDelete: 'set null' }),
   fundName: text('fund_name').notNull(),
   folioNumber: text('folio_number'),
   monthlyAmount: numeric('monthly_amount', { precision: 14, scale: 2 }).notNull().default('0'),
@@ -149,8 +159,63 @@ export const sips = pgTable('sips', {
   unitsHeld: numeric('units_held', { precision: 18, scale: 4 }).notNull().default('0'),
   nav: numeric('nav', { precision: 14, scale: 4 }).notNull().default('0'),
   currentValue: numeric('current_value', { precision: 14, scale: 2 }).notNull().default('0'),
+  averagePrice: numeric('average_price', { precision: 14, scale: 4 }),
+  source: text('source').notNull().default('manual'),
+  lastSyncedAt: timestamp('last_synced_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [index('sips_user_id_idx').on(t.userId)])
+}, (t) => [check('sips_source_check', sql`${t.source} in ('manual','kite')`), index('sips_user_id_idx').on(t.userId)])
+
+// For assets with no exchange/live price at all — physical gold, silver, land, and anything
+// else — where "current value" can only ever be a projection: purchase_value compounded by
+// expectedCagrPct from purchaseDate, optionally rebased onto a manually-entered real-world
+// correction (lastKnownValue/lastKnownValueDate) when the user actually finds out a truer
+// number (a revaluation, today's gold rate, etc.). purchaseValue itself never changes — it's
+// always the true cost basis for P&L, independent of that rebasing.
+export const otherInvestments = pgTable('other_investments', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  portfolioId: uuid('portfolio_id').notNull().references(() => portfolios.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  category: text('category').notNull().default('other'),
+  purchaseValue: numeric('purchase_value', { precision: 14, scale: 2 }).notNull().default('0'),
+  purchaseDate: date('purchase_date').notNull().defaultNow(),
+  expectedCagrPct: numeric('expected_cagr_pct', { precision: 6, scale: 2 }).notNull().default('0'),
+  lastKnownValue: numeric('last_known_value', { precision: 14, scale: 2 }),
+  lastKnownValueDate: date('last_known_value_date'),
+  // Bond-specific — nullable, only populated when category = 'bond'. A bond's value isn't a CAGR
+  // projection like gold/silver/land: it's a known contract, so currentValueOf() straight-line
+  // accretes from purchaseValue up to faceValue between purchaseDate and maturityDate instead of
+  // compounding expectedCagrPct (which stays unused/0 for bond rows).
+  faceValue: numeric('face_value', { precision: 14, scale: 2 }),
+  couponRatePct: numeric('coupon_rate_pct', { precision: 6, scale: 2 }),
+  maturityDate: date('maturity_date'),
+  interestFrequency: text('interest_frequency'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  check('other_investments_category_check', sql`${t.category} in ('gold','silver','land','bond','other')`),
+  check('other_investments_interest_frequency_check', sql`${t.interestFrequency} is null or ${t.interestFrequency} in ('annual','semi_annual','quarterly','monthly','cumulative')`),
+  index('other_investments_user_id_idx').on(t.userId),
+  index('other_investments_portfolio_idx').on(t.portfolioId),
+])
+
+export const kiteOrders = pgTable('kite_orders', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
+  kiteOrderId: text('kite_order_id').notNull(),
+  segment: text('segment').notNull(),
+  tradingsymbol: text('tradingsymbol').notNull(),
+  exchange: text('exchange'),
+  transactionType: text('transaction_type').notNull(),
+  quantity: numeric('quantity', { precision: 18, scale: 4 }),
+  price: numeric('price', { precision: 14, scale: 4 }),
+  averagePrice: numeric('average_price', { precision: 14, scale: 4 }),
+  status: text('status'),
+  orderTimestamp: timestamp('order_timestamp', { withTimezone: true }),
+  fund: text('fund'),
+  folio: text('folio'),
+  syncedAt: timestamp('synced_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [check('kite_orders_segment_check', sql`${t.segment} in ('equity','mf')`), unique('kite_orders_user_order_unique').on(t.userId, t.kiteOrderId), index('kite_orders_user_idx').on(t.userId)])
 
 export const loans = pgTable('loans', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -210,6 +275,23 @@ export const profiles = pgTable('profiles', {
   currency: text('currency').notNull().default('INR'),
   kiteAccessToken: text('kite_access_token'),
   kiteAccessTokenAt: timestamp('kite_access_token_at', { withTimezone: true }),
+  // Set by the sync services themselves on every attempt (regardless of whether it produced
+  // any rows) — MF/orders are user-level, not tied to a portfolio, so unlike equity holdings
+  // (which key staleness off the linked portfolio's own last_kite_sync_at) they need their own
+  // clock here rather than one derived from row data, or a user with genuinely zero MF holdings
+  // would get re-fetched on every single app action forever (nothing to anchor "already tried").
+  kiteMfSyncedAt: timestamp('kite_mf_synced_at', { withTimezone: true }),
+  kiteOrdersSyncedAt: timestamp('kite_orders_synced_at', { withTimezone: true }),
+  // Set on any sync failure (holdings/MF/orders — any one failing means the token is bad),
+  // cleared on success or a fresh /kite/callback login. This is what "is Kite actually broken"
+  // means — kite_access_token/kite_access_token_at alone only prove a token exists and is
+  // recent, not that it still works (e.g. after swapping which Kite app's key/secret is
+  // configured, the old token looks perfectly fresh but every real call 403s).
+  kiteLastError: text('kite_last_error'),
+  // Default behavior when a bank/cash/debit-card transaction would exceed the account's
+  // balance: true = block it outright, false = allow it through a "confirm anyway" prompt.
+  // Credit cards have no equivalent toggle — going over the limit is always blocked.
+  blockInsufficientFunds: boolean('block_insufficient_funds').notNull().default(true),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 

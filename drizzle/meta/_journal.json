@@ -36,6 +36,62 @@
       "when": 1787052582711,
       "tag": "0004_small_black_queen",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1787131131016,
+      "tag": "0005_dusty_wolfpack",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1787204656243,
+      "tag": "0006_fancy_domino",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1787208996599,
+      "tag": "0007_natural_ben_parker",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1787211538425,
+      "tag": "0008_mute_matthew_murdock",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1787216066179,
+      "tag": "0009_familiar_selene",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1787219828139,
+      "tag": "0010_wealthy_franklin_richards",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1787313466180,
+      "tag": "0011_serious_tarantula",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1787325599874,
+      "tag": "0012_fancy_ronan",
+      "breakpoints": true
     }
   ]
 }
