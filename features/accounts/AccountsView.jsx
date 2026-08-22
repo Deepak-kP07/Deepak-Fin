@@ -7,7 +7,7 @@ import { StatCard } from '@/components/shared/StatCard'
 import { money } from '@/lib/format'
 import { AccountDetailView } from '@/features/accounts/AccountDetailView'
 
-export function AccountsView({ data, onAdd, onEdit, onDelete, onDeleteTx, showMoney, onToggleMoney }) {
+export function AccountsView({ data, onAdd, onEdit, onDelete, onDeleteTx, onAddTransaction, showMoney, onToggleMoney }) {
   const { accounts, transactions, categories } = data
   // Debit cards aren't a separate balance — they draw from their linked bank account, so they
   // never get their own tile here; the account they're linked to is where their card face shows.
@@ -28,6 +28,7 @@ export function AccountsView({ data, onAdd, onEdit, onDelete, onDeleteTx, showMo
         onEditCard={onEdit}
         onDelete={(a) => { onDelete(a); setSelectedAccountId(null) }}
         onDeleteTx={onDeleteTx}
+        onAddTransaction={onAddTransaction}
         showMoney={showMoney}
         onToggleMoney={onToggleMoney}
       />

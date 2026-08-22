@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { ArrowDownRight, ArrowUpRight, Download, Eye, EyeOff, Layers, Link2, PiggyBank, Pencil, Plus, RefreshCw, Sparkles, Target, Trash2, TrendingUp, Wallet } from 'lucide-react'
+import { ArrowDownRight, ArrowUpRight, Eye, EyeOff, Layers, Link2, PiggyBank, Pencil, Plus, RefreshCw, Sparkles, Target, Trash2, TrendingUp, Upload, Wallet } from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { StatCard } from '@/components/shared/StatCard'
 import { Select } from '@/components/shared/Select'
@@ -158,7 +158,7 @@ export function InvestmentsView({
             disabled={portfolios.length === 0}
             title="Export every portfolio, holding, SIP, and other investment as one CSV"
             className="flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-white/5 disabled:opacity-50"
-          ><Download size={14} />Export</button>
+          ><Upload size={14} />Export</button>
           <button onClick={onAddPortfolio} className="rounded-xl border border-white/10 px-4 py-2.5 text-sm text-slate-300 hover:bg-white/5">New portfolio</button>
           <button onClick={() => onAddHolding()} disabled={portfolios.length === 0} title={portfolios.length === 0 ? 'Create a portfolio first' : undefined} className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 px-4 py-2.5 text-sm font-semibold text-[#07101c] disabled:opacity-50"><Plus size={15} />Add holding</button>
           <button onClick={onToggleMoney} className="rounded-xl border border-white/10 p-2.5 text-slate-400 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>

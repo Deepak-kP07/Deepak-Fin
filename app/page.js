@@ -53,8 +53,10 @@ import { CreditCardsView } from '@/features/credit-cards/CreditCardsView'
 import { ScholarshipForm } from '@/features/scholarships/ScholarshipForm'
 import { ScholarshipPayForm } from '@/features/scholarships/ScholarshipPayForm'
 import { ScholarshipsView } from '@/features/scholarships/ScholarshipsView'
-import { ZopkitForm } from '@/features/zopkit/ZopkitForm'
-import { ZopkitView } from '@/features/zopkit/ZopkitView'
+import { MoneyProfileForm } from '@/features/familyCompany/MoneyProfileForm'
+import { MoneyProfileEntryForm } from '@/features/familyCompany/MoneyProfileEntryForm'
+import { MoneyProfileBulkImport } from '@/features/familyCompany/MoneyProfileBulkImport'
+import { FamilyCompanyView } from '@/features/familyCompany/FamilyCompanyView'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import {
@@ -63,23 +65,25 @@ import {
 import {
   ArrowDownRight, ArrowLeftRight, ArrowUpDown, ArrowUpRight, BarChart3, Briefcase, Calendar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock, CreditCard,
   Download, Eye, EyeOff, FileText, Heart, History, Landmark, LayoutDashboard, LineChart, ListChecks, LogOut, Menu, MoreVertical, Mountain, Paperclip, PieChart as PieChartIcon, PiggyBank, Plus,
-  RefreshCw, Repeat, Rocket, Search, ShieldCheck, Sparkles, Star, Tag, Target, TrendingDown, TrendingUp, Trash2, Pencil,
+  RefreshCw, Repeat, Search, ShieldCheck, Sparkles, Star, Tag, Target, TrendingDown, TrendingUp, Trash2, Pencil, Users,
   Wallet, X, Zap,
 } from 'lucide-react'
 
 /* ---------------- Transaction Form ---------------- */
-function TransactionForm({ open, onClose, onSaved, editing, accounts, categories, creditCards = [], lendBorrow = [], loans = [], onAddAccount, onAddCategory, toast, profile }) {
+function TransactionForm({ open, onClose, onSaved, editing, accounts, categories, creditCards = [], lendBorrow = [], loans = [], onAddAccount, onAddCategory, toast, profile, defaultAccountId = '' }) {
   const now = todayISO()
   const nowTime = new Date().toTimeString().slice(0, 5)
   const initial = useMemo(() => {
     if (editing) return { ...editing, amount: String(editing.amount), time: editing.time?.slice(0, 5) || nowTime, to_account_id: '', account_id: editing.linked_module === 'credit_card' ? `cc:${editing.linked_module_id}` : (editing.account_id || ''), repay_value: editing.linked_module === 'lend' ? `lend:${editing.linked_module_id}` : '' }
-    // No pre-filled default here on purpose — silently defaulting to whichever account happens
-    // to be first let transactions land on the wrong account without anyone noticing (e.g. an
-    // income entry meant for a cash account quietly going to a bank account instead). Leaving
-    // it blank forces an explicit, conscious choice every time, and pairs with `required` on
-    // the Select below actually blocking submission until one is picked.
-    return { type: 'expense', amount: '', description: '', date: now, time: nowTime, account_id: '', to_account_id: '', category_id: '', notes: '', linked_module: '', linked_module_id: '', repay_value: '' }
-  }, [editing, open])
+    // No blind pre-filled default here on purpose — silently defaulting to whichever account
+    // happens to be first let transactions land on the wrong account without anyone noticing
+    // (e.g. an income entry meant for a cash account quietly going to a bank account instead).
+    // defaultAccountId is the one exception: it's only ever set when this form was opened FROM
+    // that specific account's own page (see AccountDetailView's "+ Add transaction"), so the
+    // default is a conscious, contextual one rather than an arbitrary "first in list" guess —
+    // and it's still just a starting value, freely changeable before submitting.
+    return { type: 'expense', amount: '', description: '', date: now, time: nowTime, account_id: defaultAccountId || '', to_account_id: '', category_id: '', notes: '', linked_module: '', linked_module_id: '', repay_value: '' }
+  }, [editing, open, defaultAccountId])
   const [form, setForm] = useState(initial)
   // 'category' = normal spending/income category selected; 'repayment' = this transaction is
   // settling a loan or a lend/borrow debt instead, and picks a target from that list.
@@ -1339,7 +1343,7 @@ function InsightsView({ data }) {
 function Shell({ user, onLogout }) {
   const [view, setView] = useState('dashboard')
   const [showMoney, setShowMoney] = useState(true)
-  const [data, setData] = useState({ accounts: [], categories: [], transactions: [], budgets: [], portfolios: [], holdings: [], sips: [], kite_orders: [], loans: [], loan_payments: [], bucket_list: [], lend_borrow: [], lend_repayments: [], credit_cards: [], credit_card_transactions: [], scholarships: [], scholarship_payments: [], zopkit_transactions: [], money_rules: [], recurring_transactions: [], profile: null })
+  const [data, setData] = useState({ accounts: [], categories: [], transactions: [], budgets: [], portfolios: [], holdings: [], sips: [], other_investments: [], kite_orders: [], loans: [], loan_payments: [], bucket_list: [], lend_borrow: [], lend_repayments: [], credit_cards: [], credit_card_transactions: [], scholarships: [], scholarship_payments: [], money_rules: [], recurring_transactions: [], money_profiles: [], money_profile_entries: [], profile: null })
   const [loading, setLoading] = useState(true)
 
   const toast = useToast()
@@ -1348,6 +1352,7 @@ function Shell({ user, onLogout }) {
 
   const [txFormOpen, setTxFormOpen] = useState(false)
   const [txEditing, setTxEditing] = useState(null)
+  const [txDefaultAccountId, setTxDefaultAccountId] = useState('')
   const [accFormOpen, setAccFormOpen] = useState(false)
   const [accEditing, setAccEditing] = useState(null)
   const [catFormOpen, setCatFormOpen] = useState(false)
@@ -1392,11 +1397,16 @@ function Shell({ user, onLogout }) {
   const [scholarshipPayTarget, setScholarshipPayTarget] = useState(null)
   const [pricesLoading, setPricesLoading] = useState(false)
   const [kiteSyncBusy, setKiteSyncBusy] = useState(false)
-  const [zopkitFormOpen, setZopkitFormOpen] = useState(false)
-  const [zopkitEditing, setZopkitEditing] = useState(null)
   const [recurringManagerOpen, setRecurringManagerOpen] = useState(false)
   const [recurringFormOpen, setRecurringFormOpen] = useState(false)
   const [recurringEditing, setRecurringEditing] = useState(null)
+  const [moneyProfileFormOpen, setMoneyProfileFormOpen] = useState(false)
+  const [moneyProfileEditing, setMoneyProfileEditing] = useState(null)
+  const [moneyProfileEntryFormOpen, setMoneyProfileEntryFormOpen] = useState(false)
+  const [moneyProfileEntryEditing, setMoneyProfileEntryEditing] = useState(null)
+  const [moneyProfileEntryProfileId, setMoneyProfileEntryProfileId] = useState(null)
+  const [moneyProfileBulkImportOpen, setMoneyProfileBulkImportOpen] = useState(false)
+  const [moneyProfileBulkImportProfile, setMoneyProfileBulkImportProfile] = useState(null)
 
   const refresh = async () => {
     try {
@@ -1410,8 +1420,9 @@ function Shell({ user, onLogout }) {
         lend_borrow: result.lend_borrow || [], lend_repayments: result.lend_repayments || [],
         credit_cards: result.credit_cards || [], credit_card_transactions: result.credit_card_transactions || [],
         scholarships: result.scholarships || [], scholarship_payments: result.scholarship_payments || [],
-        zopkit_transactions: result.zopkit_transactions || [], money_rules: result.money_rules || [],
+        money_rules: result.money_rules || [],
         recurring_transactions: result.recurring_transactions || [],
+        money_profiles: result.money_profiles || [], money_profile_entries: result.money_profile_entries || [],
         profile: result.profile || null,
       })
     } catch (e) {
@@ -1420,8 +1431,8 @@ function Shell({ user, onLogout }) {
   }
   useEffect(() => { refresh() }, [])
 
-  const openTxForm = (t = null) => { setTxEditing(t); setTxFormOpen(true) }
-  const closeTxForm = () => { setTxFormOpen(false); setTxEditing(null) }
+  const openTxForm = (t = null, defaultAccountId = '') => { setTxEditing(t); setTxDefaultAccountId(defaultAccountId); setTxFormOpen(true) }
+  const closeTxForm = () => { setTxFormOpen(false); setTxEditing(null); setTxDefaultAccountId('') }
   const onTxSaved = async () => { closeTxForm(); await refresh() }
 
   const openAccForm = (a = null) => { setAccEditing(a); setAccFormOpen(true) }
@@ -1629,14 +1640,35 @@ function Shell({ user, onLogout }) {
     } catch (e) { toast.push('Price fetch failed', 'error') } finally { setPricesLoading(false) }
   }
 
-  // Zopkit
-  const openZopkitForm = (t = null) => { setZopkitEditing(t); setZopkitFormOpen(true) }
-  const closeZopkitForm = () => { setZopkitFormOpen(false); setZopkitEditing(null) }
-  const onZopkitSaved = async () => { closeZopkitForm(); await refresh() }
-  const deleteZopkit = async (t) => {
-    if (!(await confirm.ask('Delete this Zopkit entry?'))) return
-    const response = await fetch(`/api/finance/zopkit_transactions/${t.id}`, { method: 'DELETE' })
-    if (response.ok) { toast.push('Deleted'); await refresh() } else { toast.push('Delete failed', 'error') }
+  // Family / Company
+  const openMoneyProfileForm = (p = null) => { setMoneyProfileEditing(p); setMoneyProfileFormOpen(true) }
+  const closeMoneyProfileForm = () => { setMoneyProfileFormOpen(false); setMoneyProfileEditing(null) }
+  const onMoneyProfileSaved = async () => { closeMoneyProfileForm(); await refresh() }
+  const deleteMoneyProfile = async (p) => {
+    if (!(await confirm.ask(`Delete profile "${p.name}"? Its entries will be removed too. Any transactions already mirrored into your accounts (for a linked profile) are left as-is — they really happened.`))) return
+    const response = await fetch(`/api/finance/money_profiles/${p.id}`, { method: 'DELETE' })
+    if (response.ok) { toast.push('Profile deleted'); await refresh() } else { toast.push('Delete failed', 'error') }
+  }
+  const openMoneyProfileEntryForm = (profileId) => { setMoneyProfileEntryEditing(null); setMoneyProfileEntryProfileId(profileId); setMoneyProfileEntryFormOpen(true) }
+  const openMoneyProfileEntryEdit = (e) => { setMoneyProfileEntryEditing(e); setMoneyProfileEntryProfileId(e.profile_id); setMoneyProfileEntryFormOpen(true) }
+  const closeMoneyProfileEntryForm = () => { setMoneyProfileEntryFormOpen(false); setMoneyProfileEntryEditing(null) }
+  const onMoneyProfileEntrySaved = async () => { closeMoneyProfileEntryForm(); await refresh() }
+  const deleteMoneyProfileEntry = async (e) => {
+    if (!(await confirm.ask(`Delete this entry? ${e.description}`))) return
+    const response = await fetch(`/api/finance/money_profile_entries/${e.id}`, { method: 'DELETE' })
+    if (response.ok) { toast.push('Entry deleted'); await refresh() } else { toast.push('Delete failed', 'error') }
+  }
+  const openMoneyProfileBulkImport = (p) => { setMoneyProfileBulkImportProfile(p); setMoneyProfileBulkImportOpen(true) }
+  const closeMoneyProfileBulkImport = () => { setMoneyProfileBulkImportOpen(false); setMoneyProfileBulkImportProfile(null) }
+  const onMoneyProfileBulkImported = async () => { closeMoneyProfileBulkImport(); await refresh() }
+  const toggleMoneyProfileStatus = async (p) => {
+    const nextStatus = p.status === 'closed' ? 'active' : 'closed'
+    const response = await fetch(`/api/finance/money_profiles/${p.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: nextStatus }) })
+    if (response.ok) { toast.push(nextStatus === 'closed' ? 'Profile closed' : 'Profile reactivated'); await refresh() } else { toast.push('Update failed', 'error') }
+  }
+  const updateMoneyProfileCategories = async (p, categories) => {
+    const response = await fetch(`/api/finance/money_profiles/${p.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ categories }) })
+    if (response.ok) await refresh(); else toast.push('Update failed', 'error')
   }
 
   // Money rules
@@ -1713,11 +1745,11 @@ function Shell({ user, onLogout }) {
     { key: 'cards', label: 'Credit cards', icon: CreditCard },
     { key: 'investments', label: 'Investments', icon: TrendingUp },
     { key: 'loans', label: 'Loans', icon: Briefcase },
+    { key: 'family_company', label: 'Family / Company', icon: Users },
     { key: 'lend', label: 'Lend / Borrow', icon: Heart },
     { key: 'scholarships', label: 'Scholarships', icon: ShieldCheck },
     { key: 'budgets', label: 'Budgets', icon: Target },
     { key: 'bucket', label: 'Bucket list', icon: Mountain },
-    { key: 'zopkit', label: 'Zopkit', icon: Rocket },
     { key: 'rules', label: 'Money rules', icon: Star },
     { key: 'insights', label: 'Insights', icon: LineChart },
   ]
@@ -1783,16 +1815,16 @@ function Shell({ user, onLogout }) {
             <div className={fitScreen ? 'min-h-0 flex-1 lg:overflow-y-auto' : ''}>
               {view === 'dashboard' && <DashboardView data={data} showMoney={showMoney} onOpenTxForm={() => openTxForm()} setView={setView} />}
               {view === 'transactions' && <TransactionsView data={data} onOpenTxForm={() => openTxForm()} onEditTx={openTxForm} onDeleteTx={deleteTx} onImport={() => setCsvOpen(true)} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onOpenRecurring={openRecurringManager} />}
-              {view === 'accounts' && <AccountsView data={data} onAdd={() => openAccForm()} onEdit={openAccForm} onDelete={deleteAccount} onDeleteTx={deleteTx} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
+              {view === 'accounts' && <AccountsView data={data} onAdd={() => openAccForm()} onEdit={openAccForm} onDelete={deleteAccount} onDeleteTx={deleteTx} onAddTransaction={(accountId) => openTxForm(null, accountId)} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'categories' && <CategoriesView data={data} onAdd={() => openCatForm()} onEdit={openCatForm} onDelete={deleteCategory} />}
               {view === 'budgets' && <BudgetsView data={data} onAdd={() => openBudgetForm()} onEdit={openBudgetForm} onDelete={deleteBudget} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'investments' && <InvestmentsView data={data} onAddPortfolio={() => openPortfolioForm()} onEditPortfolio={openPortfolioForm} onDeletePortfolio={deletePortfolio} onAddHolding={openHoldingForm} onBulkImport={openBulkImport} onEditHolding={openHoldingEdit} onDeleteHolding={deleteHolding} onRefreshRowPrice={onRefreshRowPrice} onManualPriceEntry={onManualPriceEntry} onRefreshAll={refreshAllPrices} pricesLoading={pricesLoading} onAddFunds={openFundsForm} onWithdrawFunds={openWithdrawForm} onConnectKite={connectKite} onLinkKite={linkPortfolioKite} onUnlinkKite={unlinkPortfolioKite} onSyncKite={syncPortfolioKite} kiteSyncBusy={kiteSyncBusy} onAddSip={openSipForm} onEditSip={openSipForm} onDeleteSip={deleteSip} onSyncSipsKite={syncSipsKite} onAddOtherInvestment={openOtherInvestmentForm} onEditOtherInvestment={openOtherInvestmentEdit} onDeleteOtherInvestment={deleteOtherInvestment} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'cards' && <CreditCardsView data={data} onAdd={() => openCardForm()} onEdit={openCardForm} onDelete={deleteCard} onSpend={openCardSpend} onPay={openCardPay} onDeleteSpend={deleteCardSpend} onDeleteTx={deleteTx} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'scholarships' && <ScholarshipsView data={data} onAdd={() => openScholarshipForm()} onEdit={openScholarshipForm} onDelete={deleteScholarship} onPay={openScholarshipPay} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
-              {view === 'zopkit' && <ZopkitView data={data} onAdd={() => openZopkitForm()} onEdit={openZopkitForm} onDelete={deleteZopkit} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'rules' && <MoneyRulesView data={data} onAdd={addRule} onToggle={toggleRule} onEdit={() => {}} onDelete={deleteRule} />}
               {view === 'loans' && <LoansView data={data} onAdd={() => openLoanForm()} onEdit={openLoanForm} onDelete={deleteLoan} onPay={openLoanPay} onDeletePayment={deleteLoanPayment} onSync={syncLoanOutstanding} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'lend' && <LendBorrowView data={data} onAdd={() => openLendForm()} onEdit={openLendForm} onDelete={deleteLend} onDeleteTx={deleteTx} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
+              {view === 'family_company' && <FamilyCompanyView data={data} onAddProfile={() => openMoneyProfileForm()} onEditProfile={openMoneyProfileForm} onDeleteProfile={deleteMoneyProfile} onAddEntry={openMoneyProfileEntryForm} onEditEntry={openMoneyProfileEntryEdit} onDeleteEntry={deleteMoneyProfileEntry} onBulkImport={openMoneyProfileBulkImport} onToggleStatus={toggleMoneyProfileStatus} />}
               {view === 'bucket' && <BucketListView data={data} onAdd={() => openBucketForm()} onEdit={openBucketForm} onDelete={deleteBucket} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'insights' && <InsightsView data={data} />}
               {view === 'profile' && <ProfileView data={data} user={user} theme={theme} onThemeChange={onThemeChange} onSaveProfile={onSaveProfile} onAddCategory={() => openCatForm()} onEditCategory={openCatForm} onDeleteCategory={deleteCategory} onLogout={onLogout} />}
@@ -1818,7 +1850,7 @@ function Shell({ user, onLogout }) {
       </nav>
 
       {/* Modals */}
-      <TransactionForm open={txFormOpen} onClose={closeTxForm} onSaved={onTxSaved} editing={txEditing} accounts={data.accounts} categories={data.categories} creditCards={data.credit_cards} lendBorrow={data.lend_borrow} loans={data.loans} onAddAccount={() => { closeTxForm(); openAccForm() }} onAddCategory={() => openCatForm()} toast={toast} profile={data.profile} />
+      <TransactionForm open={txFormOpen} onClose={closeTxForm} onSaved={onTxSaved} editing={txEditing} accounts={data.accounts} categories={data.categories} creditCards={data.credit_cards} lendBorrow={data.lend_borrow} loans={data.loans} onAddAccount={() => { closeTxForm(); openAccForm() }} onAddCategory={() => openCatForm()} toast={toast} profile={data.profile} defaultAccountId={txDefaultAccountId} />
       <AccountForm open={accFormOpen} onClose={closeAccForm} onSaved={onAccSaved} editing={accEditing} accounts={data.accounts} toast={toast} />
       <CategoryForm open={catFormOpen} onClose={closeCatForm} onSaved={onCatSaved} editing={catEditing} toast={toast} />
       <RecurringManager open={recurringManagerOpen} onClose={closeRecurringManager} rules={data.recurring_transactions} onAdd={() => openRecurringForm()} onEdit={openRecurringForm} onToggle={toggleRecurring} onDelete={deleteRecurring} showMoney={showMoney} />
@@ -1841,7 +1873,9 @@ function Shell({ user, onLogout }) {
       <CardPayForm open={cardPayOpen} onClose={closeCardPay} onSaved={onCardPaid} card={cardPayTarget} accounts={data.accounts} toast={toast} />
       <ScholarshipForm open={scholarshipFormOpen} onClose={closeScholarshipForm} onSaved={onScholarshipSaved} editing={scholarshipEditing} accounts={data.accounts} toast={toast} />
       <ScholarshipPayForm open={scholarshipPayOpen} onClose={closeScholarshipPay} onSaved={onScholarshipPaid} scholarship={scholarshipPayTarget} accounts={data.accounts} toast={toast} />
-      <ZopkitForm open={zopkitFormOpen} onClose={closeZopkitForm} onSaved={onZopkitSaved} editing={zopkitEditing} toast={toast} />
+      <MoneyProfileForm open={moneyProfileFormOpen} onClose={closeMoneyProfileForm} onSaved={onMoneyProfileSaved} editing={moneyProfileEditing} accounts={data.accounts} toast={toast} />
+      <MoneyProfileEntryForm open={moneyProfileEntryFormOpen} onClose={closeMoneyProfileEntryForm} onSaved={onMoneyProfileEntrySaved} editing={moneyProfileEntryEditing} profile={data.money_profiles?.find((p) => p.id === moneyProfileEntryProfileId)} onUpdateCategories={updateMoneyProfileCategories} toast={toast} />
+      <MoneyProfileBulkImport open={moneyProfileBulkImportOpen} onClose={closeMoneyProfileBulkImport} onImported={onMoneyProfileBulkImported} profile={moneyProfileBulkImportProfile} toast={toast} />
     </div>
   )
 }

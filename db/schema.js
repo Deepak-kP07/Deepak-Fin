@@ -383,19 +383,49 @@ export const scholarshipPayments = pgTable('scholarship_payments', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [check('scholarship_payments_amount_check', sql`${t.amount} > 0`), index('scholarship_payments_scholarship_idx').on(t.scholarshipId), index('scholarship_payments_user_idx').on(t.userId)])
 
-export const zopkitTransactions = pgTable('zopkit_transactions', {
+export const moneyProfiles = pgTable('money_profiles', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
-  type: text('type').notNull().default('expense'),
-  amount: numeric('amount', { precision: 14, scale: 2 }).notNull(),
-  description: text('description').notNull(),
-  category: text('category'),
-  date: date('date').notNull().defaultNow(),
-  time: time('time'),
-  addedBy: text('added_by').notNull().default('self'),
+  name: text('name').notNull(),
+  profileType: text('profile_type').notNull().default('family'),
+  // Set only at creation; the entry-creation side-effect (lib/server/genericCrud.js) checks this
+  // to decide whether to mirror an entry into transactions — never re-toggled after the fact.
+  linkedAccountId: uuid('linked_account_id').references(() => accounts.id, { onDelete: 'set null' }),
+  openingBalance: numeric('opening_balance', { precision: 14, scale: 2 }).notNull().default('0'),
+  openingBalanceDate: date('opening_balance_date').notNull().defaultNow(),
+  // 'closed' blocks new entries (manual and bulk-import) until switched back to 'active' —
+  // existing entries stay fully visible/editable either way, only creation is gated.
+  status: text('status').notNull().default('active'),
+  // User-customizable per profile (add/remove in the UI) — seeded with a few sensible starters
+  // at creation so the entry form always has something to pick from immediately.
+  categories: text('categories').array().notNull().default(sql`ARRAY['Salary','Rent','Groceries','Utilities','Other']::text[]`),
   notes: text('notes'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [check('zopkit_transactions_amount_check', sql`${t.amount} > 0`), index('zopkit_user_idx').on(t.userId)])
+}, (t) => [
+  check('money_profiles_type_check', sql`${t.profileType} in ('family','company','other')`),
+  check('money_profiles_status_check', sql`${t.status} in ('active','closed')`),
+  index('money_profiles_user_idx').on(t.userId),
+])
+
+export const moneyProfileEntries = pgTable('money_profile_entries', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  profileId: uuid('profile_id').notNull().references(() => moneyProfiles.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
+  entryType: text('entry_type').notNull().default('expense'),
+  category: text('category'),
+  description: text('description').notNull(),
+  amount: numeric('amount', { precision: 14, scale: 2 }).notNull(),
+  date: date('date').notNull().defaultNow(),
+  paidParty: text('paid_party'),
+  notes: text('notes'),
+  linkedTransactionId: uuid('linked_transaction_id').references(() => transactions.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  check('money_profile_entries_type_check', sql`${t.entryType} in ('income','expense','capital')`),
+  check('money_profile_entries_amount_check', sql`${t.amount} > 0`),
+  index('money_profile_entries_profile_idx').on(t.profileId),
+  index('money_profile_entries_user_idx').on(t.userId),
+])
 
 export const moneyRules = pgTable('money_rules', {
   id: uuid('id').primaryKey().defaultRandom(),

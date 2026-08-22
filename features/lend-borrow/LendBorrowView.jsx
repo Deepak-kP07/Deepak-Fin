@@ -41,6 +41,7 @@ export function LendBorrowView({ data, onAdd, onEdit, onDelete, onDeleteTx, show
 
   const card = (l) => {
     const isLent = l.type === 'lent'
+    const isClosed = l.status === 'returned'
     const repaid = Number(l.amount_repaid || 0)
     const pending = Math.max(0, Number(l.amount) - repaid)
     const pct = Number(l.amount) > 0 ? Math.min(100, Math.round((repaid / Number(l.amount)) * 100)) : 0
@@ -48,27 +49,29 @@ export function LendBorrowView({ data, onAdd, onEdit, onDelete, onDeleteTx, show
     const acc = accounts.find((a) => a.id === l.from_account_id)
     // Lent = money flowing back to you (green, "+"). Borrowed = money flowing out of you
     // to settle the debt (rose, "-") — same progress-bar mechanic, opposite direction of cash.
+    // Fully settled ("returned") records mute to gray instead of the lent/borrowed accent —
+    // they're history at that point, not something still needing attention.
     return (
-      <div key={l.id} onClick={() => setSelectedId(l.id)} className={`cursor-pointer rounded-2xl border p-5 transition hover:bg-white/[.02] ${isLent ? 'border-emerald-400/10 bg-emerald-500/[.03]' : 'border-rose-400/10 bg-rose-500/[.03]'}`}>
+      <div key={l.id} onClick={() => setSelectedId(l.id)} className={`cursor-pointer rounded-2xl border p-5 transition ${isClosed ? 'border-white/5 bg-white/[.02] hover:bg-white/[.035]' : isLent ? 'border-emerald-400/10 bg-emerald-500/[.03] hover:bg-white/[.02]' : 'border-rose-400/10 bg-rose-500/[.03] hover:bg-white/[.02]'}`}>
         <div className="flex items-center gap-2">
           <div className="text-base font-semibold text-white">{l.person_name}</div>
-          <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-widest ${isLent ? 'bg-emerald-400/15 text-emerald-200' : 'bg-rose-400/15 text-rose-200'}`}>{isLent ? 'lent' : 'borrowed'}</span>
-          <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-widest ${l.status === 'returned' ? 'bg-emerald-400/15 text-emerald-200' : l.status === 'partial' ? 'bg-amber-400/15 text-amber-200' : 'bg-cyan-400/15 text-cyan-200'}`}>{l.status}</span>
+          <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-widest ${isClosed ? 'bg-slate-500/15 text-slate-400' : isLent ? 'bg-emerald-400/15 text-emerald-200' : 'bg-rose-400/15 text-rose-200'}`}>{isLent ? 'lent' : 'borrowed'}</span>
+          <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-widest ${isClosed ? 'bg-slate-500/15 text-slate-400' : l.status === 'partial' ? 'bg-amber-400/15 text-amber-200' : 'bg-cyan-400/15 text-cyan-200'}`}>{l.status}</span>
           {overdue && <span className="rounded-full bg-rose-400/15 px-2 py-0.5 text-[10px] uppercase tracking-widest text-rose-200">overdue</span>}
         </div>
         <div className="mt-1 text-xs text-slate-500">{l.reason || (isLent ? 'Lent' : 'Borrowed')} · {formatDate(l.date)}{acc ? ` · ${acc.name}` : ''}{l.due_date ? ` · due ${formatDate(l.due_date)}` : ''}</div>
         <div className="mt-4 flex items-baseline justify-between">
           <div>
             <div className="text-xs text-slate-500">{isLent ? 'They still owe you' : 'You still owe'}</div>
-            <div className="text-2xl font-semibold text-white">{showMoney ? money(pending) : '••••'}</div>
+            <div className={`text-2xl font-semibold ${isClosed ? 'text-slate-300' : 'text-white'}`}>{showMoney ? money(pending) : '••••'}</div>
           </div>
           <div className="text-right">
             <div className="text-xs text-slate-500">of {showMoney ? money(l.amount) : '••••'}</div>
-            <div className={`text-[11px] ${isLent ? 'text-emerald-300' : 'text-rose-300'}`}>{isLent ? '+' : '-'}{money(repaid)} {isLent ? 'repaid to you' : 'paid by you'}</div>
+            <div className={`text-[11px] ${isClosed ? 'text-slate-500' : isLent ? 'text-emerald-300' : 'text-rose-300'}`}>{isLent ? '+' : '-'}{money(repaid)} {isLent ? 'repaid to you' : 'paid by you'}</div>
           </div>
         </div>
         <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/5">
-          <div className={`h-full rounded-full transition-all ${isLent ? 'bg-emerald-400' : 'bg-rose-400'}`} style={{ width: `${pct}%` }} />
+          <div className={`h-full rounded-full transition-all ${isClosed ? 'bg-slate-500' : isLent ? 'bg-emerald-400' : 'bg-rose-400'}`} style={{ width: `${pct}%` }} />
         </div>
       </div>
     )

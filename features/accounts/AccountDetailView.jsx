@@ -1,22 +1,24 @@
 'use client'
 
 import { useState } from 'react'
-import { ArrowDownRight, ArrowLeftRight, ArrowUpRight, ChevronLeft, ChevronRight, Eye, EyeOff, Landmark, Pencil, Trash2, Wallet } from 'lucide-react'
+import { ArrowDownRight, ArrowLeftRight, ArrowUpRight, ChevronRight, Eye, EyeOff, Landmark, Pencil, Plus, Trash2, Wallet } from 'lucide-react'
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { BankCardFace } from '@/components/shared/BankCardFace'
 import { StatCard } from '@/components/shared/StatCard'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { NetBar } from '@/components/shared/NetBar'
-import { MONTH_NAMES, formatDateTime, money, monthName } from '@/lib/format'
+import { MonthCursor } from '@/components/shared/MonthCursor'
+import { formatDateTime, money, monthName } from '@/lib/format'
 
-export function AccountDetailView({ account, debitCard, transactions, categories, onBack, onEdit, onDelete, onEditCard, onDeleteTx, showMoney, onToggleMoney }) {
+export function AccountDetailView({ account, debitCard, transactions, categories, onBack, onEdit, onDelete, onEditCard, onDeleteTx, onAddTransaction, showMoney, onToggleMoney }) {
   const activity = transactions
     .filter((t) => t.account_id === account.id)
     .sort((a, b) => new Date(b.date) - new Date(a.date) || String(b.time || '').localeCompare(String(a.time || '')))
 
   const [monthCursor, setMonthCursor] = useState(() => { const d = new Date(); return { year: d.getFullYear(), month: d.getMonth() } })
-  const shiftMonth = (delta) => setMonthCursor((c) => { const d = new Date(c.year, c.month + delta, 1); return { year: d.getFullYear(), month: d.getMonth() } })
-  const monthActivity = activity.filter((a) => {
+  const [showAllMonths, setShowAllMonths] = useState(false)
+  const shiftMonth = (delta) => { setShowAllMonths(false); setMonthCursor((c) => { const d = new Date(c.year, c.month + delta, 1); return { year: d.getFullYear(), month: d.getMonth() } }) }
+  const monthActivity = showAllMonths ? activity : activity.filter((a) => {
     const d = new Date(a.date)
     return d.getFullYear() === monthCursor.year && d.getMonth() === monthCursor.month
   })
@@ -59,6 +61,7 @@ export function AccountDetailView({ account, debitCard, transactions, categories
           </div>
         )}
         <div className="flex flex-wrap gap-2">
+          <button onClick={() => onAddTransaction(account.id)} className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 px-4 py-2.5 text-sm font-semibold text-[#07101c]"><Plus size={15} />Add transaction</button>
           <button onClick={() => onEdit(account)} className="rounded-xl border border-white/10 p-2.5 text-slate-400 hover:bg-white/5 hover:text-white"><Pencil size={15} /></button>
           <button onClick={() => onDelete(account)} className="rounded-xl border border-white/10 p-2.5 text-rose-300/70 hover:bg-rose-300/10"><Trash2 size={15} /></button>
           <button onClick={onToggleMoney} className="rounded-xl border border-white/10 p-2.5 text-slate-400 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
@@ -98,14 +101,10 @@ export function AccountDetailView({ account, debitCard, transactions, categories
       <div className="rounded-2xl border border-white/10 bg-white/[.035]">
         <div className="flex items-center justify-between gap-3 border-b border-white/10 px-5 py-3">
           <div className="text-xs uppercase tracking-widest text-slate-500">Account activity · {monthActivity.length}</div>
-          <div className="flex items-center rounded-xl border border-white/10">
-            <button type="button" onClick={() => shiftMonth(-1)} className="rounded-l-xl p-2 text-slate-400 hover:bg-white/5 hover:text-white" title="Previous month"><ChevronLeft size={14} /></button>
-            <span className="w-9 text-center text-xs font-semibold uppercase tracking-wider text-slate-300" title={`${MONTH_NAMES[monthCursor.month]} ${monthCursor.year}`}>{MONTH_NAMES[monthCursor.month].slice(0, 3)}</span>
-            <button type="button" onClick={() => shiftMonth(1)} className="rounded-r-xl p-2 text-slate-400 hover:bg-white/5 hover:text-white" title="Next month"><ChevronRight size={14} /></button>
-          </div>
+          <MonthCursor cursor={monthCursor} onShift={shiftMonth} showAll={showAllMonths} onToggleAll={() => setShowAllMonths((v) => !v)} />
         </div>
         {monthActivity.length === 0 ? (
-          <EmptyState compact icon={ArrowDownRight} title="No activity this month" message="Transactions on this account will show up here." />
+          <EmptyState compact icon={ArrowDownRight} title={showAllMonths ? 'No activity yet' : 'No activity this month'} message="Transactions on this account will show up here." />
         ) : (
           <>
             <div className="hidden grid-cols-[1.4fr_.9fr_.6fr_.6fr_auto] gap-4 border-b border-white/10 px-5 py-2.5 text-[10px] uppercase tracking-widest text-slate-600 sm:grid">

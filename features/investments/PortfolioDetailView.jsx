@@ -1,13 +1,14 @@
 'use client'
 
 import { useState } from 'react'
-import { ArrowDownRight, ArrowUpRight, ChevronLeft, ChevronRight, Eye, EyeOff, Link2, Pencil, PiggyBank, RefreshCw, Target, Trash2, TrendingUp, Unlink, Wallet } from 'lucide-react'
+import { ArrowDownRight, ArrowUpRight, ChevronRight, Download, Eye, EyeOff, Link2, Pencil, PiggyBank, RefreshCw, Target, Trash2, TrendingUp, Unlink, Wallet } from 'lucide-react'
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { StatCard } from '@/components/shared/StatCard'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { NetBar } from '@/components/shared/NetBar'
+import { MonthCursor } from '@/components/shared/MonthCursor'
 import { currentValueOf, CATEGORY_BADGE_STYLE } from '@/lib/otherInvestments'
-import { MONTH_NAMES, formatDate, formatDateTime, money, money2, monthName, relativeTime } from '@/lib/format'
+import { formatDate, formatDateTime, money, money2, monthName, relativeTime } from '@/lib/format'
 
 export function PortfolioDetailView({
   portfolio, holdings, sips = [], otherInvestments = [], transactions, onBack, onEdit, onDelete, onAddFunds, onWithdrawFunds,
@@ -40,8 +41,9 @@ export function PortfolioDetailView({
     .sort((a, b) => new Date(b.date) - new Date(a.date) || String(b.time || '').localeCompare(String(a.time || '')))
 
   const [monthCursor, setMonthCursor] = useState(() => { const d = new Date(); return { year: d.getFullYear(), month: d.getMonth() } })
-  const shiftMonth = (delta) => setMonthCursor((c) => { const d = new Date(c.year, c.month + delta, 1); return { year: d.getFullYear(), month: d.getMonth() } })
-  const monthActivity = cashActivity.filter((a) => {
+  const [showAllMonths, setShowAllMonths] = useState(false)
+  const shiftMonth = (delta) => { setShowAllMonths(false); setMonthCursor((c) => { const d = new Date(c.year, c.month + delta, 1); return { year: d.getFullYear(), month: d.getMonth() } }) }
+  const monthActivity = showAllMonths ? cashActivity : cashActivity.filter((a) => {
     const d = new Date(a.date)
     return d.getFullYear() === monthCursor.year && d.getMonth() === monthCursor.month
   })
@@ -89,7 +91,7 @@ export function PortfolioDetailView({
               <button onClick={() => onAddFunds(portfolio)} className="rounded-xl bg-emerald-400/15 px-4 py-2.5 text-sm font-semibold text-emerald-200 hover:bg-emerald-400/25">+ Funds</button>
               <button onClick={() => onWithdrawFunds(portfolio)} disabled={cash <= 0} className="rounded-xl border border-white/10 px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-white/5 disabled:opacity-50">− Withdraw</button>
               <button onClick={() => onAddHolding(portfolio.id)} className="rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 px-4 py-2.5 text-sm font-semibold text-[#07101c]">+ Holding</button>
-              <button onClick={() => onBulkImport(portfolio)} className="rounded-xl border border-white/10 px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-white/5">Bulk import</button>
+              <button onClick={() => onBulkImport(portfolio)} className="flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-white/5"><Download size={14} />Bulk import</button>
               {kiteConnected && canLinkKite && holdings.length === 0 && (
                 <button onClick={() => onLinkKite(portfolio)} className="flex items-center gap-2 rounded-xl border border-cyan-300/30 px-4 py-2.5 text-sm font-medium text-cyan-200 hover:bg-cyan-400/10"><Link2 size={14} />Link to Kite</button>
               )}
@@ -296,14 +298,10 @@ export function PortfolioDetailView({
       <div className="rounded-2xl border border-white/10 bg-white/[.035]">
         <div className="flex items-center justify-between gap-3 border-b border-white/10 px-5 py-3">
           <div className="text-xs uppercase tracking-widest text-slate-500">Cash activity · {monthActivity.length}</div>
-          <div className="flex items-center rounded-xl border border-white/10">
-            <button type="button" onClick={() => shiftMonth(-1)} className="rounded-l-xl p-2 text-slate-400 hover:bg-white/5 hover:text-white" title="Previous month"><ChevronLeft size={14} /></button>
-            <span className="w-9 text-center text-xs font-semibold uppercase tracking-wider text-slate-300" title={`${MONTH_NAMES[monthCursor.month]} ${monthCursor.year}`}>{MONTH_NAMES[monthCursor.month].slice(0, 3)}</span>
-            <button type="button" onClick={() => shiftMonth(1)} className="rounded-r-xl p-2 text-slate-400 hover:bg-white/5 hover:text-white" title="Next month"><ChevronRight size={14} /></button>
-          </div>
+          <MonthCursor cursor={monthCursor} onShift={shiftMonth} showAll={showAllMonths} onToggleAll={() => setShowAllMonths((v) => !v)} />
         </div>
         {monthActivity.length === 0 ? (
-          <EmptyState compact icon={PiggyBank} title="No cash activity this month" message="Add or withdraw funds to see it here." />
+          <EmptyState compact icon={PiggyBank} title={showAllMonths ? 'No cash activity yet' : 'No cash activity this month'} message="Add or withdraw funds to see it here." />
         ) : (
           <>
             <div className="hidden grid-cols-[1.4fr_.9fr_.6fr_.6fr_auto] gap-4 border-b border-white/10 px-5 py-2.5 text-[10px] uppercase tracking-widest text-slate-600 sm:grid">

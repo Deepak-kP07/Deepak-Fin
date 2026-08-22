@@ -77,7 +77,7 @@ async function handleRoute(request, { params }) {
         const { data } = await applyOrder(supabase.from(table).select('*').eq('user_id', user.id), table)
         return data || []
       }
-      let [accounts, categories, transactions, budgets, portfolios, holdings, sips, other_investments, kite_orders, loans, loan_payments, bucket_list, lend_borrow, lend_repayments, credit_cards, credit_card_transactions, scholarships, scholarship_payments, zopkit_transactions, money_rules, recurring_transactions, profile] = await Promise.all([
+      let [accounts, categories, transactions, budgets, portfolios, holdings, sips, other_investments, kite_orders, loans, loan_payments, bucket_list, lend_borrow, lend_repayments, credit_cards, credit_card_transactions, scholarships, scholarship_payments, money_rules, recurring_transactions, money_profiles, money_profile_entries, profile] = await Promise.all([
         readAll('accounts'),
         readAll('categories'),
         readAll('transactions'),
@@ -96,9 +96,10 @@ async function handleRoute(request, { params }) {
         readAll('credit_card_transactions'),
         readAll('scholarships'),
         readAll('scholarship_payments'),
-        readAll('zopkit_transactions'),
         readAll('money_rules'),
         readAll('recurring_transactions'),
+        readAll('money_profiles'),
+        readAll('money_profile_entries'),
         supabase.from('profiles').select('*').eq('id', user.id).maybeSingle().then((r) => r.data),
       ])
       // Both of these are rare-path side effects (first-ever use of the app; a recurring rule
@@ -152,7 +153,7 @@ async function handleRoute(request, { params }) {
         // "did the last actual API call work" signal, set by the sync services themselves.
         profileSafe = { ...rest, kite_connected: !!kiteTokenFresh, kite_broken: !!profile.kite_last_error }
       }
-      return cors(NextResponse.json({ accounts, categories, transactions, budgets, portfolios, holdings, sips, other_investments, kite_orders, loans, loan_payments, bucket_list, lend_borrow, lend_repayments, credit_cards, credit_card_transactions, scholarships, scholarship_payments, zopkit_transactions, money_rules, recurring_transactions, profile: profileSafe }))
+      return cors(NextResponse.json({ accounts, categories, transactions, budgets, portfolios, holdings, sips, other_investments, kite_orders, loans, loan_payments, bucket_list, lend_borrow, lend_repayments, credit_cards, credit_card_transactions, scholarships, scholarship_payments, money_rules, recurring_transactions, money_profiles, money_profile_entries, profile: profileSafe }))
     }
 
     // ---- PRICES: Yahoo Finance fallback (public); Kite when creds set ----

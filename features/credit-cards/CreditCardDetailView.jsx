@@ -1,12 +1,13 @@
 'use client'
 
 import { useState } from 'react'
-import { ArrowDownRight, ArrowUpRight, ChevronLeft, ChevronRight, Eye, EyeOff, Pencil, Target, Trash2 } from 'lucide-react'
+import { ArrowDownRight, ArrowUpRight, ChevronRight, Eye, EyeOff, Pencil, Target, Trash2 } from 'lucide-react'
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { BankCardFace } from '@/components/shared/BankCardFace'
 import { StatCard } from '@/components/shared/StatCard'
 import { EmptyState } from '@/components/shared/EmptyState'
-import { MONTH_NAMES, formatDate, formatDateTime, money, monthName, ordinal } from '@/lib/format'
+import { MonthCursor } from '@/components/shared/MonthCursor'
+import { formatDate, formatDateTime, money, monthName, ordinal } from '@/lib/format'
 
 // Same billing-cycle math CreditCardFlip uses for its back face — repeated here because the
 // full detail page never flips, so it's the only place left that surfaces this once you're past
@@ -51,8 +52,9 @@ export function CreditCardDetailView({ card, cardTransactions, allTransactions, 
   const nd = nextBillDue(card)
 
   const [monthCursor, setMonthCursor] = useState(() => { const d = new Date(); return { year: d.getFullYear(), month: d.getMonth() } })
-  const shiftMonth = (delta) => setMonthCursor((c) => { const d = new Date(c.year, c.month + delta, 1); return { year: d.getFullYear(), month: d.getMonth() } })
-  const monthActivity = activity.filter((a) => {
+  const [showAllMonths, setShowAllMonths] = useState(false)
+  const shiftMonth = (delta) => { setShowAllMonths(false); setMonthCursor((c) => { const d = new Date(c.year, c.month + delta, 1); return { year: d.getFullYear(), month: d.getMonth() } }) }
+  const monthActivity = showAllMonths ? activity : activity.filter((a) => {
     const d = new Date(a.date)
     return d.getFullYear() === monthCursor.year && d.getMonth() === monthCursor.month
   })
@@ -132,14 +134,10 @@ export function CreditCardDetailView({ card, cardTransactions, allTransactions, 
       <div className="rounded-2xl border border-white/10 bg-white/[.035]">
         <div className="flex items-center justify-between gap-3 border-b border-white/10 px-5 py-3">
           <div className="text-xs uppercase tracking-widest text-slate-500">Card activity · {monthActivity.length}</div>
-          <div className="flex items-center rounded-xl border border-white/10">
-            <button type="button" onClick={() => shiftMonth(-1)} className="rounded-l-xl p-2 text-slate-400 hover:bg-white/5 hover:text-white" title="Previous month"><ChevronLeft size={14} /></button>
-            <span className="w-9 text-center text-xs font-semibold uppercase tracking-wider text-slate-300" title={`${MONTH_NAMES[monthCursor.month]} ${monthCursor.year}`}>{MONTH_NAMES[monthCursor.month].slice(0, 3)}</span>
-            <button type="button" onClick={() => shiftMonth(1)} className="rounded-r-xl p-2 text-slate-400 hover:bg-white/5 hover:text-white" title="Next month"><ChevronRight size={14} /></button>
-          </div>
+          <MonthCursor cursor={monthCursor} onShift={shiftMonth} showAll={showAllMonths} onToggleAll={() => setShowAllMonths((v) => !v)} />
         </div>
         {monthActivity.length === 0 ? (
-          <EmptyState compact icon={ArrowDownRight} title="No activity this month" message="Log a spend, or pay for something with this card, to see it here." cta="Log spend" onCta={() => onSpend(card)} />
+          <EmptyState compact icon={ArrowDownRight} title={showAllMonths ? 'No activity yet' : 'No activity this month'} message="Log a spend, or pay for something with this card, to see it here." cta="Log spend" onCta={() => onSpend(card)} />
         ) : (
           <>
             <div className="hidden grid-cols-[1.4fr_.9fr_.6fr_.6fr_auto] gap-4 border-b border-white/10 px-5 py-2.5 text-[10px] uppercase tracking-widest text-slate-600 sm:grid">
