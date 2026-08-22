@@ -292,6 +292,9 @@ export const profiles = pgTable('profiles', {
   // balance: true = block it outright, false = allow it through a "confirm anyway" prompt.
   // Credit cards have no equivalent toggle — going over the limit is always blocked.
   blockInsufficientFunds: boolean('block_insufficient_funds').notNull().default(true),
+  // Scholarships is an opt-in module — off by default, only shown in the nav once the user
+  // turns it on from their profile settings.
+  scholarshipsEnabled: boolean('scholarships_enabled').notNull().default(false),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
@@ -367,6 +370,8 @@ export const scholarships = pgTable('scholarships', {
   amountPaidToCollege: numeric('amount_paid_to_college', { precision: 14, scale: 2 }).notNull().default('0'),
   notes: text('notes'),
   linkedTransactionId: uuid('linked_transaction_id').references(() => transactions.id, { onDelete: 'set null' }),
+  attachmentPath: text('attachment_path'),
+  attachmentName: text('attachment_name'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index('scholarships_user_idx').on(t.userId)])
 
@@ -380,6 +385,8 @@ export const scholarshipPayments = pgTable('scholarship_payments', {
   accountId: uuid('account_id').references(() => accounts.id, { onDelete: 'set null' }),
   linkedTransactionId: uuid('linked_transaction_id').references(() => transactions.id, { onDelete: 'set null' }),
   notes: text('notes'),
+  attachmentPath: text('attachment_path'),
+  attachmentName: text('attachment_name'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [check('scholarship_payments_amount_check', sql`${t.amount} > 0`), index('scholarship_payments_scholarship_idx').on(t.scholarshipId), index('scholarship_payments_user_idx').on(t.userId)])
 

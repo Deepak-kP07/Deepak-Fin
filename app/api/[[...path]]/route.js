@@ -315,6 +315,27 @@ async function handleRoute(request, { params }) {
       return cors(NextResponse.json({ ok: true }))
     }
 
+    // ---- SCHOLARSHIP / SCHOLARSHIP PAYMENT attachment: signed URL for viewing, and delete ----
+    // Same shape as the transaction attachment route above, just parameterized by table.
+    const scholarshipAttachmentMatch = route.match(/^\/finance\/(scholarships|scholarship_payments)\/([^/]+)\/attachment$/)
+    if (scholarshipAttachmentMatch && (method === 'GET' || method === 'DELETE')) {
+      const user = await currentUser(supabase)
+      if (!user) return cors(NextResponse.json({ error: 'Not authenticated' }, { status: 401 }))
+      const [, table, recordId] = scholarshipAttachmentMatch
+      const { data: row } = await supabase.from(table).select('attachment_path').eq('id', recordId).eq('user_id', user.id).maybeSingle()
+      if (!row?.attachment_path) return cors(NextResponse.json({ error: 'No attachment' }, { status: 404 }))
+
+      if (method === 'GET') {
+        const { data: signed, error } = await supabase.storage.from('attachments').createSignedUrl(row.attachment_path, 300)
+        if (error) return cors(NextResponse.json({ error: error.message }, { status: 400 }))
+        return cors(NextResponse.json({ url: signed.signedUrl }))
+      }
+
+      await supabase.storage.from('attachments').remove([row.attachment_path])
+      await supabase.from(table).update({ attachment_path: null, attachment_name: null }).eq('id', recordId).eq('user_id', user.id)
+      return cors(NextResponse.json({ ok: true }))
+    }
+
     // ---- CREDIT CARD bill payment ----
     if (route.match(/^\/finance\/credit_cards\/([^/]+)\/pay_bill$/) && method === 'POST') {
       const user = await currentUser(supabase)

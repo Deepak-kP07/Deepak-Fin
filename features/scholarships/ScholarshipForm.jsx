@@ -13,11 +13,14 @@ export function ScholarshipForm({ open, onClose, onSaved, editing, accounts, toa
   const [busy, setBusy] = useState(false)
   useEffect(() => { setForm(initial) }, [editing, open])
   if (!open) return null
+  const linkedAccount = accounts.find((a) => a.id === form.received_to_account_id)
   const save = async (e) => {
     e.preventDefault(); setBusy(true)
     try {
       const endpoint = editing ? `/api/finance/scholarships/${editing.id}` : '/api/finance/scholarships'
-      const payload = { ...form, total_amount: Number(form.total_amount), received_date: form.received_date || null, due_date: form.due_date || null, received_to_account_id: form.received_to_account_id || null }
+      const payload = editing
+        ? { name: form.name, total_amount: Number(form.total_amount), academic_year: form.academic_year, source: form.source, status: form.status, received_date: form.received_date || null, due_date: form.due_date || null, notes: form.notes }
+        : { ...form, total_amount: Number(form.total_amount), received_date: form.received_date || null, due_date: form.due_date || null, received_to_account_id: form.received_to_account_id || null }
       const response = await fetch(endpoint, { method: editing ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || data.message || 'Could not save')
@@ -48,6 +51,7 @@ export function ScholarshipForm({ open, onClose, onSaved, editing, accounts, toa
             <Select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
               <option value="pending">Pending</option><option value="received">Received</option><option value="paid">Paid to college</option>
             </Select>
+            {form.status === 'paid' && <p className="mt-1.5 text-[11px] text-slate-500">Marks the full amount as paid to college right away. To log paid amounts one at a time (with dates and which account they left from), use the &quot;Pay to college&quot; button on the scholarship instead.</p>}
           </label>
           <label className="text-sm text-slate-300">Received date
             <DateInput value={form.received_date || ''} onChange={(e) => setForm({ ...form, received_date: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
@@ -55,12 +59,19 @@ export function ScholarshipForm({ open, onClose, onSaved, editing, accounts, toa
           <label className="text-sm text-slate-300">Due date (to college)
             <DateInput value={form.due_date || ''} onChange={(e) => setForm({ ...form, due_date: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
           </label>
-          <label className="text-sm text-slate-300 sm:col-span-2">Received into account (when marked received)
-            <Select value={form.received_to_account_id || ''} onChange={(e) => setForm({ ...form, received_to_account_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
-              <option value="">None</option>
-              {accounts.filter((a) => a.type !== 'debit_card').map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-            </Select>
-          </label>
+          {editing ? (
+            <div className="rounded-xl border border-white/10 bg-white/[.02] px-3 py-2.5 text-xs text-slate-400 sm:col-span-2">
+              {linkedAccount ? <>Linked to <span className="text-white">{linkedAccount.name}</span> — marking this received/paid posts a transaction on that account.</> : 'Not linked to a bank account — this scholarship stays only in this module.'} Linking can only be set when a scholarship is created, not changed afterward.
+            </div>
+          ) : (
+            <label className="text-sm text-slate-300 sm:col-span-2">Link to a bank account <span className="text-xs text-slate-500">(optional — can't be changed later)</span>
+              <Select value={form.received_to_account_id || ''} onChange={(e) => setForm({ ...form, received_to_account_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
+                <option value="">Don't link — keep this separate</option>
+                {accounts.filter((a) => a.type !== 'debit_card').map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </Select>
+              <p className="mt-1.5 text-[11px] text-slate-500">{form.received_to_account_id ? 'Marking this received (or paid) posts a transaction on this account, and stays in sync as you edit status/amount.' : "This scholarship won't show up anywhere outside this module."}</p>
+            </label>
+          )}
           <label className="text-sm text-slate-300 sm:col-span-2">Notes
             <input value={form.notes || ''} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
           </label>

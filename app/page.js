@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/browser'
+import { removeAttachment, uploadAttachment, viewAttachment } from '@/lib/attachments'
 import { calcEmi, daysBetween, projectSchedule, totalInterest } from '@/lib/amortization'
 import {
   MONTH_NAMES, addMonthsToDate, formatDate, formatDateTime, liveOutstanding, maskedMoney, money, money2,
@@ -250,18 +251,11 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
       if (!response.ok) throw new Error(data.error || data.message || 'Could not save')
 
       if (attachmentRemoved && editing?.attachment_path) {
-        await fetch(`/api/finance/transactions/${data.id}/attachment`, { method: 'DELETE' })
+        await removeAttachment(`/api/finance/transactions/${data.id}/attachment`)
       }
       if (attachmentFile) {
-        const supabase = createClient()
-        const { data: userData } = await supabase.auth.getUser()
-        const path = `${userData.user.id}/${data.id}/${Date.now()}-${attachmentFile.name}`
-        const { error: uploadError } = await supabase.storage.from('attachments').upload(path, attachmentFile, { upsert: true })
-        if (!uploadError) {
-          await fetch(endpoint === '/api/finance/transactions' ? `/api/finance/transactions/${data.id}` : endpoint, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ attachment_path: path, attachment_name: attachmentFile.name }) })
-        } else {
-          toast.push('Transaction saved, but the attachment failed to upload', 'error')
-        }
+        const { error: uploadError } = await uploadAttachment(`/api/finance/transactions/${data.id}`, data.id, attachmentFile)
+        if (uploadError) toast.push('Transaction saved, but the attachment failed to upload', 'error')
       }
 
       toast.push(editing ? 'Transaction updated' : 'Transaction added')
@@ -352,11 +346,7 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
             Receipt / attachment
             {editing?.attachment_path && !attachmentRemoved ? (
               <div className="mt-2 flex items-center justify-between rounded-xl border border-white/10 bg-white/[.04] px-3 py-3">
-                <button type="button" onClick={async () => {
-                  const response = await fetch(`/api/finance/transactions/${editing.id}/attachment`)
-                  const data = await response.json()
-                  if (response.ok) window.open(data.url, '_blank')
-                }} className="flex min-w-0 items-center gap-2 truncate text-sm text-cyan-200 hover:underline"><Paperclip size={14} className="shrink-0 text-slate-500" />{editing.attachment_name || 'Attachment'}</button>
+                <button type="button" onClick={() => viewAttachment(`/api/finance/transactions/${editing.id}/attachment`)} className="flex min-w-0 items-center gap-2 truncate text-sm text-cyan-200 hover:underline"><Paperclip size={14} className="shrink-0 text-slate-500" />{editing.attachment_name || 'Attachment'}</button>
                 <button type="button" onClick={() => setAttachmentRemoved(true)} className="shrink-0 rounded-lg p-1.5 text-rose-300/70 hover:bg-rose-300/10"><Trash2 size={14} /></button>
               </div>
             ) : (
@@ -573,6 +563,25 @@ function ProfileView({ data, user, theme, onThemeChange, onSaveProfile, onAddCat
             className={`relative h-6 w-10 shrink-0 rounded-full transition-colors ${profile?.block_insufficient_funds !== false ? 'bg-cyan-400' : 'bg-white/15'}`}
           >
             <span className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${profile?.block_insufficient_funds !== false ? 'translate-x-4' : 'translate-x-0'}`} />
+          </button>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-white/10 bg-white/[.035] p-5">
+        <div className="text-sm font-semibold text-white">Optional modules</div>
+        <div className="mt-3 flex items-center justify-between gap-4 rounded-xl bg-black/20 px-4 py-3">
+          <div>
+            <div className="text-sm text-white">Scholarships module</div>
+            <div className="mt-0.5 text-xs text-slate-500">Track scholarship batches received and payments made to college. Off by default — turn on if this applies to you.</div>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={!!profile?.scholarships_enabled}
+            onClick={() => onSaveProfile({ scholarships_enabled: !profile?.scholarships_enabled })}
+            className={`relative h-6 w-10 shrink-0 rounded-full transition-colors ${profile?.scholarships_enabled ? 'bg-cyan-400' : 'bg-white/15'}`}
+          >
+            <span className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${profile?.scholarships_enabled ? 'translate-x-4' : 'translate-x-0'}`} />
           </button>
         </div>
       </div>
@@ -1590,6 +1599,9 @@ function Shell({ user, onLogout }) {
     }
   }
   useEffect(() => { if (data.profile?.theme) setTheme(data.profile.theme) }, [data.profile])
+  // Scholarships is opt-in — if it gets turned off while that view is open (or data just loaded
+  // with it already off), fall back to the dashboard instead of showing a nav-less dead view.
+  useEffect(() => { if (view === 'scholarships' && data.profile && !data.profile.scholarships_enabled) setView('dashboard') }, [view, data.profile])
   const onThemeChange = async (t) => { setTheme(t); await fetch('/api/finance/profile', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ theme: t }) }); toast.push(`Theme: ${t}`, 'info') }
 
   // Credit cards
@@ -1747,7 +1759,7 @@ function Shell({ user, onLogout }) {
     { key: 'loans', label: 'Loans', icon: Briefcase },
     { key: 'family_company', label: 'Family / Company', icon: Users },
     { key: 'lend', label: 'Lend / Borrow', icon: Heart },
-    { key: 'scholarships', label: 'Scholarships', icon: ShieldCheck },
+    ...(data.profile?.scholarships_enabled ? [{ key: 'scholarships', label: 'Scholarships', icon: ShieldCheck }] : []),
     { key: 'budgets', label: 'Budgets', icon: Target },
     { key: 'bucket', label: 'Bucket list', icon: Mountain },
     { key: 'rules', label: 'Money rules', icon: Star },
@@ -1820,7 +1832,7 @@ function Shell({ user, onLogout }) {
               {view === 'budgets' && <BudgetsView data={data} onAdd={() => openBudgetForm()} onEdit={openBudgetForm} onDelete={deleteBudget} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'investments' && <InvestmentsView data={data} onAddPortfolio={() => openPortfolioForm()} onEditPortfolio={openPortfolioForm} onDeletePortfolio={deletePortfolio} onAddHolding={openHoldingForm} onBulkImport={openBulkImport} onEditHolding={openHoldingEdit} onDeleteHolding={deleteHolding} onRefreshRowPrice={onRefreshRowPrice} onManualPriceEntry={onManualPriceEntry} onRefreshAll={refreshAllPrices} pricesLoading={pricesLoading} onAddFunds={openFundsForm} onWithdrawFunds={openWithdrawForm} onConnectKite={connectKite} onLinkKite={linkPortfolioKite} onUnlinkKite={unlinkPortfolioKite} onSyncKite={syncPortfolioKite} kiteSyncBusy={kiteSyncBusy} onAddSip={openSipForm} onEditSip={openSipForm} onDeleteSip={deleteSip} onSyncSipsKite={syncSipsKite} onAddOtherInvestment={openOtherInvestmentForm} onEditOtherInvestment={openOtherInvestmentEdit} onDeleteOtherInvestment={deleteOtherInvestment} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'cards' && <CreditCardsView data={data} onAdd={() => openCardForm()} onEdit={openCardForm} onDelete={deleteCard} onSpend={openCardSpend} onPay={openCardPay} onDeleteSpend={deleteCardSpend} onDeleteTx={deleteTx} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
-              {view === 'scholarships' && <ScholarshipsView data={data} onAdd={() => openScholarshipForm()} onEdit={openScholarshipForm} onDelete={deleteScholarship} onPay={openScholarshipPay} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
+              {view === 'scholarships' && <ScholarshipsView data={data} onAdd={() => openScholarshipForm()} onEdit={openScholarshipForm} onDelete={deleteScholarship} onPay={openScholarshipPay} onRefresh={refresh} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} toast={toast} />}
               {view === 'rules' && <MoneyRulesView data={data} onAdd={addRule} onToggle={toggleRule} onEdit={() => {}} onDelete={deleteRule} />}
               {view === 'loans' && <LoansView data={data} onAdd={() => openLoanForm()} onEdit={openLoanForm} onDelete={deleteLoan} onPay={openLoanPay} onDeletePayment={deleteLoanPayment} onSync={syncLoanOutstanding} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'lend' && <LendBorrowView data={data} onAdd={() => openLendForm()} onEdit={openLendForm} onDelete={deleteLend} onDeleteTx={deleteTx} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
