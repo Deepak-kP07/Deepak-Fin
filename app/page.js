@@ -21,6 +21,7 @@ import { EmptyState } from '@/components/shared/EmptyState'
 import { Skeleton } from '@/components/shared/Skeleton'
 import { LoadingScreen } from '@/components/shared/LoadingScreen'
 import { Avatar } from '@/components/shared/Avatar'
+import { CreditCardBillAlert } from '@/components/shared/CreditCardBillAlert'
 import { AuthScreen } from '@/features/auth/AuthScreen'
 import { CategoryForm } from '@/features/categories/CategoryForm'
 import { CategoriesView } from '@/features/categories/CategoriesView'
@@ -71,7 +72,7 @@ import {
 } from 'lucide-react'
 
 /* ---------------- Transaction Form ---------------- */
-function TransactionForm({ open, onClose, onSaved, editing, accounts, categories, creditCards = [], lendBorrow = [], loans = [], onAddAccount, onAddCategory, toast, profile, defaultAccountId = '' }) {
+function TransactionForm({ open, onClose, onSaved, editing, accounts, categories, creditCards = [], lendBorrow = [], loans = [], onAddAccount, onAddCategory, toast, profile, defaultAccountId = '', defaultRepayment = null }) {
   const now = todayISO()
   const nowTime = new Date().toTimeString().slice(0, 5)
   const initial = useMemo(() => {
@@ -82,9 +83,11 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
     // defaultAccountId is the one exception: it's only ever set when this form was opened FROM
     // that specific account's own page (see AccountDetailView's "+ Add transaction"), so the
     // default is a conscious, contextual one rather than an arbitrary "first in list" guess —
-    // and it's still just a starting value, freely changeable before submitting.
-    return { type: 'expense', amount: '', description: '', date: now, time: nowTime, account_id: defaultAccountId || '', to_account_id: '', category_id: '', notes: '', linked_module: '', linked_module_id: '', repay_value: '' }
-  }, [editing, open, defaultAccountId])
+    // and it's still just a starting value, freely changeable before submitting. defaultRepayment
+    // is the same idea for Lend/Borrow's own "+ Log repayment" button — pre-selects that exact
+    // person in Repayment mode instead of leaving the user to find them in a dropdown themselves.
+    return { type: defaultRepayment?.type || 'expense', amount: '', description: '', date: now, time: nowTime, account_id: defaultAccountId || '', to_account_id: '', category_id: '', notes: '', linked_module: '', linked_module_id: '', repay_value: defaultRepayment?.value || '' }
+  }, [editing, open, defaultAccountId, defaultRepayment])
   const [form, setForm] = useState(initial)
   // 'category' = normal spending/income category selected; 'repayment' = this transaction is
   // settling a loan or a lend/borrow debt instead, and picks a target from that list.
@@ -662,7 +665,7 @@ function TransactionTicker({ items, categories, accounts, creditCards = [], show
 }
 
 /* ---------------- Views ---------------- */
-function DashboardView({ data, showMoney, onOpenTxForm, setView, onAddRule }) {
+function DashboardView({ data, showMoney, onOpenTxForm, setView, onAddRule, onPayCardBill }) {
   const { accounts, transactions, categories, holdings = [], loans = [], loan_payments = [], bucket_list = [], money_rules = [], credit_cards = [], portfolios = [] } = data
   const totalBalance = accounts.reduce((s, a) => s + Number(a.current_balance || 0), 0)
   const invested = holdings.reduce((s, h) => s + Number(h.qty) * Number(h.avg_buy_price), 0)
@@ -714,6 +717,7 @@ function DashboardView({ data, showMoney, onOpenTxForm, setView, onAddRule }) {
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
+      <CreditCardBillAlert creditCards={credit_cards} transactions={transactions} onPay={onPayCardBill} showMoney={showMoney} />
       <div className="grid shrink-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Net worth" value={showMoney ? money(netWorth) : '••••••'} sub={<span className="flex items-center gap-1"><ArrowUpRight size={13} />Cash + Investments − Debt</span>} icon={PiggyBank} accent="bg-gradient-to-br from-cyan-300 to-blue-500 text-[#07101c]" />
         <StatCard label={`Income · ${thisMonth?.label || ''}`} value={showMoney ? money(thisMonth?.income || 0) : '••••'} sub={<span className="flex items-center gap-1"><ArrowUpRight size={13} />This month</span>} icon={TrendingUp} accent="bg-emerald-400/15 text-emerald-200" />
@@ -906,7 +910,7 @@ function AttachmentViewer({ open, onClose, transaction }) {
   )
 }
 
-function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onImport, showMoney, onToggleMoney, onOpenRecurring }) {
+function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onImport, showMoney, onToggleMoney, onOpenRecurring, onPayCardBill }) {
   const { transactions, accounts, categories, credit_cards: creditCards = [] } = data
   const [query, setQuery] = useState('')
   const [type, setType] = useState('all')
@@ -1059,6 +1063,7 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onImport, 
 
   return (
     <div className="space-y-5">
+      <CreditCardBillAlert creditCards={creditCards} transactions={transactions} onPay={onPayCardBill} showMoney={showMoney} />
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
           <div className="mb-2 text-xs uppercase tracking-widest text-cyan-200/70">Money movement</div>
@@ -1362,6 +1367,7 @@ function Shell({ user, onLogout }) {
   const [txFormOpen, setTxFormOpen] = useState(false)
   const [txEditing, setTxEditing] = useState(null)
   const [txDefaultAccountId, setTxDefaultAccountId] = useState('')
+  const [txDefaultRepayment, setTxDefaultRepayment] = useState(null)
   const [accFormOpen, setAccFormOpen] = useState(false)
   const [accEditing, setAccEditing] = useState(null)
   const [catFormOpen, setCatFormOpen] = useState(false)
@@ -1440,8 +1446,8 @@ function Shell({ user, onLogout }) {
   }
   useEffect(() => { refresh() }, [])
 
-  const openTxForm = (t = null, defaultAccountId = '') => { setTxEditing(t); setTxDefaultAccountId(defaultAccountId); setTxFormOpen(true) }
-  const closeTxForm = () => { setTxFormOpen(false); setTxEditing(null); setTxDefaultAccountId('') }
+  const openTxForm = (t = null, defaultAccountId = '', defaultRepayment = null) => { setTxEditing(t); setTxDefaultAccountId(defaultAccountId); setTxDefaultRepayment(defaultRepayment); setTxFormOpen(true) }
+  const closeTxForm = () => { setTxFormOpen(false); setTxEditing(null); setTxDefaultAccountId(''); setTxDefaultRepayment(null) }
   const onTxSaved = async () => { closeTxForm(); await refresh() }
 
   const openAccForm = (a = null) => { setAccEditing(a); setAccFormOpen(true) }
@@ -1825,8 +1831,8 @@ function Shell({ user, onLogout }) {
             </div>
           ) : (
             <div className={fitScreen ? 'min-h-0 flex-1 lg:overflow-y-auto' : ''}>
-              {view === 'dashboard' && <DashboardView data={data} showMoney={showMoney} onOpenTxForm={() => openTxForm()} setView={setView} />}
-              {view === 'transactions' && <TransactionsView data={data} onOpenTxForm={() => openTxForm()} onEditTx={openTxForm} onDeleteTx={deleteTx} onImport={() => setCsvOpen(true)} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onOpenRecurring={openRecurringManager} />}
+              {view === 'dashboard' && <DashboardView data={data} showMoney={showMoney} onOpenTxForm={() => openTxForm()} setView={setView} onPayCardBill={openCardPay} />}
+              {view === 'transactions' && <TransactionsView data={data} onOpenTxForm={() => openTxForm()} onEditTx={openTxForm} onDeleteTx={deleteTx} onImport={() => setCsvOpen(true)} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onOpenRecurring={openRecurringManager} onPayCardBill={openCardPay} />}
               {view === 'accounts' && <AccountsView data={data} onAdd={() => openAccForm()} onEdit={openAccForm} onDelete={deleteAccount} onDeleteTx={deleteTx} onAddTransaction={(accountId) => openTxForm(null, accountId)} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'categories' && <CategoriesView data={data} onAdd={() => openCatForm()} onEdit={openCatForm} onDelete={deleteCategory} />}
               {view === 'budgets' && <BudgetsView data={data} onAdd={() => openBudgetForm()} onEdit={openBudgetForm} onDelete={deleteBudget} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
@@ -1835,7 +1841,7 @@ function Shell({ user, onLogout }) {
               {view === 'scholarships' && <ScholarshipsView data={data} onAdd={() => openScholarshipForm()} onEdit={openScholarshipForm} onDelete={deleteScholarship} onPay={openScholarshipPay} onRefresh={refresh} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} toast={toast} />}
               {view === 'rules' && <MoneyRulesView data={data} onAdd={addRule} onToggle={toggleRule} onEdit={() => {}} onDelete={deleteRule} />}
               {view === 'loans' && <LoansView data={data} onAdd={() => openLoanForm()} onEdit={openLoanForm} onDelete={deleteLoan} onPay={openLoanPay} onDeletePayment={deleteLoanPayment} onSync={syncLoanOutstanding} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
-              {view === 'lend' && <LendBorrowView data={data} onAdd={() => openLendForm()} onEdit={openLendForm} onDelete={deleteLend} onDeleteTx={deleteTx} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
+              {view === 'lend' && <LendBorrowView data={data} onAdd={() => openLendForm()} onEdit={openLendForm} onDelete={deleteLend} onDeleteTx={deleteTx} onLogRepayment={(record) => openTxForm(null, '', { value: `lend:${record.id}`, type: record.type === 'lent' ? 'income' : 'expense' })} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'family_company' && <FamilyCompanyView data={data} onAddProfile={() => openMoneyProfileForm()} onEditProfile={openMoneyProfileForm} onDeleteProfile={deleteMoneyProfile} onAddEntry={openMoneyProfileEntryForm} onEditEntry={openMoneyProfileEntryEdit} onDeleteEntry={deleteMoneyProfileEntry} onBulkImport={openMoneyProfileBulkImport} onToggleStatus={toggleMoneyProfileStatus} />}
               {view === 'bucket' && <BucketListView data={data} onAdd={() => openBucketForm()} onEdit={openBucketForm} onDelete={deleteBucket} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'insights' && <InsightsView data={data} />}
@@ -1862,7 +1868,7 @@ function Shell({ user, onLogout }) {
       </nav>
 
       {/* Modals */}
-      <TransactionForm open={txFormOpen} onClose={closeTxForm} onSaved={onTxSaved} editing={txEditing} accounts={data.accounts} categories={data.categories} creditCards={data.credit_cards} lendBorrow={data.lend_borrow} loans={data.loans} onAddAccount={() => { closeTxForm(); openAccForm() }} onAddCategory={() => openCatForm()} toast={toast} profile={data.profile} defaultAccountId={txDefaultAccountId} />
+      <TransactionForm open={txFormOpen} onClose={closeTxForm} onSaved={onTxSaved} editing={txEditing} accounts={data.accounts} categories={data.categories} creditCards={data.credit_cards} lendBorrow={data.lend_borrow} loans={data.loans} onAddAccount={() => { closeTxForm(); openAccForm() }} onAddCategory={() => openCatForm()} toast={toast} profile={data.profile} defaultAccountId={txDefaultAccountId} defaultRepayment={txDefaultRepayment} />
       <AccountForm open={accFormOpen} onClose={closeAccForm} onSaved={onAccSaved} editing={accEditing} accounts={data.accounts} toast={toast} />
       <CategoryForm open={catFormOpen} onClose={closeCatForm} onSaved={onCatSaved} editing={catEditing} toast={toast} />
       <RecurringManager open={recurringManagerOpen} onClose={closeRecurringManager} rules={data.recurring_transactions} onAdd={() => openRecurringForm()} onEdit={openRecurringForm} onToggle={toggleRecurring} onDelete={deleteRecurring} showMoney={showMoney} />

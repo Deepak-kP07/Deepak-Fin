@@ -3,16 +3,8 @@
 import { useState } from 'react'
 import { ArrowRight, RotateCcw } from 'lucide-react'
 import { BankCardFace } from '@/components/shared/BankCardFace'
+import { nextBillDue } from '@/lib/creditCards'
 import { money } from '@/lib/format'
-
-const nextDueLabel = (card) => {
-  const now = new Date(); const bd = Number(card.billing_date), offset = Number(card.due_date_offset)
-  let billing = new Date(now.getFullYear(), now.getMonth(), bd)
-  if (now > billing) billing = new Date(now.getFullYear(), now.getMonth() + 1, bd)
-  const due = new Date(billing); due.setDate(due.getDate() + offset)
-  const days = Math.ceil((due - now) / (1000 * 60 * 60 * 24))
-  return { due, days }
-}
 
 // The list only ever shows the card face — tap/click it to flip and reveal the numbers and
 // quick actions on the back, same gesture as handling a real card. Nothing here needs its own
@@ -24,7 +16,7 @@ export function CreditCardFlip({ card, showMoney, onSpend, onPay, onViewDetails 
   const util = Number(card.credit_limit) > 0 ? Math.min(100, Math.round((Number(card.current_outstanding) / Number(card.credit_limit)) * 100)) : 0
   const tone = util >= 80 ? 'bg-rose-400' : util >= 50 ? 'bg-amber-400' : 'bg-emerald-400'
   const utilText = util >= 80 ? 'text-rose-300' : util >= 50 ? 'text-amber-300' : 'text-emerald-300'
-  const nd = nextDueLabel(card)
+  const nd = nextBillDue(card)
   const stop = (fn) => (e) => { e.stopPropagation(); fn() }
 
   return (

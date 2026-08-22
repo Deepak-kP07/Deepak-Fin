@@ -5,8 +5,9 @@ import { StatCard } from '@/components/shared/StatCard'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { formatDate, money } from '@/lib/format'
 
-export function LendBorrowDetailView({ record, repayments, accounts, transactions, onBack, onEdit, onDelete, onDeleteTx, showMoney, onToggleMoney }) {
+export function LendBorrowDetailView({ record, repayments, accounts, transactions, onBack, onEdit, onDelete, onDeleteTx, onLogRepayment, showMoney, onToggleMoney }) {
   const isLent = record.type === 'lent'
+  const isSettled = record.status === 'returned'
   const repaid = Number(record.amount_repaid || 0)
   const pending = Math.max(0, Number(record.amount) - repaid)
   const pct = Number(record.amount) > 0 ? Math.min(100, Math.round((repaid / Number(record.amount)) * 100)) : 0
@@ -41,6 +42,7 @@ export function LendBorrowDetailView({ record, repayments, accounts, transaction
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
+          <button onClick={() => onLogRepayment(record)} disabled={isSettled} title={isSettled ? 'Already fully settled' : undefined} className="rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 px-4 py-2.5 text-sm font-semibold text-[#07101c] disabled:opacity-40">+ Log {isLent ? 'repayment' : 'payment'}</button>
           <button onClick={() => onEdit(record)} className="rounded-xl border border-white/10 p-2.5 text-slate-400 hover:bg-white/5 hover:text-white"><Pencil size={15} /></button>
           <button onClick={() => onDelete(record)} className="rounded-xl border border-white/10 p-2.5 text-rose-300/70 hover:bg-rose-300/10"><Trash2 size={15} /></button>
           <button onClick={onToggleMoney} className="rounded-xl border border-white/10 p-2.5 text-slate-400 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
@@ -64,7 +66,7 @@ export function LendBorrowDetailView({ record, repayments, accounts, transaction
       <div className="rounded-2xl border border-white/10 bg-white/[.035]">
         <div className="border-b border-white/10 px-5 py-3 text-xs uppercase tracking-widest text-slate-500">{isLent ? 'Repayments received' : 'Payments made'} · {paymentsForThis.length}</div>
         {paymentsForThis.length === 0 ? (
-          <EmptyState compact icon={isLent ? ArrowDownRight : ArrowUpRight} title="No payments yet" message="Log a repayment as an income or expense transaction linked to this record." />
+          <EmptyState compact icon={isLent ? ArrowDownRight : ArrowUpRight} title="No payments yet" message={isSettled ? 'This record is fully settled.' : `Log it here when ${isLent ? 'they repay you' : 'you make a payment'}.`} cta={isSettled ? undefined : `Log ${isLent ? 'repayment' : 'payment'}`} onCta={isSettled ? undefined : () => onLogRepayment(record)} />
         ) : (
           <>
             <div className="hidden grid-cols-[1.4fr_.9fr_.6fr_.6fr_auto] gap-4 border-b border-white/10 px-5 py-2.5 text-[10px] uppercase tracking-widest text-slate-600 sm:grid">

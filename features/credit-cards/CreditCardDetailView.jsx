@@ -7,19 +7,8 @@ import { BankCardFace } from '@/components/shared/BankCardFace'
 import { StatCard } from '@/components/shared/StatCard'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { MonthCursor } from '@/components/shared/MonthCursor'
+import { nextBillDue } from '@/lib/creditCards'
 import { formatDate, formatDateTime, money, monthName, ordinal } from '@/lib/format'
-
-// Same billing-cycle math CreditCardFlip uses for its back face — repeated here because the
-// full detail page never flips, so it's the only place left that surfaces this once you're past
-// the list view.
-function nextBillDue(card) {
-  const now = new Date(); const bd = Number(card.billing_date), offset = Number(card.due_date_offset)
-  let billing = new Date(now.getFullYear(), now.getMonth(), bd)
-  if (now > billing) billing = new Date(now.getFullYear(), now.getMonth() + 1, bd)
-  const due = new Date(billing); due.setDate(due.getDate() + offset)
-  const days = Math.ceil((due - now) / (1000 * 60 * 60 * 24))
-  return { due, days }
-}
 
 // Bill payments are logged through /finance/credit_cards/:id/pay_bill, which creates a plain
 // transaction with a fixed, app-generated description rather than a linked_module reference —
@@ -97,7 +86,7 @@ export function CreditCardDetailView({ card, cardTransactions, allTransactions, 
         </div>
       </div>
 
-      <div className={`rounded-xl border px-4 py-3 text-sm ${nd.days <= 3 ? 'border-amber-300/30 bg-amber-300/5 text-amber-200' : 'border-white/10 bg-white/[.035] text-slate-300'}`}>
+      <div className={`rounded-xl border px-4 py-3 text-sm ${nd.days <= 4 ? 'border-amber-300/30 bg-amber-300/5 text-amber-200' : 'border-white/10 bg-white/[.035] text-slate-300'}`}>
         Bill on the {ordinal(card.billing_date)} · Due {nd.days > 0 ? `in ${nd.days} day${nd.days === 1 ? '' : 's'}` : nd.days === 0 ? 'today' : 'overdue'} ({formatDate(nd.due.toISOString().slice(0, 10))})
       </div>
 
