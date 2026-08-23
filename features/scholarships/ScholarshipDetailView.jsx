@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { ArrowDownRight, ArrowUpRight, ChevronRight, Eye, EyeOff, Link2, Paperclip, Pencil, ShieldCheck, Sparkles, Target, Trash2 } from 'lucide-react'
 import { StatCard } from '@/components/shared/StatCard'
 import { EmptyState } from '@/components/shared/EmptyState'
+import { DismissibleBanner } from '@/components/shared/DismissibleBanner'
 import { removeAttachment, uploadAttachment, viewAttachment } from '@/lib/attachments'
 import { scholarshipDisplayStatus } from '@/lib/scholarships'
 import { formatDate, money } from '@/lib/format'
@@ -88,9 +89,9 @@ export function ScholarshipDetailView({
         </div>
       </div>
 
-      <div className="rounded-xl border border-cyan-300/20 bg-cyan-300/5 px-4 py-2.5 text-xs text-cyan-200">
+      <DismissibleBanner tone="cyan">
         {linkedAccount ? <>Linked to <b>{linkedAccount.name}</b> — marking this received/paid posts a transaction there, kept in sync as you edit.</> : 'Not linked to a bank account — stays only in this module.'}
-      </div>
+      </DismissibleBanner>
 
       <div className="grid gap-4 sm:grid-cols-3">
         <StatCard label="Total" value={showMoney ? money(total) : '••••'} icon={ArrowUpRight} accent="bg-emerald-400/15 text-emerald-200" />

@@ -24,12 +24,13 @@ import { Avatar } from '@/components/shared/Avatar'
 import { CreditCardBillAlert } from '@/components/shared/CreditCardBillAlert'
 import { AuthScreen } from '@/features/auth/AuthScreen'
 import { CategoryForm } from '@/features/categories/CategoryForm'
-import { CategoriesView } from '@/features/categories/CategoriesView'
 import { MoneyRulesWidget } from '@/features/money-rules/MoneyRulesWidget'
-import { MoneyRulesView } from '@/features/money-rules/MoneyRulesView'
+import { SettingsShell } from '@/features/settings/SettingsShell'
+import { resolveModuleSettings, resolveDashboardWidgets, orderedEnabledKeys } from '@/lib/moduleSettings'
 import { AccountForm } from '@/features/accounts/AccountForm'
 import { AccountsView } from '@/features/accounts/AccountsView'
 import { BudgetForm } from '@/features/budgets/BudgetForm'
+import { BudgetMonthForm } from '@/features/budgets/BudgetMonthForm'
 import { BudgetsView } from '@/features/budgets/BudgetsView'
 import { RecurringForm } from '@/features/recurring/RecurringForm'
 import { RecurringManager } from '@/features/recurring/RecurringManager'
@@ -59,6 +60,7 @@ import { MoneyProfileForm } from '@/features/familyCompany/MoneyProfileForm'
 import { MoneyProfileEntryForm } from '@/features/familyCompany/MoneyProfileEntryForm'
 import { MoneyProfileBulkImport } from '@/features/familyCompany/MoneyProfileBulkImport'
 import { FamilyCompanyView } from '@/features/familyCompany/FamilyCompanyView'
+import { VaultItemForm } from '@/features/vault/VaultItemForm'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import {
@@ -110,7 +112,7 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
       setHistory(response.ok ? await response.json() : [])
     }
   }
-  const catsForType = categories.filter((c) => c.type === (form.type === 'income' ? 'income' : 'expense'))
+  const catsForType = categories.filter((c) => c.type === (form.type === 'income' ? 'income' : 'expense') && !(c.hidden_in_modules || []).includes('transactions'))
   const openLends = lendBorrow.filter((l) => l.type === 'lent' && l.status !== 'returned')
   const openBorrows = lendBorrow.filter((l) => l.type === 'borrowed' && l.status !== 'returned')
   // Loan prepayments route through the dedicated /loan_payments endpoint, which has no matching
@@ -491,134 +493,6 @@ function CsvImport({ open, onClose, onImported, accounts, categories, transactio
   )
 }
 
-/* ---------------- Profile View ---------------- */
-function ProfileView({ data, user, theme, onThemeChange, onSaveProfile, onAddCategory, onEditCategory, onDeleteCategory, onLogout }) {
-  const { profile, categories } = data
-  const [form, setForm] = useState({ full_name: '', age: '', avatar_url: '' })
-  const [busy, setBusy] = useState(false)
-  useEffect(() => {
-    if (profile) setForm({ full_name: profile.full_name || '', age: profile.age ?? '', avatar_url: profile.avatar_url || '' })
-  }, [profile])
-  const save = async () => {
-    setBusy(true)
-    try { await onSaveProfile({ ...form, age: form.age === '' ? null : Number(form.age) }) } finally { setBusy(false) }
-  }
-  const grouped = { income: categories.filter((c) => c.type === 'income'), expense: categories.filter((c) => c.type === 'expense') }
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <div className="mb-1 text-xs uppercase tracking-widest text-cyan-200/70">Your space</div>
-          <h1 className="text-2xl font-semibold tracking-tight text-white">Profile &amp; settings</h1>
-        </div>
-        <button onClick={onLogout} className="flex shrink-0 items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-xs text-slate-400 hover:bg-white/5"><LogOut size={13} />Sign out</button>
-      </div>
-
-      <div className="rounded-2xl border border-white/10 bg-white/[.035] p-5">
-        <div className="flex flex-col items-start gap-5 sm:flex-row sm:items-center">
-          <Avatar src={form.avatar_url} name={form.full_name} email={user?.email} size={84} rounded="rounded-2xl" />
-          <div className="grid flex-1 gap-3.5 sm:grid-cols-2">
-            <label className="text-sm text-slate-300">Full name
-              <input value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-2.5 text-white outline-none focus:border-cyan-300/50" placeholder="Deepak Perumal" />
-            </label>
-            <label className="text-sm text-slate-300">Age
-              <input type="number" min="1" max="150" value={form.age} onChange={(e) => setForm({ ...form, age: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-2.5 text-white outline-none focus:border-cyan-300/50" />
-            </label>
-            <div className="text-sm text-slate-300">
-              <div className="text-xs text-slate-500">Email</div>
-              <div className="mt-1 text-white">{user?.email}</div>
-            </div>
-            <label className="text-sm text-slate-300">Avatar URL <span className="text-[11px] text-slate-600">(auto-filled from Google)</span>
-              <input value={form.avatar_url} onChange={(e) => setForm({ ...form, avatar_url: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-2.5 text-xs text-slate-300 outline-none focus:border-cyan-300/50" placeholder="https://…" />
-            </label>
-          </div>
-        </div>
-        <button onClick={save} disabled={busy} className="mt-5 rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 px-6 py-2.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : 'Save profile'}</button>
-      </div>
-
-      <div className="rounded-2xl border border-white/10 bg-white/[.035] p-5">
-        <div className="text-sm font-semibold text-white">Theme</div>
-        <div className="mt-3 grid grid-cols-3 gap-3">
-          {[{ v: 'dark', l: 'Dark', c: 'from-slate-900 to-slate-700' }, { v: 'midnight', l: 'Midnight', c: 'from-[#0b1220] to-[#1e2a44]' }, { v: 'ocean', l: 'Ocean', c: 'from-cyan-900 to-blue-950' }].map((t) => (
-            <button key={t.v} onClick={() => onThemeChange(t.v)} className={`rounded-xl border p-3 text-left transition ${theme === t.v ? 'border-cyan-300/50 bg-cyan-400/10' : 'border-white/10 hover:bg-white/[.04]'}`}>
-              <div className={`h-10 rounded-lg bg-gradient-to-br ${t.c}`} />
-              <div className="mt-2 text-sm font-medium text-white">{t.l}</div>
-              {theme === t.v && <div className="text-[11px] text-cyan-300">Active</div>}
-            </button>
-          ))}
-        </div>
-        <div className="mt-2 text-[11px] text-slate-500">Currently only dark themes; light mode coming soon.</div>
-      </div>
-
-      <div className="rounded-2xl border border-white/10 bg-white/[.035] p-5">
-        <div className="text-sm font-semibold text-white">Spending guardrails</div>
-        <div className="mt-3 flex items-center justify-between gap-4 rounded-xl bg-black/20 px-4 py-3">
-          <div>
-            <div className="text-sm text-white">Block transactions when an account is short</div>
-            <div className="mt-0.5 text-xs text-slate-500">When a bank, cash, or debit card doesn't have enough balance: {profile?.block_insufficient_funds !== false ? 'blocked outright' : 'allowed with a "confirm anyway" prompt'}. Credit cards always block past their limit, regardless of this setting.</div>
-          </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={profile?.block_insufficient_funds !== false}
-            onClick={() => onSaveProfile({ block_insufficient_funds: profile?.block_insufficient_funds === false })}
-            className={`relative h-6 w-10 shrink-0 rounded-full transition-colors ${profile?.block_insufficient_funds !== false ? 'bg-cyan-400' : 'bg-white/15'}`}
-          >
-            <span className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${profile?.block_insufficient_funds !== false ? 'translate-x-4' : 'translate-x-0'}`} />
-          </button>
-        </div>
-      </div>
-
-      <div className="rounded-2xl border border-white/10 bg-white/[.035] p-5">
-        <div className="text-sm font-semibold text-white">Optional modules</div>
-        <div className="mt-3 flex items-center justify-between gap-4 rounded-xl bg-black/20 px-4 py-3">
-          <div>
-            <div className="text-sm text-white">Scholarships module</div>
-            <div className="mt-0.5 text-xs text-slate-500">Track scholarship batches received and payments made to college. Off by default — turn on if this applies to you.</div>
-          </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={!!profile?.scholarships_enabled}
-            onClick={() => onSaveProfile({ scholarships_enabled: !profile?.scholarships_enabled })}
-            className={`relative h-6 w-10 shrink-0 rounded-full transition-colors ${profile?.scholarships_enabled ? 'bg-cyan-400' : 'bg-white/15'}`}
-          >
-            <span className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${profile?.scholarships_enabled ? 'translate-x-4' : 'translate-x-0'}`} />
-          </button>
-        </div>
-      </div>
-
-      <div className="rounded-2xl border border-white/10 bg-white/[.035] p-5">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-sm font-semibold text-white">Categories</div>
-            <div className="text-xs text-slate-500">Group your income and expenses your way</div>
-          </div>
-          <button onClick={onAddCategory} className="flex items-center gap-1 rounded-xl bg-white/[.06] px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/[.1]"><Plus size={13} />Add</button>
-        </div>
-        <div className="mt-3 grid max-h-56 gap-4 overflow-y-auto md:grid-cols-2">
-          {['income', 'expense'].map((k) => (
-            <div key={k}>
-              <div className="mb-2 text-[10px] uppercase tracking-widest text-slate-500">{k}</div>
-              <div className="space-y-1.5">
-                {grouped[k].length === 0 ? <div className="text-sm text-slate-500">No categories</div> : grouped[k].map((c) => (
-                  <div key={c.id} className="group flex items-center justify-between rounded-xl bg-black/20 px-3 py-1.5">
-                    <div className="flex items-center gap-3"><div className="h-6 w-6 rounded-md" style={{ background: `${c.color || '#94a3b8'}33`, color: c.color }} /><span className="text-sm text-white">{c.name}</span></div>
-                    <div className="flex gap-1 opacity-0 transition group-hover:opacity-100">
-                      <button onClick={() => onEditCategory(c)} className="rounded-lg p-1.5 text-slate-500 hover:bg-white/5 hover:text-white"><Pencil size={13} /></button>
-                      <button onClick={() => onDeleteCategory(c)} className="rounded-lg p-1.5 text-rose-300/70 hover:bg-rose-300/10"><Trash2 size={13} /></button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  )
-}
 
 function TransactionTicker({ items, categories, accounts, creditCards = [], showMoney }) {
   const boxRef = useRef(null)
@@ -665,8 +539,10 @@ function TransactionTicker({ items, categories, accounts, creditCards = [], show
 }
 
 /* ---------------- Views ---------------- */
-function DashboardView({ data, showMoney, onOpenTxForm, setView, onAddRule, onPayCardBill }) {
-  const { accounts, transactions, categories, holdings = [], loans = [], loan_payments = [], bucket_list = [], money_rules = [], credit_cards = [], portfolios = [] } = data
+function DashboardView({ data, showMoney, onOpenTxForm, setView, onManageMoneyRules, onPayCardBill }) {
+  const { profile, accounts, transactions, categories, holdings = [], loans = [], loan_payments = [], bucket_list = [], money_rules = [], credit_cards = [], portfolios = [], budget_months = [] } = data
+  const moduleSettings = resolveModuleSettings(profile)
+  const widgets = resolveDashboardWidgets(profile)
   const totalBalance = accounts.reduce((s, a) => s + Number(a.current_balance || 0), 0)
   const invested = holdings.reduce((s, h) => s + Number(h.qty) * Number(h.avg_buy_price), 0)
   // Holdings-only figure, used for P&L — cash sitting un-invested in a portfolio has no P&L of
@@ -693,41 +569,84 @@ function DashboardView({ data, showMoney, onOpenTxForm, setView, onAddRule, onPa
   const thisMonth = months[months.length - 1]
   const savingsRate = thisMonth?.income > 0 ? Math.round(((thisMonth.income - thisMonth.expense) / thisMonth.income) * 100) : 0
   const nowMonthKey = `${now.getFullYear()}-${now.getMonth()}`
-  const recent = transactions.filter((t) => {
+  const allThisMonth = transactions.filter((t) => {
     const d = new Date(t.date)
     return `${d.getFullYear()}-${d.getMonth()}` === nowMonthKey
-  }).slice(0, 15)
+  })
+  const recent = allThisMonth.slice(0, 15)
+
+  // Extra stat-card figures — each gated behind its own Settings > Dashboard toggle, off by
+  // default except the original four, so turning them on is opt-in rather than new clutter.
+  const netCashflow = (thisMonth?.income || 0) - (thisMonth?.expense || 0)
+  const creditCardDebt = credit_cards.reduce((s, c) => s + Number(c.current_outstanding || 0), 0)
+  const totalDebt = (moduleSettings.loans.enabled ? totalOutstanding : 0) + (moduleSettings.credit_cards.enabled ? creditCardDebt : 0)
+  const avgMonthlySpend = months.length ? months.reduce((s, m) => s + m.expense, 0) / months.length : 0
+  const spendByCategory = {}
+  allThisMonth.filter((t) => t.type === 'expense').forEach((t) => {
+    const key = t.category_id || 'none'
+    spendByCategory[key] = (spendByCategory[key] || 0) + Number(t.amount || 0)
+  })
+  const topCategoryEntry = Object.entries(spendByCategory).sort((a, b) => b[1] - a[1])[0]
+  const topCategory = topCategoryEntry ? { name: categories.find((c) => c.id === topCategoryEntry[0])?.name || 'Uncategorized', amount: topCategoryEntry[1] } : null
+  const creditLimitSum = credit_cards.reduce((s, c) => s + Number(c.credit_limit || 0), 0)
+  const creditUtilizationPct = creditLimitSum > 0 ? Math.round((creditCardDebt / creditLimitSum) * 100) : 0
+  const currentBudgetPlan = budget_months.find((p) => p.year === now.getFullYear() && p.month === now.getMonth() && p.status === 'active')
+  const budgetTotal = Number(currentBudgetPlan?.total_amount || 0)
+  const budgetUsedPct = budgetTotal > 0 ? Math.round(((thisMonth?.expense || 0) / budgetTotal) * 100) : 0
+
+  const STAT_CARDS = [
+    { key: 'net_worth', available: true, node: <StatCard label="Net worth" value={showMoney ? money(netWorth) : '••••••'} sub={<span className="flex items-center gap-1"><ArrowUpRight size={13} />Cash + Investments − Debt</span>} icon={PiggyBank} accent="bg-gradient-to-br from-cyan-300 to-blue-500 text-[#07101c]" /> },
+    { key: 'income_month', available: true, node: <StatCard label={`Income · ${thisMonth?.label || ''}`} value={showMoney ? money(thisMonth?.income || 0) : '••••'} sub={<span className="flex items-center gap-1"><ArrowUpRight size={13} />This month</span>} icon={TrendingUp} accent="bg-emerald-400/15 text-emerald-200" /> },
+    { key: 'expense_month', available: true, node: <StatCard label={`Expense · ${thisMonth?.label || ''}`} value={showMoney ? money(thisMonth?.expense || 0) : '••••'} sub={<span className="flex items-center gap-1 text-rose-300"><ArrowDownRight size={13} />This month</span>} icon={TrendingDown} accent="bg-rose-400/15 text-rose-200" tone="text-rose-300" /> },
+    { key: 'savings_rate', available: true, node: <StatCard label="Savings rate" value={`${savingsRate}%`} sub={<span className={savingsRate >= 20 ? 'text-emerald-300' : 'text-amber-300'}>{savingsRate >= 20 ? 'Great pace' : 'Aim for 20%+'}</span>} icon={Target} accent="bg-violet-400/15 text-violet-200" tone={savingsRate >= 20 ? 'text-emerald-300' : 'text-amber-300'} /> },
+    { key: 'net_cashflow', available: true, node: <StatCard label="Net cash flow" value={showMoney ? money(netCashflow) : '••••'} sub={<span className={netCashflow >= 0 ? 'text-emerald-300' : 'text-rose-300'}>{netCashflow >= 0 ? 'Positive' : 'Negative'} this month</span>} icon={ArrowLeftRight} accent="bg-cyan-400/15 text-cyan-200" tone={netCashflow >= 0 ? 'text-emerald-300' : 'text-rose-300'} /> },
+    { key: 'total_debt', available: moduleSettings.loans.enabled || moduleSettings.credit_cards.enabled, node: <StatCard label="Total debt" value={showMoney ? money(totalDebt) : '••••'} sub="Loans + credit cards" icon={CreditCard} accent="bg-rose-400/15 text-rose-200" /> },
+    { key: 'total_invested', available: moduleSettings.investments.enabled, node: <StatCard label="Total invested" value={showMoney ? money(currentInv) : '••••'} sub={<span className={pnl >= 0 ? 'text-emerald-300' : 'text-rose-300'}>{pnl >= 0 ? '+' : '−'}{money(pnl).replace('-', '')} P&amp;L</span>} icon={TrendingUp} accent="bg-violet-400/15 text-violet-200" /> },
+    { key: 'avg_monthly_spend', available: true, node: <StatCard label="Avg. monthly spend" value={showMoney ? money(avgMonthlySpend) : '••••'} sub="Last 6 months" icon={BarChart3} accent="bg-amber-400/15 text-amber-200" /> },
+    { key: 'transactions_count', available: true, node: <StatCard label="Transactions" value={String(allThisMonth.length)} sub="This month" icon={ListChecks} accent="bg-cyan-400/15 text-cyan-200" /> },
+    { key: 'top_category', available: !!topCategory, node: topCategory && <StatCard label="Top category" value={topCategory.name} sub={showMoney ? money(topCategory.amount) : '••••'} icon={Tag} accent="bg-pink-400/15 text-pink-200" /> },
+    { key: 'credit_utilization', available: moduleSettings.credit_cards.enabled && credit_cards.length > 0, node: <StatCard label="Credit utilization" value={`${creditUtilizationPct}%`} sub={creditUtilizationPct >= 70 ? 'Getting high' : 'Under control'} icon={PieChartIcon} accent="bg-rose-400/15 text-rose-200" tone={creditUtilizationPct >= 70 ? 'text-rose-300' : 'text-emerald-300'} /> },
+    { key: 'budget_used_pct', available: moduleSettings.budgets.enabled && budgetTotal > 0, node: <StatCard label="Budget used" value={`${budgetUsedPct}%`} sub={budgetUsedPct > 100 ? 'Over budget' : 'On track'} icon={Zap} accent="bg-violet-400/15 text-violet-200" tone={budgetUsedPct > 100 ? 'text-rose-300' : 'text-emerald-300'} /> },
+  ].filter((s) => widgets[s.key]?.enabled && s.available)
 
   // Consolidated balances: bank accounts, credit cards (as debt), investment portfolios.
   // Debit cards are excluded — they share their linked account's balance, already listed here.
+  // Credit card/portfolio line items only appear here while their module is switched on — a
+  // module toggle is UI-hide only, so the underlying balances stay real, just not surfaced here.
   const balanceItems = [
     ...accounts.filter((a) => a.type !== 'debit_card').map((a) => ({
       id: `acc-${a.id}`, name: a.name, sub: a.type.replace('_', ' '), amount: Number(a.current_balance || 0),
       icon: a.type === 'cash' ? Wallet : Landmark, color: a.color || '#22d3ee', debt: false,
     })),
-    ...credit_cards.map((c) => ({
+    ...(moduleSettings.credit_cards.enabled ? credit_cards.map((c) => ({
       id: `cc-${c.id}`, name: c.name, sub: 'Credit card', amount: Number(c.current_outstanding || 0),
       icon: CreditCard, color: c.color || '#f472b6', debt: true,
-    })),
-    ...portfolios.map((p) => {
+    })) : []),
+    ...(moduleSettings.investments.enabled ? portfolios.map((p) => {
       const value = holdings.filter((h) => h.portfolio_id === p.id).reduce((s, h) => s + Number(h.qty) * Number(h.current_price || h.avg_buy_price), 0) + Number(p.cash_balance || 0)
       return { id: `port-${p.id}`, name: p.name, sub: 'Investment', amount: value, icon: TrendingUp, color: p.color || '#a78bfa', debt: false }
-    }),
+    }) : []),
   ]
+
+  const showPortfolioTile = moduleSettings.investments.enabled && holdings.length > 0
+  const showLoansTile = moduleSettings.loans.enabled && loans.length > 0
+  const showBucketTile = moduleSettings.bucket_list.enabled && bucket_list.length > 0
+  const showQuickTiles = showPortfolioTile || showLoansTile || showBucketTile
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
-      <CreditCardBillAlert creditCards={credit_cards} transactions={transactions} onPay={onPayCardBill} showMoney={showMoney} />
-      <div className="grid shrink-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Net worth" value={showMoney ? money(netWorth) : '••••••'} sub={<span className="flex items-center gap-1"><ArrowUpRight size={13} />Cash + Investments − Debt</span>} icon={PiggyBank} accent="bg-gradient-to-br from-cyan-300 to-blue-500 text-[#07101c]" />
-        <StatCard label={`Income · ${thisMonth?.label || ''}`} value={showMoney ? money(thisMonth?.income || 0) : '••••'} sub={<span className="flex items-center gap-1"><ArrowUpRight size={13} />This month</span>} icon={TrendingUp} accent="bg-emerald-400/15 text-emerald-200" />
-        <StatCard label={`Expense · ${thisMonth?.label || ''}`} value={showMoney ? money(thisMonth?.expense || 0) : '••••'} sub={<span className="flex items-center gap-1 text-rose-300"><ArrowDownRight size={13} />This month</span>} icon={TrendingDown} accent="bg-rose-400/15 text-rose-200" tone="text-rose-300" />
-        <StatCard label="Savings rate" value={`${savingsRate}%`} sub={<span className={savingsRate >= 20 ? 'text-emerald-300' : 'text-amber-300'}>{savingsRate >= 20 ? 'Great pace' : 'Aim for 20%+'}</span>} icon={Target} accent="bg-violet-400/15 text-violet-200" tone={savingsRate >= 20 ? 'text-emerald-300' : 'text-amber-300'} />
-      </div>
+      {widgets.credit_card_alert.enabled && moduleSettings.credit_cards.enabled && (
+        <CreditCardBillAlert creditCards={credit_cards} transactions={transactions} onPay={onPayCardBill} showMoney={showMoney} />
+      )}
+      {STAT_CARDS.length > 0 && (
+        <div className="grid shrink-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {STAT_CARDS.map((s) => <div key={s.key}>{s.node}</div>)}
+        </div>
+      )}
 
-      {(holdings.length > 0 || loans.length > 0 || bucket_list.length > 0) && (
+      {widgets.quick_tiles.enabled && showQuickTiles && (
         <div className="grid shrink-0 gap-3 sm:grid-cols-3">
-          {holdings.length > 0 && (
+          {showPortfolioTile && (
             <button onClick={() => setView('investments')} className="rounded-xl border border-white/10 bg-white/[.035] p-3 text-left transition hover:bg-white/[.06]">
               <div className="flex items-center justify-between">
                 <span className="text-xs text-slate-400">Portfolio</span>
@@ -737,7 +656,7 @@ function DashboardView({ data, showMoney, onOpenTxForm, setView, onAddRule, onPa
               <div className={`mt-0.5 text-[11px] ${pnl >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>{pnl >= 0 ? '+' : '−'}{money(pnl).replace('-', '')} P&amp;L</div>
             </button>
           )}
-          {loans.length > 0 && (
+          {showLoansTile && (
             <button onClick={() => setView('loans')} className="rounded-xl border border-white/10 bg-white/[.035] p-3 text-left transition hover:bg-white/[.06]">
               <div className="flex items-center justify-between">
                 <span className="text-xs text-slate-400">Loans outstanding</span>
@@ -747,14 +666,14 @@ function DashboardView({ data, showMoney, onOpenTxForm, setView, onAddRule, onPa
               <div className="mt-0.5 text-[11px] text-slate-500">{loans.filter((l) => l.status !== 'closed').length} active loan{loans.filter((l) => l.status !== 'closed').length === 1 ? '' : 's'}</div>
             </button>
           )}
-          {bucket_list.length > 0 && (
+          {showBucketTile && (
             <button onClick={() => setView('bucket')} className="rounded-xl border border-white/10 bg-white/[.035] p-3 text-left transition hover:bg-white/[.06]">
               <div className="flex items-center justify-between">
                 <span className="text-xs text-slate-400">Bucket list</span>
                 <Mountain size={14} className="text-cyan-300" />
               </div>
-              <div className="mt-1.5 text-lg font-semibold text-white">{bucket_list.length} dream{bucket_list.length === 1 ? '' : 's'}</div>
-              <div className="mt-0.5 text-[11px] text-slate-500">{bucket_list.filter((b) => b.status === 'saving').length} being saved for</div>
+              <div className="mt-1.5 text-lg font-semibold text-white">{bucket_list.length} item{bucket_list.length === 1 ? '' : 's'}</div>
+              <div className="mt-0.5 text-[11px] text-slate-500">{bucket_list.filter((b) => (Date.now() - new Date(b.created_at).getTime()) / 86400000 >= 30).length} past 30 days</div>
             </button>
           )}
         </div>
@@ -762,78 +681,86 @@ function DashboardView({ data, showMoney, onOpenTxForm, setView, onAddRule, onPa
 
       <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[1.4fr_1fr]">
         <div className="flex min-h-0 flex-col gap-3">
-          <div className="shrink-0 rounded-2xl border border-white/10 bg-white/[.035] p-3.5">
-            <div className="mb-1 flex items-center justify-between">
-              <div>
-                <div className="text-sm font-semibold text-white">Cash flow · last 6 months</div>
-                <div className="text-xs text-slate-500">Income vs expense</div>
+          {widgets.cashflow_chart.enabled && (
+            <div className="shrink-0 rounded-2xl border border-white/10 bg-white/[.035] p-3.5">
+              <div className="mb-1 flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-semibold text-white">Cash flow · last 6 months</div>
+                  <div className="text-xs text-slate-500">Income vs expense</div>
+                </div>
+                <BarChart3 size={16} className="text-slate-500" />
               </div>
-              <BarChart3 size={16} className="text-slate-500" />
+              <div className="h-40">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={months}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff11" />
+                    <XAxis dataKey="label" tick={{ fill: '#94a3b8', fontSize: 12 }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fill: '#94a3b8', fontSize: 12 }} axisLine={false} tickLine={false} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
+                    <Tooltip cursor={{ fill: '#ffffff08' }} contentStyle={{ background: '#0f1420', border: '1px solid #ffffff22', borderRadius: 12, color: '#fff' }} formatter={(v) => money(v)} />
+                    <Legend iconType="circle" wrapperStyle={{ color: '#94a3b8', fontSize: 12 }} />
+                    <Bar dataKey="income" fill="#34d399" radius={[8, 8, 0, 0]} />
+                    <Bar dataKey="expense" fill="#fb7185" radius={[8, 8, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </div>
-            <div className="h-40">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={months}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#ffffff11" />
-                  <XAxis dataKey="label" tick={{ fill: '#94a3b8', fontSize: 12 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fill: '#94a3b8', fontSize: 12 }} axisLine={false} tickLine={false} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
-                  <Tooltip cursor={{ fill: '#ffffff08' }} contentStyle={{ background: '#0f1420', border: '1px solid #ffffff22', borderRadius: 12, color: '#fff' }} formatter={(v) => money(v)} />
-                  <Legend iconType="circle" wrapperStyle={{ color: '#94a3b8', fontSize: 12 }} />
-                  <Bar dataKey="income" fill="#34d399" radius={[8, 8, 0, 0]} />
-                  <Bar dataKey="expense" fill="#fb7185" radius={[8, 8, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
+          )}
 
-          <div className="flex min-h-0 flex-1 flex-col rounded-2xl border border-white/10 bg-white/[.035]">
-            <div className="flex shrink-0 items-center justify-between px-3.5 py-2.5">
-              <div>
-                <div className="text-sm font-semibold text-white">Recent transactions</div>
-                <div className="text-xs text-slate-500">{thisMonth?.label || 'This month'}'s activity</div>
+          {widgets.recent_transactions.enabled && (
+            <div className="flex min-h-0 flex-1 flex-col rounded-2xl border border-white/10 bg-white/[.035]">
+              <div className="flex shrink-0 items-center justify-between px-3.5 py-2.5">
+                <div>
+                  <div className="text-sm font-semibold text-white">Recent transactions</div>
+                  <div className="text-xs text-slate-500">{thisMonth?.label || 'This month'}'s activity</div>
+                </div>
+                <button onClick={() => setView('transactions')} className="text-xs text-cyan-300 hover:underline">See all</button>
               </div>
-              <button onClick={() => setView('transactions')} className="text-xs text-cyan-300 hover:underline">See all</button>
+              {recent.length === 0 ? (
+                <EmptyState compact icon={Wallet} title="No transactions yet" message="Log your first income or expense to see it here." cta="Add transaction" onCta={onOpenTxForm} />
+              ) : (
+                <TransactionTicker items={recent} categories={categories} accounts={accounts} creditCards={credit_cards} showMoney={showMoney} />
+              )}
             </div>
-            {recent.length === 0 ? (
-              <EmptyState compact icon={Wallet} title="No transactions yet" message="Log your first income or expense to see it here." cta="Add transaction" onCta={onOpenTxForm} />
-            ) : (
-              <TransactionTicker items={recent} categories={categories} accounts={accounts} creditCards={credit_cards} showMoney={showMoney} />
-            )}
-          </div>
+          )}
         </div>
 
         <div className="flex min-h-0 flex-col gap-3">
-          <div className="shrink-0">
-            <MoneyRulesWidget rules={money_rules} onOpen={() => setView('rules')} />
-          </div>
-          <div className="flex min-h-0 flex-1 flex-col rounded-2xl border border-white/10 bg-white/[.035] p-3.5">
-            <div className="mb-2 flex shrink-0 items-center justify-between">
-              <div>
-                <div className="text-sm font-semibold text-white">Balances</div>
-                <div className="text-xs text-slate-500">Accounts, cards &amp; investments</div>
-              </div>
-              <button onClick={() => setView('accounts')} className="text-xs text-cyan-300 hover:underline">Manage</button>
+          {widgets.money_rules_widget.enabled && (
+            <div className="shrink-0">
+              <MoneyRulesWidget rules={money_rules} onOpen={onManageMoneyRules} />
             </div>
-            {balanceItems.length === 0 ? (
-              <EmptyState compact icon={Landmark} title="Nothing tracked yet" message="Add an account, card, or portfolio to see balances here." cta="Add account" onCta={() => setView('accounts')} />
-            ) : (
-              <div className="min-h-0 flex-1 space-y-2 overflow-y-auto">
-                {balanceItems.map((it) => (
-                  <div key={it.id} className="flex items-center justify-between rounded-xl border border-white/5 bg-black/20 px-3 py-2">
-                    <div className="flex min-w-0 items-center gap-2.5">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style={{ background: `${it.color}22`, color: it.color }}>
-                        <it.icon size={14} />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-medium text-white">{it.name}</div>
-                        <div className="truncate text-[11px] capitalize text-slate-500">{it.sub}</div>
-                      </div>
-                    </div>
-                    <div className={`shrink-0 text-sm font-semibold ${it.debt ? 'text-rose-300' : 'text-white'}`}>{showMoney ? `${it.debt ? '−' : ''}${money(it.amount).replace('-', '')}` : '••••'}</div>
-                  </div>
-                ))}
+          )}
+          {widgets.balances_panel.enabled && (
+            <div className="flex min-h-0 flex-1 flex-col rounded-2xl border border-white/10 bg-white/[.035] p-3.5">
+              <div className="mb-2 flex shrink-0 items-center justify-between">
+                <div>
+                  <div className="text-sm font-semibold text-white">Balances</div>
+                  <div className="text-xs text-slate-500">Accounts, cards &amp; investments</div>
+                </div>
+                <button onClick={() => setView('accounts')} className="text-xs text-cyan-300 hover:underline">Manage</button>
               </div>
-            )}
-          </div>
+              {balanceItems.length === 0 ? (
+                <EmptyState compact icon={Landmark} title="Nothing tracked yet" message="Add an account, card, or portfolio to see balances here." cta="Add account" onCta={() => setView('accounts')} />
+              ) : (
+                <div className="min-h-0 flex-1 space-y-2 overflow-y-auto">
+                  {balanceItems.map((it) => (
+                    <div key={it.id} className="flex items-center justify-between rounded-xl border border-white/5 bg-black/20 px-3 py-2">
+                      <div className="flex min-w-0 items-center gap-2.5">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style={{ background: `${it.color}22`, color: it.color }}>
+                          <it.icon size={14} />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-medium text-white">{it.name}</div>
+                          <div className="truncate text-[11px] capitalize text-slate-500">{it.sub}</div>
+                        </div>
+                      </div>
+                      <div className={`shrink-0 text-sm font-semibold ${it.debt ? 'text-rose-300' : 'text-white'}`}>{showMoney ? `${it.debt ? '−' : ''}${money(it.amount).replace('-', '')}` : '••••'}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -1034,7 +961,7 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onImport, 
     })].join('\n')
     const link = document.createElement('a')
     link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }))
-    link.download = 'deepak-finance-transactions.csv'
+    link.download = 'personal-finance-transactions.csv'
     link.click(); URL.revokeObjectURL(link.href)
   }
 
@@ -1042,7 +969,7 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onImport, 
     const doc = new jsPDF()
     const rangeLabel = customRange ? `${formatDate(customRange.start)} - ${formatDate(customRange.end)}` : `${MONTH_NAMES[monthCursor.month]} ${monthCursor.year}`
     doc.setFontSize(14)
-    doc.text('Deepak Finance - Transaction Statement', 14, 16)
+    doc.text('Personal Finance - Transaction Statement', 14, 16)
     doc.setFontSize(10)
     doc.text(rangeLabel, 14, 23)
     autoTable(doc, {
@@ -1053,7 +980,7 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onImport, 
       headStyles: { fillColor: [30, 41, 59] },
       columnStyles: { 5: { halign: 'right' } },
     })
-    doc.save('deepak-finance-transactions.pdf')
+    doc.save('personal-finance-transactions.pdf')
   }
 
   const handleExport = async (kind) => {
@@ -1353,11 +1280,26 @@ function InsightsView({ data }) {
   )
 }
 
+// Maps a module_settings key to its sidebar nav entry — money_rules is intentionally absent
+// here since it now lives entirely inside Settings, not as a top-level view.
+const NAV_META = {
+  credit_cards: { key: 'cards', label: 'Credit cards', icon: CreditCard },
+  investments: { key: 'investments', label: 'Investments', icon: TrendingUp },
+  loans: { key: 'loans', label: 'Loans', icon: Briefcase },
+  family_company: { key: 'family_company', label: 'Family / Company', icon: Users },
+  lend_borrow: { key: 'lend', label: 'Lend / Borrow', icon: Heart },
+  scholarships: { key: 'scholarships', label: 'Scholarships', icon: ShieldCheck },
+  budgets: { key: 'budgets', label: 'Budgets', icon: Target },
+  bucket_list: { key: 'bucket', label: 'Bucket list', icon: Mountain },
+  insights: { key: 'insights', label: 'Insights', icon: LineChart },
+}
+const VIEW_TO_MODULE = Object.fromEntries(Object.entries(NAV_META).map(([moduleKey, meta]) => [meta.key, moduleKey]))
+
 /* ---------------- Shell (nav + main) ---------------- */
 function Shell({ user, onLogout }) {
   const [view, setView] = useState('dashboard')
   const [showMoney, setShowMoney] = useState(true)
-  const [data, setData] = useState({ accounts: [], categories: [], transactions: [], budgets: [], portfolios: [], holdings: [], sips: [], other_investments: [], kite_orders: [], loans: [], loan_payments: [], bucket_list: [], lend_borrow: [], lend_repayments: [], credit_cards: [], credit_card_transactions: [], scholarships: [], scholarship_payments: [], money_rules: [], recurring_transactions: [], money_profiles: [], money_profile_entries: [], profile: null })
+  const [data, setData] = useState({ accounts: [], categories: [], transactions: [], budgets: [], portfolios: [], holdings: [], sips: [], other_investments: [], kite_orders: [], loans: [], loan_payments: [], bucket_list: [], lend_borrow: [], lend_repayments: [], credit_cards: [], credit_card_transactions: [], scholarships: [], scholarship_payments: [], money_rules: [], recurring_transactions: [], money_profiles: [], money_profile_entries: [], budget_months: [], budget_month_categories: [], vault_items: [], profile: null })
   const [loading, setLoading] = useState(true)
 
   const toast = useToast()
@@ -1372,8 +1314,11 @@ function Shell({ user, onLogout }) {
   const [accEditing, setAccEditing] = useState(null)
   const [catFormOpen, setCatFormOpen] = useState(false)
   const [catEditing, setCatEditing] = useState(null)
+  const [catFormDefaultType, setCatFormDefaultType] = useState(null)
   const [budgetFormOpen, setBudgetFormOpen] = useState(false)
   const [budgetEditing, setBudgetEditing] = useState(null)
+  const [budgetMonthFormOpen, setBudgetMonthFormOpen] = useState(false)
+  const [budgetMonthFormInitial, setBudgetMonthFormInitial] = useState(() => { const d = new Date(); return { year: d.getFullYear(), month: d.getMonth() } })
   const [csvOpen, setCsvOpen] = useState(false)
   const [portfolioFormOpen, setPortfolioFormOpen] = useState(false)
   const [portfolioEditing, setPortfolioEditing] = useState(null)
@@ -1406,6 +1351,9 @@ function Shell({ user, onLogout }) {
   const [cardSpendTarget, setCardSpendTarget] = useState(null)
   const [cardPayOpen, setCardPayOpen] = useState(false)
   const [cardPayTarget, setCardPayTarget] = useState(null)
+  const [vaultFormOpen, setVaultFormOpen] = useState(false)
+  const [vaultEditing, setVaultEditing] = useState(null)
+  const [vaultDefaultType, setVaultDefaultType] = useState('bank_account')
   const [scholarshipFormOpen, setScholarshipFormOpen] = useState(false)
   const [scholarshipEditing, setScholarshipEditing] = useState(null)
   const [scholarshipPayOpen, setScholarshipPayOpen] = useState(false)
@@ -1422,6 +1370,7 @@ function Shell({ user, onLogout }) {
   const [moneyProfileEntryProfileId, setMoneyProfileEntryProfileId] = useState(null)
   const [moneyProfileBulkImportOpen, setMoneyProfileBulkImportOpen] = useState(false)
   const [moneyProfileBulkImportProfile, setMoneyProfileBulkImportProfile] = useState(null)
+  const [settingsSection, setSettingsSection] = useState('profile')
 
   const refresh = async () => {
     try {
@@ -1438,13 +1387,22 @@ function Shell({ user, onLogout }) {
         money_rules: result.money_rules || [],
         recurring_transactions: result.recurring_transactions || [],
         money_profiles: result.money_profiles || [], money_profile_entries: result.money_profile_entries || [],
+        budget_months: result.budget_months || [], budget_month_categories: result.budget_month_categories || [],
+        vault_items: result.vault_items || [],
         profile: result.profile || null,
       })
     } catch (e) {
       toast.push(e.message || 'Could not load data', 'error')
     } finally { setLoading(false) }
   }
-  useEffect(() => { refresh() }, [])
+  // Same StrictMode double-invoke guard as App's initial auth check above — without it this
+  // fires the full 19-table /finance/summary load twice on every page open.
+  const didLoad = useRef(false)
+  useEffect(() => {
+    if (didLoad.current) return
+    didLoad.current = true
+    refresh()
+  }, [])
 
   const openTxForm = (t = null, defaultAccountId = '', defaultRepayment = null) => { setTxEditing(t); setTxDefaultAccountId(defaultAccountId); setTxDefaultRepayment(defaultRepayment); setTxFormOpen(true) }
   const closeTxForm = () => { setTxFormOpen(false); setTxEditing(null); setTxDefaultAccountId(''); setTxDefaultRepayment(null) }
@@ -1454,8 +1412,8 @@ function Shell({ user, onLogout }) {
   const closeAccForm = () => { setAccFormOpen(false); setAccEditing(null) }
   const onAccSaved = async () => { closeAccForm(); await refresh() }
 
-  const openCatForm = (c = null) => { setCatEditing(c); setCatFormOpen(true) }
-  const closeCatForm = () => { setCatFormOpen(false); setCatEditing(null) }
+  const openCatForm = (c = null, defaultType = null) => { setCatEditing(c); setCatFormDefaultType(defaultType); setCatFormOpen(true) }
+  const closeCatForm = () => { setCatFormOpen(false); setCatEditing(null); setCatFormDefaultType(null) }
   const onCatSaved = async () => { closeCatForm(); await refresh() }
 
   const openBudgetForm = (b = null) => { setBudgetEditing(b); setBudgetFormOpen(true) }
@@ -1465,6 +1423,28 @@ function Shell({ user, onLogout }) {
   const deleteBudget = async (b) => {
     if (!(await confirm.ask('Delete this budget?'))) return
     const response = await fetch(`/api/finance/budgets/${b.id}`, { method: 'DELETE' })
+    if (response.ok) { toast.push('Budget deleted'); await refresh() } else { toast.push('Delete failed', 'error') }
+  }
+
+  // Monthly budget plans — a plan + its category lines are opened/edited together.
+  // year/month is only the STARTING point — the form owns its own month cursor from there
+  // (prev/next), so this can be current month, next month ("plan ahead"), or any past month
+  // ("back-fill") depending on where it was opened from.
+  const openBudgetMonthForm = (year, month) => { setBudgetMonthFormInitial({ year, month }); setBudgetMonthFormOpen(true) }
+  const closeBudgetMonthForm = () => setBudgetMonthFormOpen(false)
+  const onBudgetMonthSaved = async () => { closeBudgetMonthForm(); await refresh() }
+  const closeBudgetMonth = async (plan) => {
+    if (!(await confirm.ask(`Close ${MONTH_NAMES[plan.month]} ${plan.year}'s budget? It moves into your history log — you can still reopen it later.`))) return
+    const response = await fetch(`/api/finance/budget_months/${plan.id}/close`, { method: 'POST' })
+    if (response.ok) { toast.push('Month closed'); await refresh() } else { toast.push('Could not close', 'error') }
+  }
+  const reopenBudgetMonth = async (plan) => {
+    const response = await fetch(`/api/finance/budget_months/${plan.id}/reopen`, { method: 'POST' })
+    if (response.ok) { toast.push('Month reopened'); await refresh() } else { toast.push('Could not reopen', 'error') }
+  }
+  const deleteBudgetMonth = async (plan) => {
+    if (!(await confirm.ask(`Delete ${MONTH_NAMES[plan.month]} ${plan.year}'s budget? This can't be undone.`))) return
+    const response = await fetch(`/api/finance/budget_months/${plan.id}`, { method: 'DELETE' })
     if (response.ok) { toast.push('Budget deleted'); await refresh() } else { toast.push('Delete failed', 'error') }
   }
 
@@ -1605,9 +1585,13 @@ function Shell({ user, onLogout }) {
     }
   }
   useEffect(() => { if (data.profile?.theme) setTheme(data.profile.theme) }, [data.profile])
-  // Scholarships is opt-in — if it gets turned off while that view is open (or data just loaded
-  // with it already off), fall back to the dashboard instead of showing a nav-less dead view.
-  useEffect(() => { if (view === 'scholarships' && data.profile && !data.profile.scholarships_enabled) setView('dashboard') }, [view, data.profile])
+  // Every non-mandatory module is opt-in — if the one behind the current view gets turned off
+  // (or data just loaded with it already off), fall back to the dashboard instead of showing a
+  // nav-less dead view.
+  useEffect(() => {
+    const moduleKey = VIEW_TO_MODULE[view]
+    if (moduleKey && data.profile && !resolveModuleSettings(data.profile)[moduleKey]?.enabled) setView('dashboard')
+  }, [view, data.profile])
   const onThemeChange = async (t) => { setTheme(t); await fetch('/api/finance/profile', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ theme: t }) }); toast.push(`Theme: ${t}`, 'info') }
 
   // Credit cards
@@ -1629,6 +1613,14 @@ function Shell({ user, onLogout }) {
     if (!(await confirm.ask('Delete this spend?'))) return
     const response = await fetch(`/api/finance/credit_card_transactions/${t.id}`, { method: 'DELETE' })
     if (response.ok) { toast.push('Spend removed'); await refresh() } else { toast.push('Delete failed', 'error') }
+  }
+  const openVaultForm = (item = null, defaultType = 'bank_account') => { setVaultEditing(item); setVaultDefaultType(defaultType); setVaultFormOpen(true) }
+  const closeVaultForm = () => { setVaultFormOpen(false); setVaultEditing(null) }
+  const onVaultSaved = async () => { closeVaultForm(); await refresh() }
+  const deleteVaultItem = async (item) => {
+    if (!(await confirm.ask(`Delete "${item.label}" from the vault? This can't be undone.`))) return
+    const response = await fetch(`/api/finance/vault_items/${item.id}`, { method: 'DELETE' })
+    if (response.ok) { toast.push('Vault item deleted'); await refresh() } else { toast.push('Delete failed', 'error') }
   }
 
   // Scholarships
@@ -1684,11 +1676,6 @@ function Shell({ user, onLogout }) {
     const response = await fetch(`/api/finance/money_profiles/${p.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: nextStatus }) })
     if (response.ok) { toast.push(nextStatus === 'closed' ? 'Profile closed' : 'Profile reactivated'); await refresh() } else { toast.push('Update failed', 'error') }
   }
-  const updateMoneyProfileCategories = async (p, categories) => {
-    const response = await fetch(`/api/finance/money_profiles/${p.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ categories }) })
-    if (response.ok) await refresh(); else toast.push('Update failed', 'error')
-  }
-
   // Money rules
   const addRule = async (rule_text) => {
     const nextOrder = (data.money_rules?.[data.money_rules.length - 1]?.order_index ?? 0) + 1
@@ -1753,23 +1740,49 @@ function Shell({ user, onLogout }) {
     const response = await fetch(`/api/finance/categories/${c.id}`, { method: 'DELETE' })
     if (response.ok) { toast.push('Category deleted'); await refresh() } else { toast.push('Delete failed', 'error') }
   }
+  // Swaps order_index between two adjacent categories/accounts — a plain two-PATCH swap rather
+  // than a dedicated bulk-reorder endpoint, since the list only ever moves one step at a time.
+  // Each PATCH response already returns the full updated row, so — same as onSaveProfile — these
+  // merge straight into local state instead of paying for a full refresh() (a 19-table re-fetch)
+  // on every single click, which is what made the Settings checkboxes/reorder feel sluggish.
+  const reorderCategory = async (a, b) => {
+    if (!b) return
+    const [r1, r2] = await Promise.all([
+      fetch(`/api/finance/categories/${a.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order_index: b.order_index ?? 0 }) }),
+      fetch(`/api/finance/categories/${b.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order_index: a.order_index ?? 0 }) }),
+    ])
+    if (!r1.ok || !r2.ok) { toast.push('Reorder failed', 'error'); return }
+    const [u1, u2] = await Promise.all([r1.json(), r2.json()])
+    setData((d) => ({ ...d, categories: d.categories.map((cat) => (cat.id === u1.id ? u1 : cat.id === u2.id ? u2 : cat)) }))
+  }
+  const toggleCategoryModule = async (c, moduleKey) => {
+    const hidden = c.hidden_in_modules || []
+    const next = hidden.includes(moduleKey) ? hidden.filter((m) => m !== moduleKey) : [...hidden, moduleKey]
+    const response = await fetch(`/api/finance/categories/${c.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hidden_in_modules: next }) })
+    if (!response.ok) { toast.push('Update failed', 'error'); return }
+    const updated = await response.json()
+    setData((d) => ({ ...d, categories: d.categories.map((cat) => (cat.id === updated.id ? updated : cat)) }))
+  }
+  const reorderAccount = async (a, b) => {
+    if (!b) return
+    const [r1, r2] = await Promise.all([
+      fetch(`/api/finance/accounts/${a.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order_index: b.order_index ?? 0 }) }),
+      fetch(`/api/finance/accounts/${b.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order_index: a.order_index ?? 0 }) }),
+    ])
+    if (!r1.ok || !r2.ok) { toast.push('Reorder failed', 'error'); return }
+    const [u1, u2] = await Promise.all([r1.json(), r2.json()])
+    setData((d) => ({ ...d, accounts: d.accounts.map((acc) => (acc.id === u1.id ? u1 : acc.id === u2.id ? u2 : acc)) }))
+  }
+  const openSettings = (section) => { setSettingsSection(section); setView('profile') }
 
   const firstName = data.profile?.full_name?.split(' ')?.[0] || user?.user_metadata?.full_name?.split(' ')?.[0] || user?.email?.split('@')?.[0] || 'Deepak'
 
+  const moduleSettings = resolveModuleSettings(data.profile)
   const nav = [
     { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { key: 'transactions', label: 'Transactions', icon: BarChart3 },
     { key: 'accounts', label: 'Accounts', icon: Landmark },
-    { key: 'cards', label: 'Credit cards', icon: CreditCard },
-    { key: 'investments', label: 'Investments', icon: TrendingUp },
-    { key: 'loans', label: 'Loans', icon: Briefcase },
-    { key: 'family_company', label: 'Family / Company', icon: Users },
-    { key: 'lend', label: 'Lend / Borrow', icon: Heart },
-    ...(data.profile?.scholarships_enabled ? [{ key: 'scholarships', label: 'Scholarships', icon: ShieldCheck }] : []),
-    { key: 'budgets', label: 'Budgets', icon: Target },
-    { key: 'bucket', label: 'Bucket list', icon: Mountain },
-    { key: 'rules', label: 'Money rules', icon: Star },
-    { key: 'insights', label: 'Insights', icon: LineChart },
+    ...orderedEnabledKeys(moduleSettings).filter((k) => NAV_META[k]).map((k) => NAV_META[k]),
   ]
   const avatarUrl = data.profile?.avatar_url || user?.user_metadata?.avatar_url || user?.user_metadata?.picture || ''
   const fitScreen = view === 'dashboard' || view === 'profile'
@@ -1831,21 +1844,30 @@ function Shell({ user, onLogout }) {
             </div>
           ) : (
             <div className={fitScreen ? 'min-h-0 flex-1 lg:overflow-y-auto' : ''}>
-              {view === 'dashboard' && <DashboardView data={data} showMoney={showMoney} onOpenTxForm={() => openTxForm()} setView={setView} onPayCardBill={openCardPay} />}
+              {view === 'dashboard' && <DashboardView data={data} showMoney={showMoney} onOpenTxForm={() => openTxForm()} setView={setView} onManageMoneyRules={() => openSettings('money_rules')} onPayCardBill={openCardPay} />}
               {view === 'transactions' && <TransactionsView data={data} onOpenTxForm={() => openTxForm()} onEditTx={openTxForm} onDeleteTx={deleteTx} onImport={() => setCsvOpen(true)} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onOpenRecurring={openRecurringManager} onPayCardBill={openCardPay} />}
               {view === 'accounts' && <AccountsView data={data} onAdd={() => openAccForm()} onEdit={openAccForm} onDelete={deleteAccount} onDeleteTx={deleteTx} onAddTransaction={(accountId) => openTxForm(null, accountId)} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
-              {view === 'categories' && <CategoriesView data={data} onAdd={() => openCatForm()} onEdit={openCatForm} onDelete={deleteCategory} />}
-              {view === 'budgets' && <BudgetsView data={data} onAdd={() => openBudgetForm()} onEdit={openBudgetForm} onDelete={deleteBudget} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
+              {view === 'budgets' && <BudgetsView data={data} onSetMonth={openBudgetMonthForm} onCloseMonth={closeBudgetMonth} onReopenMonth={reopenBudgetMonth} onDeleteMonth={deleteBudgetMonth} onAddYearly={() => openBudgetForm()} onEditYearly={openBudgetForm} onDeleteYearly={deleteBudget} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'investments' && <InvestmentsView data={data} onAddPortfolio={() => openPortfolioForm()} onEditPortfolio={openPortfolioForm} onDeletePortfolio={deletePortfolio} onAddHolding={openHoldingForm} onBulkImport={openBulkImport} onEditHolding={openHoldingEdit} onDeleteHolding={deleteHolding} onRefreshRowPrice={onRefreshRowPrice} onManualPriceEntry={onManualPriceEntry} onRefreshAll={refreshAllPrices} pricesLoading={pricesLoading} onAddFunds={openFundsForm} onWithdrawFunds={openWithdrawForm} onConnectKite={connectKite} onLinkKite={linkPortfolioKite} onUnlinkKite={unlinkPortfolioKite} onSyncKite={syncPortfolioKite} kiteSyncBusy={kiteSyncBusy} onAddSip={openSipForm} onEditSip={openSipForm} onDeleteSip={deleteSip} onSyncSipsKite={syncSipsKite} onAddOtherInvestment={openOtherInvestmentForm} onEditOtherInvestment={openOtherInvestmentEdit} onDeleteOtherInvestment={deleteOtherInvestment} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'cards' && <CreditCardsView data={data} onAdd={() => openCardForm()} onEdit={openCardForm} onDelete={deleteCard} onSpend={openCardSpend} onPay={openCardPay} onDeleteSpend={deleteCardSpend} onDeleteTx={deleteTx} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'scholarships' && <ScholarshipsView data={data} onAdd={() => openScholarshipForm()} onEdit={openScholarshipForm} onDelete={deleteScholarship} onPay={openScholarshipPay} onRefresh={refresh} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} toast={toast} />}
-              {view === 'rules' && <MoneyRulesView data={data} onAdd={addRule} onToggle={toggleRule} onEdit={() => {}} onDelete={deleteRule} />}
               {view === 'loans' && <LoansView data={data} onAdd={() => openLoanForm()} onEdit={openLoanForm} onDelete={deleteLoan} onPay={openLoanPay} onDeletePayment={deleteLoanPayment} onSync={syncLoanOutstanding} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'lend' && <LendBorrowView data={data} onAdd={() => openLendForm()} onEdit={openLendForm} onDelete={deleteLend} onDeleteTx={deleteTx} onLogRepayment={(record) => openTxForm(null, '', { value: `lend:${record.id}`, type: record.type === 'lent' ? 'income' : 'expense' })} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'family_company' && <FamilyCompanyView data={data} onAddProfile={() => openMoneyProfileForm()} onEditProfile={openMoneyProfileForm} onDeleteProfile={deleteMoneyProfile} onAddEntry={openMoneyProfileEntryForm} onEditEntry={openMoneyProfileEntryEdit} onDeleteEntry={deleteMoneyProfileEntry} onBulkImport={openMoneyProfileBulkImport} onToggleStatus={toggleMoneyProfileStatus} />}
               {view === 'bucket' && <BucketListView data={data} onAdd={() => openBucketForm()} onEdit={openBucketForm} onDelete={deleteBucket} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'insights' && <InsightsView data={data} />}
-              {view === 'profile' && <ProfileView data={data} user={user} theme={theme} onThemeChange={onThemeChange} onSaveProfile={onSaveProfile} onAddCategory={() => openCatForm()} onEditCategory={openCatForm} onDeleteCategory={deleteCategory} onLogout={onLogout} />}
+              {view === 'profile' && (
+                <SettingsShell
+                  activeSection={settingsSection} onSectionChange={setSettingsSection}
+                  data={data} user={user} theme={theme} onThemeChange={onThemeChange} onSaveProfile={onSaveProfile}
+                  onAddCategory={(defaultType) => openCatForm(null, defaultType)} onEditCategory={openCatForm} onDeleteCategory={deleteCategory}
+                  onReorderCategory={reorderCategory} onToggleCategoryModule={toggleCategoryModule}
+                  onReorderAccount={reorderAccount}
+                  onAddVaultItem={(type) => openVaultForm(null, type)} onEditVaultItem={openVaultForm} onDeleteVaultItem={deleteVaultItem}
+                  onAddRule={addRule} onToggleRule={toggleRule} onDeleteRule={deleteRule}
+                  onLogout={onLogout}
+                />
+              )}
             </div>
           )}
         </main>
@@ -1870,10 +1892,16 @@ function Shell({ user, onLogout }) {
       {/* Modals */}
       <TransactionForm open={txFormOpen} onClose={closeTxForm} onSaved={onTxSaved} editing={txEditing} accounts={data.accounts} categories={data.categories} creditCards={data.credit_cards} lendBorrow={data.lend_borrow} loans={data.loans} onAddAccount={() => { closeTxForm(); openAccForm() }} onAddCategory={() => openCatForm()} toast={toast} profile={data.profile} defaultAccountId={txDefaultAccountId} defaultRepayment={txDefaultRepayment} />
       <AccountForm open={accFormOpen} onClose={closeAccForm} onSaved={onAccSaved} editing={accEditing} accounts={data.accounts} toast={toast} />
-      <CategoryForm open={catFormOpen} onClose={closeCatForm} onSaved={onCatSaved} editing={catEditing} toast={toast} />
+      <CategoryForm open={catFormOpen} onClose={closeCatForm} onSaved={onCatSaved} editing={catEditing} defaultType={catFormDefaultType} toast={toast} />
       <RecurringManager open={recurringManagerOpen} onClose={closeRecurringManager} rules={data.recurring_transactions} onAdd={() => openRecurringForm()} onEdit={openRecurringForm} onToggle={toggleRecurring} onDelete={deleteRecurring} showMoney={showMoney} />
       <RecurringForm open={recurringFormOpen} onClose={closeRecurringForm} onSaved={onRecurringSaved} editing={recurringEditing} accounts={data.accounts} categories={data.categories} toast={toast} />
       <BudgetForm open={budgetFormOpen} onClose={closeBudgetForm} onSaved={onBudgetSaved} editing={budgetEditing} categories={data.categories} toast={toast} />
+      <BudgetMonthForm
+        open={budgetMonthFormOpen} onClose={closeBudgetMonthForm} onSaved={onBudgetMonthSaved}
+        initialYear={budgetMonthFormInitial.year} initialMonth={budgetMonthFormInitial.month}
+        budgetMonths={data.budget_months} budgetMonthCategories={data.budget_month_categories}
+        categories={data.categories} onAddCategory={() => openCatForm()} toast={toast}
+      />
       <CsvImport open={csvOpen} onClose={() => setCsvOpen(false)} onImported={async () => { setCsvOpen(false); await refresh() }} accounts={data.accounts} categories={data.categories} transactions={data.transactions} toast={toast} />
       <PortfolioForm open={portfolioFormOpen} onClose={closePortfolioForm} onSaved={onPortfolioSaved} editing={portfolioEditing} accounts={data.accounts} toast={toast} />
       <HoldingForm open={holdingFormOpen} onClose={closeHoldingForm} onSaved={onHoldingSaved} editing={holdingEditing} portfolios={data.portfolios} defaultPortfolioId={holdingDefaultPortfolio} profile={data.profile} toast={toast} />
@@ -1887,13 +1915,14 @@ function Shell({ user, onLogout }) {
       <WithdrawFundsForm open={withdrawFormOpen} onClose={closeWithdrawForm} onSaved={onWithdrawSaved} portfolio={withdrawPortfolio} accounts={data.accounts} toast={toast} />
       <SipForm open={sipFormOpen} onClose={closeSipForm} onSaved={onSipSaved} editing={sipEditing} portfolios={data.portfolios} toast={toast} />
       <CreditCardForm open={cardFormOpen} onClose={closeCardForm} onSaved={onCardSaved} editing={cardEditing} toast={toast} />
+      <VaultItemForm open={vaultFormOpen} onClose={closeVaultForm} onSaved={onVaultSaved} editing={vaultEditing} accounts={data.accounts} toast={toast} defaultType={vaultDefaultType} />
       <CardSpendForm open={cardSpendOpen} onClose={closeCardSpend} onSaved={onCardSpendSaved} card={cardSpendTarget} categories={data.categories} toast={toast} />
       <CardPayForm open={cardPayOpen} onClose={closeCardPay} onSaved={onCardPaid} card={cardPayTarget} accounts={data.accounts} toast={toast} />
       <ScholarshipForm open={scholarshipFormOpen} onClose={closeScholarshipForm} onSaved={onScholarshipSaved} editing={scholarshipEditing} accounts={data.accounts} toast={toast} />
       <ScholarshipPayForm open={scholarshipPayOpen} onClose={closeScholarshipPay} onSaved={onScholarshipPaid} scholarship={scholarshipPayTarget} accounts={data.accounts} toast={toast} />
       <MoneyProfileForm open={moneyProfileFormOpen} onClose={closeMoneyProfileForm} onSaved={onMoneyProfileSaved} editing={moneyProfileEditing} accounts={data.accounts} toast={toast} />
-      <MoneyProfileEntryForm open={moneyProfileEntryFormOpen} onClose={closeMoneyProfileEntryForm} onSaved={onMoneyProfileEntrySaved} editing={moneyProfileEntryEditing} profile={data.money_profiles?.find((p) => p.id === moneyProfileEntryProfileId)} onUpdateCategories={updateMoneyProfileCategories} toast={toast} />
-      <MoneyProfileBulkImport open={moneyProfileBulkImportOpen} onClose={closeMoneyProfileBulkImport} onImported={onMoneyProfileBulkImported} profile={moneyProfileBulkImportProfile} toast={toast} />
+      <MoneyProfileEntryForm open={moneyProfileEntryFormOpen} onClose={closeMoneyProfileEntryForm} onSaved={onMoneyProfileEntrySaved} editing={moneyProfileEntryEditing} profile={data.money_profiles?.find((p) => p.id === moneyProfileEntryProfileId)} categories={data.categories} onAddCategory={() => openCatForm()} toast={toast} />
+      <MoneyProfileBulkImport open={moneyProfileBulkImportOpen} onClose={closeMoneyProfileBulkImport} onImported={onMoneyProfileBulkImported} profile={moneyProfileBulkImportProfile} categories={data.categories} toast={toast} />
     </div>
   )
 }
@@ -1902,7 +1931,13 @@ function Shell({ user, onLogout }) {
 function App() {
   const [user, setUser] = useState(undefined)
   const [authError, setAuthError] = useState('')
+  // React StrictMode (on by default in dev) intentionally double-invokes a fresh mount's effects
+  // to surface cleanup bugs — harmless in itself, but this effect has no cleanup, so without this
+  // guard it fires the real /api/auth/me network round trip twice on every single page load.
+  const didInit = useRef(false)
   useEffect(() => {
+    if (didInit.current) return
+    didInit.current = true
     const params = new URLSearchParams(window.location.search)
     const err = params.get('auth_error')
     if (err) setAuthError(err)

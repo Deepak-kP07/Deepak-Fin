@@ -50,7 +50,7 @@ export function CardSpendForm({ open, onClose, onSaved, card, categories, toast 
       toast.push('Spend logged'); onSaved()
     } catch (err) { toast.push(err.message, 'error') } finally { setBusy(false) }
   }
-  const expenseCats = categories.filter((c) => c.type === 'expense')
+  const expenseCats = categories.filter((c) => c.type === 'expense' && !(c.hidden_in_modules || []).includes('credit_card_spend'))
   return (
     <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center" onClick={onClose}>
       <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-3xl border border-white/10 bg-[#141a28] p-6">

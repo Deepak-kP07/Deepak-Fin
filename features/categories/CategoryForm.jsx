@@ -5,11 +5,11 @@ import { X } from 'lucide-react'
 import { Select } from '@/components/shared/Select'
 import { ColorPicker } from '@/components/shared/ColorPicker'
 
-export function CategoryForm({ open, onClose, onSaved, editing, toast }) {
-  const initial = editing ? { ...editing } : { name: '', type: 'expense', color: '#fb7185', icon: 'tag' }
+export function CategoryForm({ open, onClose, onSaved, editing, defaultType, toast }) {
+  const initial = editing ? { ...editing } : { name: '', type: defaultType || 'expense', color: '#fb7185', icon: 'tag' }
   const [form, setForm] = useState(initial)
   const [busy, setBusy] = useState(false)
-  useEffect(() => { setForm(initial) }, [editing, open])
+  useEffect(() => { setForm(initial) }, [editing, open, defaultType])
   if (!open) return null
   const save = async (e) => {
     e.preventDefault(); setBusy(true)

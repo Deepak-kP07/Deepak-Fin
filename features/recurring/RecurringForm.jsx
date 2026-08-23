@@ -15,7 +15,7 @@ export function RecurringForm({ open, onClose, onSaved, editing, accounts, categ
   const [busy, setBusy] = useState(false)
   useEffect(() => { setForm(initial) }, [editing, open])
   if (!open) return null
-  const catsForType = categories.filter((c) => c.type === form.type)
+  const catsForType = categories.filter((c) => c.type === form.type && !(c.hidden_in_modules || []).includes('recurring'))
   const save = async (e) => {
     e.preventDefault(); setBusy(true)
     try {

@@ -8,6 +8,7 @@ import {
 import { projectSchedule } from '@/lib/amortization'
 import { formatDate, liveOutstanding, money, monthAbbr, ordinal, paymentTypeLabel, todayISO } from '@/lib/format'
 import { StatCard } from '@/components/shared/StatCard'
+import { DismissibleBanner } from '@/components/shared/DismissibleBanner'
 
 export function LoanDetailView({ loan, payments, accounts, onBack, onPay, onDeletePayment, onEdit, onDelete, onSync, showMoney, onToggleMoney }) {
   const [syncOpen, setSyncOpen] = useState(false)
@@ -172,15 +173,15 @@ export function LoanDetailView({ loan, payments, accounts, onBack, onPay, onDele
       )}
 
       {emiDue && (
-        <div className={`rounded-xl border px-4 py-3 text-sm ${emiDue.days <= 3 ? 'border-amber-300/30 bg-amber-300/5 text-amber-200' : 'border-white/10 bg-white/[.035] text-slate-300'}`}>
+        <DismissibleBanner tone={emiDue.days <= 3 ? 'amber' : 'slate'}>
           Next EMI due on the {ordinal(loan.emi_due_day)} · {emiDue.days > 0 ? `in ${emiDue.days} day${emiDue.days === 1 ? '' : 's'}` : emiDue.days === 0 ? 'today' : 'overdue'}
-        </div>
+        </DismissibleBanner>
       )}
 
       {outstandingExceedsPrincipal && (
-        <div className="rounded-xl border border-amber-300/30 bg-amber-300/5 px-4 py-3 text-sm text-amber-200">
+        <DismissibleBanner tone="amber">
           Outstanding ({money(outstanding)}) is higher than Principal ({money(principal)}) — that shouldn't happen. Double-check the Principal amount by editing this loan.
-        </div>
+        </DismissibleBanner>
       )}
 
       <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-6">

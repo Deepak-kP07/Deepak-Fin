@@ -7,6 +7,7 @@ import { StatCard } from '@/components/shared/StatCard'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { NetBar } from '@/components/shared/NetBar'
 import { MonthCursor } from '@/components/shared/MonthCursor'
+import { DismissibleBanner } from '@/components/shared/DismissibleBanner'
 import { currentValueOf, CATEGORY_BADGE_STYLE } from '@/lib/otherInvestments'
 import { formatDate, formatDateTime, money, money2, monthName, relativeTime } from '@/lib/format'
 
@@ -109,9 +110,9 @@ export function PortfolioDetailView({
       </div>
 
       {kiteLinked && (
-        <div className="rounded-xl border border-cyan-300/20 bg-cyan-300/5 px-4 py-2.5 text-xs text-cyan-200">
+        <DismissibleBanner tone="cyan">
           Synced from Kite · {portfolio.last_kite_sync_at ? `last synced ${relativeTime(portfolio.last_kite_sync_at)}` : 'not synced yet'}. Holdings here mirror your real Zerodha account — add/edit them from Kite, not here.
-        </div>
+        </DismissibleBanner>
       )}
 
       <div className="grid gap-4 sm:grid-cols-4">

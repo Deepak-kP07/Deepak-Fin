@@ -31,6 +31,9 @@ export const accounts = pgTable('accounts', {
   // A debit card has no balance of its own — transactions against it resolve
   // to this linked account instead, so it's purely a named alias.
   linkedAccountId: uuid('linked_account_id').references(() => accounts.id, { onDelete: 'cascade' }),
+  // User-controlled display order in every account dropdown/list — backfilled from creation
+  // order on migration, freely reorderable afterward from Settings.
+  orderIndex: integer('order_index').notNull().default(0),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index('accounts_user_id_idx').on(t.userId)])
 
@@ -42,6 +45,13 @@ export const categories = pgTable('categories', {
   icon: text('icon'),
   color: text('color'),
   isDefault: boolean('is_default').notNull().default(false),
+  // User-controlled display order within its type group — backfilled from creation order on
+  // migration, freely reorderable afterward from Settings.
+  orderIndex: integer('order_index').notNull().default(0),
+  // Which category-consuming modules this category should be hidden from — empty means visible
+  // everywhere (the safe, backward-compatible default). Module keys: transactions, budgets,
+  // recurring, credit_card_spend, family_company.
+  hiddenInModules: text('hidden_in_modules').array().notNull().default(sql`ARRAY[]::text[]`),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [unique('categories_user_id_name_type_key').on(t.userId, t.name, t.type), index('categories_user_id_idx').on(t.userId)])
 
@@ -105,6 +115,10 @@ export const recurringTransactions = pgTable('recurring_transactions', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [check('recurring_transactions_amount_check', sql`${t.amount} > 0`), index('recurring_user_idx').on(t.userId)])
 
+// Yearly-only going forward — the monthly path was redesigned into budgetMonths/
+// budgetMonthCategories below, which supports an overall total plus a full category breakdown
+// set together, and a close/reopen lifecycle. This table's `period` column still technically
+// allows 'monthly' at the DB level, but the app only ever writes 'yearly' rows to it now.
 export const budgets = pgTable('budgets', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
@@ -114,6 +128,40 @@ export const budgets = pgTable('budgets', {
   startDate: date('start_date').notNull().defaultNow(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [check('budgets_amount_check', sql`${t.amount} >= 0`), index('budgets_user_id_idx').on(t.userId)])
+
+export const budgetMonths = pgTable('budget_months', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
+  // 0-11, matching the { year, month } month-cursor shape used everywhere else in this app
+  // (Scholarships, Family/Company, Accounts, Investments, Credit Cards).
+  year: integer('year').notNull(),
+  month: integer('month').notNull(),
+  totalAmount: numeric('total_amount', { precision: 14, scale: 2 }).notNull().default('0'),
+  // 'closed' locks the plan's amounts as a historical log entry — auto-flipped the first time
+  // /finance/summary loads in a later calendar month than this one, so a plan never sits open
+  // and stale; can also be closed/reopened by hand at any time.
+  status: text('status').notNull().default('active'),
+  closedAt: timestamp('closed_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  check('budget_months_status_check', sql`${t.status} in ('active','closed')`),
+  index('budget_months_user_idx').on(t.userId),
+  unique('budget_months_user_year_month_key').on(t.userId, t.year, t.month),
+])
+
+export const budgetMonthCategories = pgTable('budget_month_categories', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  budgetMonthId: uuid('budget_month_id').notNull().references(() => budgetMonths.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
+  categoryId: uuid('category_id').notNull().references(() => categories.id, { onDelete: 'cascade' }),
+  amount: numeric('amount', { precision: 14, scale: 2 }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  check('budget_month_categories_amount_check', sql`${t.amount} >= 0`),
+  index('budget_month_categories_month_idx').on(t.budgetMonthId),
+  index('budget_month_categories_user_idx').on(t.userId),
+  unique('budget_month_categories_month_category_key').on(t.budgetMonthId, t.categoryId),
+])
 
 export const portfolios = pgTable('portfolios', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -254,15 +302,19 @@ export const loanPayments = pgTable('loan_payments', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [check('loan_payments_amount_check', sql`${t.amount} > 0`), index('loan_payments_loan_idx').on(t.loanId), index('loan_payments_user_idx').on(t.userId)])
 
+// A 30-day-rule impulse-purchase tracker, not a funded-goal wishlist — add a product you're
+// tempted to buy, and `created_at` alone is what the UI counts days-since-added against. No
+// status/priority/target-date lifecycle; you just look at the day count and reasons whenever
+// you feel like deciding, then delete the row once you have.
 export const bucketList = pgTable('bucket_list', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
   title: text('title').notNull(),
-  estimatedCost: numeric('estimated_cost', { precision: 14, scale: 2 }).notNull().default('0'),
-  priority: text('priority').notNull().default('medium'),
-  targetDate: date('target_date'),
-  status: text('status').notNull().default('wishlist'),
-  notes: text('notes'),
+  productUrl: text('product_url'),
+  estimatedCost: numeric('estimated_cost', { precision: 14, scale: 2 }),
+  // Up to 3 short reasons you actually want this — the whole point of the 30-day rule is being
+  // able to look back at why you wanted it, not just how long you've waited.
+  reasons: text('reasons').array().notNull().default(sql`ARRAY[]::text[]`),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index('bucket_user_idx').on(t.userId)])
 
@@ -292,9 +344,13 @@ export const profiles = pgTable('profiles', {
   // balance: true = block it outright, false = allow it through a "confirm anyway" prompt.
   // Credit cards have no equivalent toggle — going over the limit is always blocked.
   blockInsufficientFunds: boolean('block_insufficient_funds').notNull().default(true),
-  // Scholarships is an opt-in module — off by default, only shown in the nav once the user
-  // turns it on from their profile settings.
-  scholarshipsEnabled: boolean('scholarships_enabled').notNull().default(false),
+  // Which non-mandatory modules (everything except dashboard/transactions/accounts) are shown
+  // in the sidebar, and in what order. Shape: { [moduleKey]: { enabled: boolean, order: number } }.
+  // Missing/unset keys fall back to lib/moduleSettings.js's defaults — see resolveModuleSettings().
+  moduleSettings: jsonb('module_settings').notNull().default(sql`'{}'::jsonb`),
+  // Which dashboard sections are shown, and in what order. Shape matches moduleSettings:
+  // { [sectionKey]: { enabled: boolean, order: number } }. See lib/moduleSettings.js.
+  dashboardWidgets: jsonb('dashboard_widgets').notNull().default(sql`'{}'::jsonb`),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
@@ -403,9 +459,6 @@ export const moneyProfiles = pgTable('money_profiles', {
   // 'closed' blocks new entries (manual and bulk-import) until switched back to 'active' —
   // existing entries stay fully visible/editable either way, only creation is gated.
   status: text('status').notNull().default('active'),
-  // User-customizable per profile (add/remove in the UI) — seeded with a few sensible starters
-  // at creation so the entry form always has something to pick from immediately.
-  categories: text('categories').array().notNull().default(sql`ARRAY['Salary','Rent','Groceries','Utilities','Other']::text[]`),
   notes: text('notes'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
@@ -419,7 +472,7 @@ export const moneyProfileEntries = pgTable('money_profile_entries', {
   profileId: uuid('profile_id').notNull().references(() => moneyProfiles.id, { onDelete: 'cascade' }),
   userId: uuid('user_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
   entryType: text('entry_type').notNull().default('expense'),
-  category: text('category'),
+  categoryId: uuid('category_id').references(() => categories.id, { onDelete: 'set null' }),
   description: text('description').notNull(),
   amount: numeric('amount', { precision: 14, scale: 2 }).notNull(),
   date: date('date').notNull().defaultNow(),
@@ -443,3 +496,25 @@ export const moneyRules = pgTable('money_rules', {
   isActive: boolean('is_active').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index('money_rules_user_idx').on(t.userId)])
+
+// A personal credential store — bank account numbers/IFSC, debit/credit card numbers, expiry,
+// CVV, PIN. Only the display fields below (label/bankName/last4/color) are plaintext; every
+// actually sensitive value lives inside encryptedPayload (AES-256-GCM ciphertext, see
+// lib/server/vaultCrypto.js) and is never selected by the generic CRUD engine — only the
+// dedicated reveal route decrypts it, on demand, per item.
+export const vaultItems = pgTable('vault_items', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
+  itemType: text('item_type').notNull(),
+  label: text('label').notNull(),
+  bankName: text('bank_name'),
+  last4: text('last4'),
+  color: text('color'),
+  linkedAccountId: uuid('linked_account_id').references(() => accounts.id, { onDelete: 'set null' }),
+  encryptedPayload: text('encrypted_payload').notNull(),
+  orderIndex: integer('order_index').notNull().default(0),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  check('vault_items_type_check', sql`${t.itemType} in ('bank_account','debit_card','credit_card')`),
+  index('vault_items_user_idx').on(t.userId),
+])

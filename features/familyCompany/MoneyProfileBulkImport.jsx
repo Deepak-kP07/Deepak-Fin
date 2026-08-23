@@ -26,28 +26,40 @@ function downloadTemplate() {
   URL.revokeObjectURL(url)
 }
 
-function parseRow(r, mapping) {
-  const rawAmount = String(r[mapping.amount] || '').replace(/[,₹\s]/g, '')
-  const amount = Number(rawAmount)
-  const description = String(r[mapping.description] || '').trim().slice(0, 200)
-  const rawType = (mapping.entry_type ? String(r[mapping.entry_type] || '').toLowerCase() : '')
-  let entry_type = 'expense'
-  if (rawType.includes('income') || rawType === 'cr' || rawType === 'credit') entry_type = 'income'
-  else if (rawType.includes('capital')) entry_type = 'capital'
-  else if (rawType.includes('expense') || rawType === 'dr' || rawType === 'debit') entry_type = 'expense'
-  else if (rawAmount.startsWith('-')) entry_type = 'expense'
-  let date = r[mapping.date] || todayISO()
-  const m = String(date).match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/)
-  if (m) { const y = m[3].length === 2 ? `20${m[3]}` : m[3]; date = `${y}-${String(m[2]).padStart(2, '0')}-${String(m[1]).padStart(2, '0')}` }
-  const category = mapping.category ? String(r[mapping.category] || '').trim() || null : null
-  const paid_party = mapping.paid_party ? String(r[mapping.paid_party] || '').trim() || null : null
-  const notes = mapping.notes ? String(r[mapping.notes] || '').trim() || null : null
-  const valid = !!description && !!amount && !isNaN(amount)
-  return { valid, date, entry_type, category, description, amount: Math.abs(amount), paid_party, notes }
+// Matches a CSV row's free-text category name against the real category list (case-insensitive,
+// scoped to the right income/expense type) — there's no per-row "create if missing" here, since
+// silently minting a category per typo'd CSV value would pollute the real category list; an
+// unmatched name just leaves the entry uncategorized instead.
+function resolveCategoryId(name, entryType, categories) {
+  if (!name) return null
+  const type = entryType === 'expense' ? 'expense' : 'income'
+  const match = categories.find((c) => c.type === type && c.name.toLowerCase() === name.toLowerCase())
+  return match?.id || null
 }
 
-export function MoneyProfileBulkImport({ open, onClose, onImported, profile, toast }) {
+export function MoneyProfileBulkImport({ open, onClose, onImported, profile, categories = [], toast }) {
   if (!profile) return null
+
+  const parseRow = (r, mapping) => {
+    const rawAmount = String(r[mapping.amount] || '').replace(/[,₹\s]/g, '')
+    const amount = Number(rawAmount)
+    const description = String(r[mapping.description] || '').trim().slice(0, 200)
+    const rawType = (mapping.entry_type ? String(r[mapping.entry_type] || '').toLowerCase() : '')
+    let entry_type = 'expense'
+    if (rawType.includes('income') || rawType === 'cr' || rawType === 'credit') entry_type = 'income'
+    else if (rawType.includes('capital')) entry_type = 'capital'
+    else if (rawType.includes('expense') || rawType === 'dr' || rawType === 'debit') entry_type = 'expense'
+    else if (rawAmount.startsWith('-')) entry_type = 'expense'
+    let date = r[mapping.date] || todayISO()
+    const m = String(date).match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/)
+    if (m) { const y = m[3].length === 2 ? `20${m[3]}` : m[3]; date = `${y}-${String(m[2]).padStart(2, '0')}-${String(m[1]).padStart(2, '0')}` }
+    const categoryName = mapping.category ? String(r[mapping.category] || '').trim() || null : null
+    const category_id = resolveCategoryId(categoryName, entry_type, categories)
+    const paid_party = mapping.paid_party ? String(r[mapping.paid_party] || '').trim() || null : null
+    const notes = mapping.notes ? String(r[mapping.notes] || '').trim() || null : null
+    const valid = !!description && !!amount && !isNaN(amount)
+    return { valid, date, entry_type, category_id, categoryName, description, amount: Math.abs(amount), paid_party, notes }
+  }
 
   return (
     <CsvBulkImport
@@ -76,7 +88,7 @@ export function MoneyProfileBulkImport({ open, onClose, onImported, profile, toa
         <>
           <td className="px-3 py-2 text-slate-400">{r.valid ? formatDate(r.date) : '—'}</td>
           <td className="px-3 py-2 capitalize text-slate-400">{r.entry_type}</td>
-          <td className="px-3 py-2 text-slate-400">{r.category || '—'}</td>
+          <td className="px-3 py-2 text-slate-400">{r.categoryName || '—'}</td>
           <td className="px-3 py-2 text-slate-300">{r.description || '—'}{!r.valid && <span className="ml-2 rounded-full bg-rose-300/15 px-1.5 py-0.5 text-[10px] text-rose-200">invalid</span>}</td>
           <td className="px-3 py-2 text-right text-slate-300">{r.valid ? money(r.amount) : '—'}</td>
         </>
@@ -86,7 +98,7 @@ export function MoneyProfileBulkImport({ open, onClose, onImported, profile, toa
         return <div className="mt-3 text-xs text-slate-400">Net effect on balance: <span className="font-semibold text-white">{net >= 0 ? '+' : '−'}{money(Math.abs(net))}</span></div>
       }}
       onImportRow={async (r) => {
-        const { valid, ...payload } = r
+        const { valid, categoryName, ...payload } = r
         const res = await fetch('/api/finance/money_profile_entries', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ...payload, profile_id: profile.id }),

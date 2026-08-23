@@ -12,7 +12,7 @@ export function FamilyCompanyView({
   data, onAddProfile, onEditProfile, onDeleteProfile,
   onAddEntry, onEditEntry, onDeleteEntry, onBulkImport, onToggleStatus,
 }) {
-  const { money_profiles: profiles = [], money_profile_entries: entries = [], accounts = [] } = data
+  const { money_profiles: profiles = [], money_profile_entries: entries = [], accounts = [], categories = [] } = data
   const [selectedProfileId, setSelectedProfileId] = useState(null)
   const selectedProfile = profiles.find((p) => p.id === selectedProfileId)
 
@@ -22,6 +22,7 @@ export function FamilyCompanyView({
         profile={selectedProfile}
         entries={entries.filter((e) => e.profile_id === selectedProfile.id)}
         accounts={accounts}
+        categories={categories}
         onBack={() => setSelectedProfileId(null)}
         onEdit={onEditProfile}
         onDelete={(p) => { onDeleteProfile(p); setSelectedProfileId(null) }}
@@ -43,7 +44,7 @@ export function FamilyCompanyView({
         </div>
         <div className="flex gap-2">
           <button
-            onClick={() => downloadFamilyCompanyExport({ profiles, entries }, 'family-company', new Date().toISOString().slice(0, 10))}
+            onClick={() => downloadFamilyCompanyExport({ profiles, entries, categories }, 'family-company', new Date().toISOString().slice(0, 10))}
             disabled={profiles.length === 0}
             title="Export every profile's entries as one CSV"
             className="flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-white/5 disabled:opacity-50"

@@ -11,6 +11,7 @@ import { applyLendRepayment, reverseLendRepayment } from '@/lib/server/services/
 import { addInterval, generateDueRecurring } from '@/lib/server/services/recurring'
 import { syncProfileFromAuth } from '@/lib/server/services/profile'
 import { syncPortfolioFromKite, syncMutualFundsFromKite, syncKiteOrders, isKiteTokenFresh } from '@/lib/server/services/kiteSync'
+import { closeStaleBudgetMonths } from '@/lib/server/services/budgets'
 import { randomUUID } from '@/lib/server/randomUUID'
 
 export async function OPTIONS() {
@@ -45,8 +46,12 @@ async function handleRoute(request, { params }) {
     if (route === '/auth/me' && method === 'GET') {
       const user = await currentUser(supabase)
       if (user) {
-        await ensureDefaults(supabase, user.id).catch(() => {})
-        await syncProfileFromAuth(supabase, user).catch(() => {})
+        // Independent of each other (categories vs profiles) — run concurrently instead of
+        // back-to-back, since each is its own network round trip to Supabase.
+        await Promise.all([
+          ensureDefaults(supabase, user.id).catch(() => {}),
+          syncProfileFromAuth(supabase, user).catch(() => {}),
+        ])
       }
       return cors(NextResponse.json({ user }, { status: user ? 200 : 401 }))
     }
@@ -77,7 +82,10 @@ async function handleRoute(request, { params }) {
         const { data } = await applyOrder(supabase.from(table).select('*').eq('user_id', user.id), table)
         return data || []
       }
-      let [accounts, categories, transactions, budgets, portfolios, holdings, sips, other_investments, kite_orders, loans, loan_payments, bucket_list, lend_borrow, lend_repayments, credit_cards, credit_card_transactions, scholarships, scholarship_payments, money_rules, recurring_transactions, money_profiles, money_profile_entries, profile] = await Promise.all([
+      // A single indexed UPDATE, no-op when nothing's stale — cheap enough to run unconditionally
+      // on every load rather than gating it behind a staleness check like the Kite syncs below.
+      await closeStaleBudgetMonths(supabase, user.id).catch(() => {})
+      let [accounts, categories, transactions, budgets, portfolios, holdings, sips, other_investments, kite_orders, loans, loan_payments, bucket_list, lend_borrow, lend_repayments, credit_cards, credit_card_transactions, scholarships, scholarship_payments, money_rules, recurring_transactions, money_profiles, money_profile_entries, budget_months, budget_month_categories, vault_items, profile] = await Promise.all([
         readAll('accounts'),
         readAll('categories'),
         readAll('transactions'),
@@ -100,6 +108,9 @@ async function handleRoute(request, { params }) {
         readAll('recurring_transactions'),
         readAll('money_profiles'),
         readAll('money_profile_entries'),
+        readAll('budget_months'),
+        readAll('budget_month_categories'),
+        readAll('vault_items'),
         supabase.from('profiles').select('*').eq('id', user.id).maybeSingle().then((r) => r.data),
       ])
       // Both of these are rare-path side effects (first-ever use of the app; a recurring rule
@@ -153,7 +164,10 @@ async function handleRoute(request, { params }) {
         // "did the last actual API call work" signal, set by the sync services themselves.
         profileSafe = { ...rest, kite_connected: !!kiteTokenFresh, kite_broken: !!profile.kite_last_error }
       }
-      return cors(NextResponse.json({ accounts, categories, transactions, budgets, portfolios, holdings, sips, other_investments, kite_orders, loans, loan_payments, bucket_list, lend_borrow, lend_repayments, credit_cards, credit_card_transactions, scholarships, scholarship_payments, money_rules, recurring_transactions, money_profiles, money_profile_entries, profile: profileSafe }))
+      // Ciphertext never needs to reach the browser on a bulk load — only the dedicated reveal
+      // route decrypts a single item, on demand, when its card is actually flipped.
+      const vaultItemsSafe = vault_items.map(({ encrypted_payload, ...rest }) => rest)
+      return cors(NextResponse.json({ accounts, categories, transactions, budgets, portfolios, holdings, sips, other_investments, kite_orders, loans, loan_payments, bucket_list, lend_borrow, lend_repayments, credit_cards, credit_card_transactions, scholarships, scholarship_payments, money_rules, recurring_transactions, money_profiles, money_profile_entries, budget_months, budget_month_categories, vault_items: vaultItemsSafe, profile: profileSafe }))
     }
 
     // ---- PRICES: Yahoo Finance fallback (public); Kite when creds set ----

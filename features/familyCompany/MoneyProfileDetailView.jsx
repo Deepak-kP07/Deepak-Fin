@@ -5,14 +5,16 @@ import { ChevronRight, Download, Link2, Lock, Pencil, Trash2, Unlock, Upload, Us
 import { StatCard } from '@/components/shared/StatCard'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { MonthCursor } from '@/components/shared/MonthCursor'
+import { DismissibleBanner } from '@/components/shared/DismissibleBanner'
 import { ENTRY_TYPE_STYLE, profileTotals } from '@/lib/moneyProfiles'
 import { downloadFamilyCompanyExport } from '@/lib/exportFamilyCompany'
 import { MONTH_NAMES, formatDate, money } from '@/lib/format'
 
 export function MoneyProfileDetailView({
-  profile, entries, accounts, onBack, onEdit, onDelete,
+  profile, entries, accounts, categories = [], onBack, onEdit, onDelete,
   onAddEntry, onEditEntry, onDeleteEntry, onBulkImport, onToggleStatus,
 }) {
+  const categoryById = (id) => categories.find((c) => c.id === id)
   // Stat cards below always use every entry (life-to-date totals), same split
   // PortfolioDetailView uses for cash activity — but the Entries table AND the Export button
   // both follow the month cursor, so what you export always matches what's on screen.
@@ -52,7 +54,7 @@ export function MoneyProfileDetailView({
           <button onClick={() => onBulkImport(profile)} disabled={isClosed} title={isClosed ? 'Reactivate this profile to add entries' : undefined} className="flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-white/5 disabled:opacity-40"><Download size={14} />Bulk import</button>
           <button
             onClick={() => downloadFamilyCompanyExport(
-              { profiles: [profile], entries: monthEntries },
+              { profiles: [profile], entries: monthEntries, categories },
               showAllMonths ? profile.name : `${profile.name} ${MONTH_NAMES[monthCursor.month]} ${monthCursor.year}`,
               new Date().toISOString().slice(0, 10),
             )}
@@ -68,14 +70,14 @@ export function MoneyProfileDetailView({
         </div>
       </div>
 
-      <div className="rounded-xl border border-cyan-300/20 bg-cyan-300/5 px-4 py-2.5 text-xs text-cyan-200">
+      <DismissibleBanner tone="cyan">
         {linkedAccount ? <>Linked to <b>{linkedAccount.name}</b> — every entry here also posts as a transaction on that account and counts toward your net worth.</> : 'Not linked to a bank account — entries here stay only in this module and never affect your other totals.'}
-      </div>
+      </DismissibleBanner>
 
       {isClosed && (
-        <div className="rounded-xl border border-amber-300/20 bg-amber-300/5 px-4 py-2.5 text-xs text-amber-200">
+        <DismissibleBanner tone="amber">
           This profile is closed — no new entries can be added until you reactivate it. Existing entries are still visible and editable.
-        </div>
+        </DismissibleBanner>
       )}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -111,7 +113,7 @@ export function MoneyProfileDetailView({
                     <td className="px-5 py-3 text-slate-400">{formatDate(e.date)}</td>
                     <td className="px-3 py-3">
                       <span className={`inline-block rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-widest ${ENTRY_TYPE_STYLE[e.entry_type]}`}>{e.entry_type}</span>
-                      {e.category && <div className="mt-1 text-[11px] text-slate-500">{e.category}</div>}
+                      {categoryById(e.category_id) && <div className="mt-1 text-[11px] text-slate-500">{categoryById(e.category_id).name}</div>}
                     </td>
                     <td className="px-3 py-3 text-white">{e.description}{e.notes && <div className="text-[11px] text-slate-500">{e.notes}</div>}</td>
                     <td className="px-3 py-3 text-slate-400">{e.paid_party || '—'}</td>

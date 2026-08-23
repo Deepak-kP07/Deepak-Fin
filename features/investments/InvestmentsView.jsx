@@ -5,6 +5,7 @@ import { ArrowDownRight, ArrowUpRight, Eye, EyeOff, Layers, Link2, PiggyBank, Pe
 import { EmptyState } from '@/components/shared/EmptyState'
 import { StatCard } from '@/components/shared/StatCard'
 import { Select } from '@/components/shared/Select'
+import { DismissibleBanner } from '@/components/shared/DismissibleBanner'
 import { currentValueOf, CATEGORY_BADGE_STYLE } from '@/lib/otherInvestments'
 import { downloadInvestmentsExport } from '@/lib/exportInvestments'
 import { formatDateTime, money, money2, relativeTime } from '@/lib/format'
@@ -173,7 +174,7 @@ export function InvestmentsView({
         <StatCard label="Overall P&L" value={showMoney ? (totalPnl >= 0 ? '+' : '−') + money(totalPnl).replace('-', '') : '••••'} icon={totalPnl >= 0 ? TrendingUp : Target} accent={totalPnl >= 0 ? 'bg-emerald-400/15 text-emerald-200' : 'bg-rose-400/15 text-rose-200'} tone={totalPnl >= 0 ? 'text-emerald-300' : 'text-rose-300'} sub={<span>{totalPnlPct >= 0 ? '+' : ''}{totalPnlPct.toFixed(2)}%</span>} />
       </div>
 
-      <div className="rounded-xl border border-cyan-300/20 bg-cyan-300/5 px-4 py-2.5 text-xs text-cyan-200">
+      <DismissibleBanner tone="cyan">
         <div className="flex flex-wrap items-center gap-2">
           <Sparkles size={13} />
           {kiteConnected && kiteBroken ? <span>Kite connection needs attention — the last sync failed.</span> : kiteConnected ? <span>Live prices via <b>Kite</b>. Token refreshes tomorrow after 6 AM IST.</span> : <span>Currently using Yahoo Finance. Connect your Zerodha Kite for real-time NSE quotes and real holdings sync.</span>}
@@ -201,7 +202,7 @@ export function InvestmentsView({
             )}
           </div>
         )}
-      </div>
+      </DismissibleBanner>
 
       {portfolios.length === 0 ? (
         <div className="rounded-2xl border border-white/10 bg-white/[.035]">

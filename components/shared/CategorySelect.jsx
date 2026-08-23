@@ -6,8 +6,14 @@ import { ChevronDown, Pencil } from 'lucide-react'
 // Category picker, specialized rather than reusing the generic Select — categories tend to run
 // long enough that a single scrolling column hides most of them; laying them out as a grid
 // surfaces far more at once. The pencil icon opens the same add-category flow as Profile.
-export function CategorySelect({ value, onChange, categories, onAddCategory, className, placeholder = 'No category' }) {
-  const [open, setOpen] = useState(false)
+// `open`/`onOpenChange` are optional — omit them and this manages its own open state exactly as
+// before. Pass them when a caller needs to know/control whether the dropdown is open (e.g. to
+// reserve layout space for it, as BudgetMonthForm's repeated rows do) without changing behavior
+// for every other existing caller.
+export function CategorySelect({ value, onChange, categories, onAddCategory, className, placeholder = 'No category', open: openProp, onOpenChange }) {
+  const [openState, setOpenState] = useState(false)
+  const open = openProp !== undefined ? openProp : openState
+  const setOpen = (next) => { onOpenChange?.(next); if (openProp === undefined) setOpenState(next) }
   const ref = useRef(null)
   useEffect(() => {
     const onDocClick = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
@@ -19,7 +25,7 @@ export function CategorySelect({ value, onChange, categories, onAddCategory, cla
 
   return (
     <div ref={ref} className="relative">
-      <button type="button" onClick={() => setOpen((o) => !o)} className={`${base} flex items-center justify-between gap-2 text-left`}>
+      <button type="button" onClick={() => setOpen(!open)} className={`${base} flex items-center justify-between gap-2 text-left`}>
         <span className={`truncate ${selected ? '' : 'text-slate-500'}`}>{selected ? selected.name : placeholder}</span>
         <ChevronDown size={15} className={`shrink-0 text-slate-500 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
