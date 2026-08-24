@@ -56,6 +56,7 @@ import { BucketForm } from '@/features/buckets/BucketForm'
 import { BucketListView } from '@/features/buckets/BucketListView'
 import { LendForm } from '@/features/lend-borrow/LendForm'
 import { LendBorrowView } from '@/features/lend-borrow/LendBorrowView'
+import { ManageLendAccessSheet } from '@/features/lend-borrow/ManageLendAccessSheet'
 import { CreditCardForm } from '@/features/credit-cards/CreditCardForm'
 import { CardSpendForm } from '@/features/credit-cards/CardSpendForm'
 import { CardPayForm } from '@/features/credit-cards/CardPayForm'
@@ -67,6 +68,8 @@ import { MoneyProfileForm } from '@/features/familyCompany/MoneyProfileForm'
 import { MoneyProfileEntryForm } from '@/features/familyCompany/MoneyProfileEntryForm'
 import { MoneyProfileBulkImport } from '@/features/familyCompany/MoneyProfileBulkImport'
 import { FamilyCompanyView } from '@/features/familyCompany/FamilyCompanyView'
+import { ManageAccessSheet } from '@/features/familyCompany/ManageAccessSheet'
+import { categoriesFor } from '@/lib/moneyProfiles'
 import { VaultItemForm } from '@/features/vault/VaultItemForm'
 import { InsightsView } from '@/features/insights/InsightsView'
 import jsPDF from 'jspdf'
@@ -1356,6 +1359,8 @@ function Shell({ user, onLogout }) {
   const [bucketEditing, setBucketEditing] = useState(null)
   const [lendFormOpen, setLendFormOpen] = useState(false)
   const [lendEditing, setLendEditing] = useState(null)
+  const [manageLendAccessOpen, setManageLendAccessOpen] = useState(false)
+  const [manageLendAccessRecord, setManageLendAccessRecord] = useState(null)
   const [fundsFormOpen, setFundsFormOpen] = useState(false)
   const [fundsPortfolio, setFundsPortfolio] = useState(null)
   const [withdrawFormOpen, setWithdrawFormOpen] = useState(false)
@@ -1388,6 +1393,8 @@ function Shell({ user, onLogout }) {
   const [moneyProfileEntryProfileId, setMoneyProfileEntryProfileId] = useState(null)
   const [moneyProfileBulkImportOpen, setMoneyProfileBulkImportOpen] = useState(false)
   const [moneyProfileBulkImportProfile, setMoneyProfileBulkImportProfile] = useState(null)
+  const [manageAccessOpen, setManageAccessOpen] = useState(false)
+  const [manageAccessProfile, setManageAccessProfile] = useState(null)
   const [settingsSection, setSettingsSection] = useState('profile')
   const [moreOpen, setMoreOpen] = useState(false)
 
@@ -1618,6 +1625,8 @@ function Shell({ user, onLogout }) {
     const response = await fetch(`/api/finance/lend_borrow/${l.id}`, { method: 'DELETE' })
     if (response.ok) { toast.push('Deleted'); await refresh() } else { toast.push('Delete failed', 'error') }
   }
+  const openManageLendAccess = (record) => { setManageLendAccessRecord(record); setManageLendAccessOpen(true) }
+  const closeManageLendAccess = () => { setManageLendAccessOpen(false); setManageLendAccessRecord(null) }
 
   // Portfolio funds
   const openFundsForm = (p) => { setFundsPortfolio(p); setFundsFormOpen(true) }
@@ -1754,6 +1763,8 @@ function Shell({ user, onLogout }) {
     const { queued } = await mutate({ table: 'money_profiles', method: 'PATCH', id: p.id, body: { status: nextStatus } })
     toast.push((nextStatus === 'closed' ? 'Profile closed' : 'Profile reactivated') + (queued ? ' — will sync when back online' : ''))
   }
+  const openManageAccess = (p) => { setManageAccessProfile(p); setManageAccessOpen(true) }
+  const closeManageAccess = () => { setManageAccessOpen(false); setManageAccessProfile(null) }
   // Money rules
   const addRule = async (rule_text) => {
     const nextOrder = (data.money_rules?.[data.money_rules.length - 1]?.order_index ?? 0) + 1
@@ -1945,8 +1956,8 @@ function Shell({ user, onLogout }) {
               {view === 'cards' && <CreditCardsView data={data} onAdd={() => openCardForm()} onEdit={openCardForm} onDelete={deleteCard} onSpend={openCardSpend} onPay={openCardPay} onDeleteSpend={deleteCardSpend} onDeleteTx={deleteTx} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'scholarships' && <ScholarshipsView data={data} onAdd={() => openScholarshipForm()} onEdit={openScholarshipForm} onDelete={deleteScholarship} onPay={openScholarshipPay} onRefresh={refresh} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} toast={toast} />}
               {view === 'loans' && <LoansView data={data} onAdd={() => openLoanForm()} onEdit={openLoanForm} onDelete={deleteLoan} onPay={openLoanPay} onDeletePayment={deleteLoanPayment} onSync={syncLoanOutstanding} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
-              {view === 'lend' && <LendBorrowView data={data} onAdd={() => openLendForm()} onEdit={openLendForm} onDelete={deleteLend} onDeleteTx={deleteTx} onLogRepayment={(record) => openTxForm(null, '', { value: `lend:${record.id}`, type: record.type === 'lent' ? 'income' : 'expense' })} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} toast={toast} />}
-              {view === 'family_company' && <FamilyCompanyView data={data} onAddProfile={() => openMoneyProfileForm()} onEditProfile={openMoneyProfileForm} onDeleteProfile={deleteMoneyProfile} onAddEntry={openMoneyProfileEntryForm} onEditEntry={openMoneyProfileEntryEdit} onDeleteEntry={deleteMoneyProfileEntry} onBulkImport={openMoneyProfileBulkImport} onToggleStatus={toggleMoneyProfileStatus} />}
+              {view === 'lend' && <LendBorrowView data={data} onAdd={() => openLendForm()} onEdit={openLendForm} onDelete={deleteLend} onDeleteTx={deleteTx} onLogRepayment={(record) => openTxForm(null, '', { value: `lend:${record.id}`, type: record.type === 'lent' ? 'income' : 'expense' })} onManageAccess={openManageLendAccess} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} toast={toast} />}
+              {view === 'family_company' && <FamilyCompanyView data={data} onAddProfile={() => openMoneyProfileForm()} onEditProfile={openMoneyProfileForm} onDeleteProfile={deleteMoneyProfile} onAddEntry={openMoneyProfileEntryForm} onEditEntry={openMoneyProfileEntryEdit} onDeleteEntry={deleteMoneyProfileEntry} onBulkImport={openMoneyProfileBulkImport} onToggleStatus={toggleMoneyProfileStatus} onManageAccess={openManageAccess} />}
               {view === 'bucket' && <BucketListView data={data} onAdd={() => openBucketForm()} onEdit={openBucketForm} onDelete={deleteBucket} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'insights' && <InsightsView data={data} />}
               {view === 'profile' && (
@@ -2025,6 +2036,7 @@ function Shell({ user, onLogout }) {
       <LoanPaymentForm open={loanPayOpen} onClose={closeLoanPay} onSaved={onLoanPaid} loan={loanPayLoan} accounts={data.accounts} creditCards={data.credit_cards} toast={toast} />
       <BucketForm open={bucketFormOpen} onClose={closeBucketForm} onSaved={onBucketSaved} editing={bucketEditing} toast={toast} mutate={mutate} />
       <LendForm open={lendFormOpen} onClose={closeLendForm} onSaved={onLendSaved} editing={lendEditing} accounts={data.accounts} creditCards={data.credit_cards} toast={toast} />
+      <ManageLendAccessSheet open={manageLendAccessOpen} onClose={closeManageLendAccess} record={manageLendAccessRecord} toast={toast} />
       <PortfolioFundsForm open={fundsFormOpen} onClose={closeFundsForm} onSaved={onFundsSaved} portfolio={fundsPortfolio} accounts={data.accounts} toast={toast} />
       <WithdrawFundsForm open={withdrawFormOpen} onClose={closeWithdrawForm} onSaved={onWithdrawSaved} portfolio={withdrawPortfolio} accounts={data.accounts} toast={toast} />
       <SipForm open={sipFormOpen} onClose={closeSipForm} onSaved={onSipSaved} editing={sipEditing} portfolios={data.portfolios} toast={toast} mutate={mutate} />
@@ -2035,8 +2047,9 @@ function Shell({ user, onLogout }) {
       <ScholarshipForm open={scholarshipFormOpen} onClose={closeScholarshipForm} onSaved={onScholarshipSaved} editing={scholarshipEditing} accounts={data.accounts} toast={toast} />
       <ScholarshipPayForm open={scholarshipPayOpen} onClose={closeScholarshipPay} onSaved={onScholarshipPaid} scholarship={scholarshipPayTarget} accounts={data.accounts} toast={toast} />
       <MoneyProfileForm open={moneyProfileFormOpen} onClose={closeMoneyProfileForm} onSaved={onMoneyProfileSaved} editing={moneyProfileEditing} accounts={data.accounts} toast={toast} mutate={mutate} />
-      <MoneyProfileEntryForm open={moneyProfileEntryFormOpen} onClose={closeMoneyProfileEntryForm} onSaved={onMoneyProfileEntrySaved} editing={moneyProfileEntryEditing} profile={data.money_profiles?.find((p) => p.id === moneyProfileEntryProfileId)} categories={data.categories} onAddCategory={() => openCatForm()} toast={toast} />
-      <MoneyProfileBulkImport open={moneyProfileBulkImportOpen} onClose={closeMoneyProfileBulkImport} onImported={onMoneyProfileBulkImported} profile={moneyProfileBulkImportProfile} categories={data.categories} toast={toast} />
+      <MoneyProfileEntryForm open={moneyProfileEntryFormOpen} onClose={closeMoneyProfileEntryForm} onSaved={onMoneyProfileEntrySaved} editing={moneyProfileEntryEditing} profile={data.money_profiles?.find((p) => p.id === moneyProfileEntryProfileId)} categories={categoriesFor(data.money_profiles?.find((p) => p.id === moneyProfileEntryProfileId) || {}, data.categories)} onAddCategory={(data.money_profiles?.find((p) => p.id === moneyProfileEntryProfileId)?.my_role || 'owner') === 'owner' ? () => openCatForm() : undefined} toast={toast} />
+      <MoneyProfileBulkImport open={moneyProfileBulkImportOpen} onClose={closeMoneyProfileBulkImport} onImported={onMoneyProfileBulkImported} profile={moneyProfileBulkImportProfile} categories={categoriesFor(moneyProfileBulkImportProfile || {}, data.categories)} toast={toast} />
+      <ManageAccessSheet open={manageAccessOpen} onClose={closeManageAccess} profile={manageAccessProfile} toast={toast} />
     </div>
   )
 }

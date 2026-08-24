@@ -6,7 +6,7 @@ import { EmptyState } from '@/components/shared/EmptyState'
 import { formatDate, money } from '@/lib/format'
 import { LendBorrowDetailView } from '@/features/lend-borrow/LendBorrowDetailView'
 
-export function LendBorrowView({ data, onAdd, onEdit, onDelete, onDeleteTx, onLogRepayment, showMoney, onToggleMoney, toast }) {
+export function LendBorrowView({ data, onAdd, onEdit, onDelete, onDeleteTx, onLogRepayment, onManageAccess, showMoney, onToggleMoney, toast }) {
   const { lend_borrow, lend_repayments, accounts, transactions } = data
   const now = new Date()
   const [showHistory, setShowHistory] = useState(false)
@@ -25,6 +25,7 @@ export function LendBorrowView({ data, onAdd, onEdit, onDelete, onDeleteTx, onLo
         onDelete={(l) => { onDelete(l); setSelectedId(null) }}
         onDeleteTx={onDeleteTx}
         onLogRepayment={onLogRepayment}
+        onManageAccess={onManageAccess}
         showMoney={showMoney}
         onToggleMoney={onToggleMoney}
         toast={toast}

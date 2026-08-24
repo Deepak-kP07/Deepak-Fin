@@ -247,9 +247,9 @@ function ModuleMarquee() {
   )
 }
 
-export function AuthScreen({ onAuth, initialError }) {
-  const [mode, setMode] = useState('landing')
-  const [email, setEmail] = useState('')
+export function AuthScreen({ onAuth, initialError, initialMode = 'landing', initialEmail = '' }) {
+  const [mode, setMode] = useState(initialMode)
+  const [email, setEmail] = useState(initialEmail)
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
   const [feedback, setFeedback] = useState(initialError ? { type: 'error', message: initialError } : null)

@@ -3,14 +3,14 @@
 import { useState } from 'react'
 import { Link2, Plus, Upload, Users } from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
-import { profileTotals } from '@/lib/moneyProfiles'
+import { profileTotals, categoriesFor } from '@/lib/moneyProfiles'
 import { downloadFamilyCompanyExport } from '@/lib/exportFamilyCompany'
 import { money } from '@/lib/format'
 import { MoneyProfileDetailView } from '@/features/familyCompany/MoneyProfileDetailView'
 
 export function FamilyCompanyView({
   data, onAddProfile, onEditProfile, onDeleteProfile,
-  onAddEntry, onEditEntry, onDeleteEntry, onBulkImport, onToggleStatus,
+  onAddEntry, onEditEntry, onDeleteEntry, onBulkImport, onToggleStatus, onManageAccess,
 }) {
   const { money_profiles: profiles = [], money_profile_entries: entries = [], accounts = [], categories = [] } = data
   const [selectedProfileId, setSelectedProfileId] = useState(null)
@@ -22,7 +22,7 @@ export function FamilyCompanyView({
         profile={selectedProfile}
         entries={entries.filter((e) => e.profile_id === selectedProfile.id)}
         accounts={accounts}
-        categories={categories}
+        categories={categoriesFor(selectedProfile, categories)}
         onBack={() => setSelectedProfileId(null)}
         onEdit={onEditProfile}
         onDelete={(p) => { onDeleteProfile(p); setSelectedProfileId(null) }}
@@ -31,6 +31,7 @@ export function FamilyCompanyView({
         onDeleteEntry={onDeleteEntry}
         onBulkImport={onBulkImport}
         onToggleStatus={onToggleStatus}
+        onManageAccess={onManageAccess}
       />
     )
   }

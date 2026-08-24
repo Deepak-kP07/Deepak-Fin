@@ -1,7 +1,9 @@
 {
   "detector": {
     "ignoreRules": [],
-    "ignoreFiles": [],
+    "ignoreFiles": [
+      "lib/email.js"
+    ],
     "ignoreValues": [
       {
         "rule": "design-system-color",
@@ -152,6 +154,18 @@
         "value": "#a78bfa",
         "createdAt": "2026-08-24T04:05:04.912Z",
         "reason": "pre-existing default color for a new portfolio (user-customizable via ColorPicker), same per-entity-color pattern as accounts/categories/cards/vault items — not the brand accent, unchanged by this edit (just moved during the BottomSheet conversion)"
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": "10px",
+        "createdAt": "2026-08-24T14:31:09.366Z",
+        "reason": "pre-existing app-wide micro-badge tier (Linked/Closed/entry-type pill labels), same as the already-documented 11px tier — flagged only because it's adjacent to lines this session edited, not introduced by this feature"
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": "9px",
+        "createdAt": "2026-08-24T14:31:09.404Z",
+        "reason": "pre-existing app-wide micro-badge tier (Linked/entry-type pill labels), same as the already-documented 11px tier — flagged only because it's adjacent to lines this session edited, not introduced by this feature"
       }
     ]
   }

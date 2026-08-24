@@ -8,7 +8,7 @@ web
 
 ## Users
 
-Primary user: Deepak, the app's builder and owner, tracking his own comprehensive personal finances, mobile-first, on a daily basis. He is currently the sole real user. He has a stated intent to possibly extend access to a small, selected group of other people (family/close contacts) who would each use it for their own finances — not committed or built yet, but a known future direction, not a hypothetical to ignore. Today, Family/Company money is data Deepak records about others' finances under his own account, not separate logins for those people.
+Primary user: Deepak, the app's builder and owner, tracking his own comprehensive personal finances, mobile-first, on a daily basis. He is currently the sole real user. A Family/Company profile can now be shared with a real second person by email invite, at one of three permission tiers (read/edit/admin) — that person accepts using their own account and the shared profile then shows up for them too, gated to their tier. A single Lend/Borrow record can be shared the same way, at two tiers (read/admin — no edit tier, since logging a repayment stays owner-only) — useful for looping in the actual person a loan is with, or a third party helping track it. Every other module is still Deepak's own data alone; sharing is scoped to individual Family/Company profiles and Lend/Borrow records specifically, not account-wide access.
 
 ## Product Purpose
 

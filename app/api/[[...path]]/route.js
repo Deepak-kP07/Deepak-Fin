@@ -13,6 +13,8 @@ import { syncProfileFromAuth } from '@/lib/server/services/profile'
 import { syncPortfolioFromKite, syncMutualFundsFromKite, syncKiteOrders, isKiteTokenFresh } from '@/lib/server/services/kiteSync'
 import { closeStaleBudgetMonths } from '@/lib/server/services/budgets'
 import { randomUUID } from '@/lib/server/randomUUID'
+import { listMoneyProfiles, listMoneyProfileEntries } from '@/lib/server/moneyProfileCrud'
+import { listLendBorrow, listLendRepayments } from '@/lib/server/lendBorrowCrud'
 
 export async function OPTIONS() {
   return handleCORS(new NextResponse(null, { status: 200 }))
@@ -98,16 +100,21 @@ async function handleRoute(request, { params }) {
         readAll('loans'),
         readAll('loan_payments'),
         readAll('bucket_list'),
-        readAll('lend_borrow'),
-        readAll('lend_repayments'),
+        // Owned-or-shared, with a my_role tag — readAll's plain owner-only filter can't express
+        // that, same reasoning as money_profiles above (lib/server/lendBorrowCrud.js).
+        listLendBorrow(supabase, user),
+        listLendRepayments(supabase),
         readAll('credit_cards'),
         readAll('credit_card_transactions'),
         readAll('scholarships'),
         readAll('scholarship_payments'),
         readAll('money_rules'),
         readAll('recurring_transactions'),
-        readAll('money_profiles'),
-        readAll('money_profile_entries'),
+        // Owned-or-shared, with a my_role tag — readAll's plain owner-only filter can't express
+        // that, so these two go through the same role-aware functions the dedicated
+        // money_profiles/money_profile_entries routes use (lib/server/moneyProfileCrud.js).
+        listMoneyProfiles(supabase, user),
+        listMoneyProfileEntries(supabase),
         readAll('budget_months'),
         readAll('budget_month_categories'),
         readAll('vault_items'),

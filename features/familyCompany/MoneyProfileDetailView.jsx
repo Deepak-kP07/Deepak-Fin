@@ -1,19 +1,20 @@
 'use client'
 
 import { useState } from 'react'
-import { ChevronRight, Download, Link2, Lock, Pencil, Trash2, Unlock, Upload, Users, Wallet } from 'lucide-react'
+import { ChevronRight, Download, Link2, Lock, Pencil, Trash2, Unlock, UserPlus, Upload, Users, Wallet } from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { MonthCursor } from '@/components/shared/MonthCursor'
 import { DismissibleBanner } from '@/components/shared/DismissibleBanner'
-import { ENTRY_TYPE_STYLE, profileTotals } from '@/lib/moneyProfiles'
+import { ENTRY_TYPE_STYLE, profileTotals, roleFor, canWriteEntries, canDeleteEntries, canEditProfile, canManageShares, canDeleteProfile } from '@/lib/moneyProfiles'
 import { downloadFamilyCompanyExport } from '@/lib/exportFamilyCompany'
 import { MONTH_NAMES, formatDate, money } from '@/lib/format'
 
 export function MoneyProfileDetailView({
   profile, entries, accounts, categories = [], onBack, onEdit, onDelete,
-  onAddEntry, onEditEntry, onDeleteEntry, onBulkImport, onToggleStatus,
+  onAddEntry, onEditEntry, onDeleteEntry, onBulkImport, onToggleStatus, onManageAccess,
 }) {
   const categoryById = (id) => categories.find((c) => c.id === id)
+  const role = roleFor(profile)
   // Stat cards below always use every entry (life-to-date totals), same split
   // PortfolioDetailView uses for cash activity — but the Entries table AND the Export button
   // both follow the month cursor, so what you export always matches what's on screen.
@@ -49,8 +50,12 @@ export function MoneyProfileDetailView({
           </div>
         </div>
         <div className="flex w-full min-w-0 flex-wrap gap-2 sm:w-auto">
-          <button onClick={() => onAddEntry(profile.id)} disabled={isClosed} title={isClosed ? 'Reactivate this profile to add entries' : undefined} className="rounded-xl bg-gradient-to-r from-accent-300 to-blue-500 px-4 py-2.5 text-sm font-semibold text-[#07101c] disabled:opacity-40">+ Add entry</button>
-          <button onClick={() => onBulkImport(profile)} disabled={isClosed} title={isClosed ? 'Reactivate this profile to add entries' : undefined} className="flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-white/5 disabled:opacity-40"><Download size={14} />Bulk import</button>
+          {canWriteEntries(role) && (
+            <button onClick={() => onAddEntry(profile.id)} disabled={isClosed} title={isClosed ? 'Reactivate this profile to add entries' : undefined} className="rounded-xl bg-gradient-to-r from-accent-300 to-blue-500 px-4 py-2.5 text-sm font-semibold text-[#07101c] disabled:opacity-40">+ Add entry</button>
+          )}
+          {canWriteEntries(role) && (
+            <button onClick={() => onBulkImport(profile)} disabled={isClosed} title={isClosed ? 'Reactivate this profile to add entries' : undefined} className="flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-white/5 disabled:opacity-40"><Download size={14} />Bulk import</button>
+          )}
           <button
             onClick={() => downloadFamilyCompanyExport(
               { profiles: [profile], entries: monthEntries, categories },
@@ -61,11 +66,20 @@ export function MoneyProfileDetailView({
             title={showAllMonths ? 'Export every entry in this profile' : `Export only ${MONTH_NAMES[monthCursor.month]} ${monthCursor.year}`}
             className="flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-white/5 disabled:opacity-50"
           ><Upload size={14} />Export</button>
-          <button onClick={() => onToggleStatus(profile)} title={isClosed ? 'Reactivate profile' : 'Close profile'} className="rounded-xl border border-white/10 p-2.5 text-slate-400 hover:bg-white/5 hover:text-white">
-            {isClosed ? <Unlock size={15} /> : <Lock size={15} />}
-          </button>
-          <button onClick={() => onEdit(profile)} className="rounded-xl border border-white/10 p-2.5 text-slate-400 hover:bg-white/5 hover:text-white"><Pencil size={15} /></button>
-          <button onClick={() => onDelete(profile)} className="rounded-xl border border-white/10 p-2.5 text-rose-300/70 hover:bg-rose-300/10"><Trash2 size={15} /></button>
+          {canManageShares(role) && (
+            <button onClick={() => onManageAccess(profile)} title="Manage who has access" className="rounded-xl border border-white/10 p-2.5 text-slate-400 hover:bg-white/5 hover:text-white"><UserPlus size={15} /></button>
+          )}
+          {canEditProfile(role) && (
+            <button onClick={() => onToggleStatus(profile)} title={isClosed ? 'Reactivate profile' : 'Close profile'} className="rounded-xl border border-white/10 p-2.5 text-slate-400 hover:bg-white/5 hover:text-white">
+              {isClosed ? <Unlock size={15} /> : <Lock size={15} />}
+            </button>
+          )}
+          {canEditProfile(role) && (
+            <button onClick={() => onEdit(profile)} className="rounded-xl border border-white/10 p-2.5 text-slate-400 hover:bg-white/5 hover:text-white"><Pencil size={15} /></button>
+          )}
+          {canDeleteProfile(role) && (
+            <button onClick={() => onDelete(profile)} className="rounded-xl border border-white/10 p-2.5 text-rose-300/70 hover:bg-rose-300/10"><Trash2 size={15} /></button>
+          )}
         </div>
       </div>
 
@@ -132,8 +146,8 @@ export function MoneyProfileDetailView({
                     <td className={`px-3 py-3 text-right font-semibold ${e.entry_type === 'expense' ? 'text-rose-300' : 'text-emerald-300'}`}>{e.entry_type === 'expense' ? '−' : '+'}{money(e.amount)}</td>
                     <td className="px-5 py-3">
                       <div className="flex justify-end gap-1">
-                        <button onClick={() => onEditEntry(e)} className="rounded-lg p-1.5 text-slate-500 hover:bg-white/5 hover:text-white"><Pencil size={14} /></button>
-                        <button onClick={() => onDeleteEntry(e)} className="rounded-lg p-1.5 text-rose-300/70 hover:bg-rose-300/10"><Trash2 size={14} /></button>
+                        {canWriteEntries(role) && <button onClick={() => onEditEntry(e)} className="rounded-lg p-1.5 text-slate-500 hover:bg-white/5 hover:text-white"><Pencil size={14} /></button>}
+                        {canDeleteEntries(role) && <button onClick={() => onDeleteEntry(e)} className="rounded-lg p-1.5 text-rose-300/70 hover:bg-rose-300/10"><Trash2 size={14} /></button>}
                       </div>
                     </td>
                   </tr>

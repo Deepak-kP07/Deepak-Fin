@@ -1,4 +1,4 @@
-import { pgTable, pgSchema, pgEnum, uuid, text, numeric, integer, boolean, timestamp, date, time, jsonb, check, unique, index } from 'drizzle-orm/pg-core'
+import { pgTable, pgSchema, pgEnum, uuid, text, numeric, integer, boolean, timestamp, date, time, jsonb, check, unique, uniqueIndex, index } from 'drizzle-orm/pg-core'
 import { sql } from 'drizzle-orm'
 
 // auth.users is managed by Supabase, not by this app's migrations — declared
@@ -389,6 +389,33 @@ export const lendRepayments = pgTable('lend_repayments', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [check('lend_repayments_amount_check', sql`${t.amount} > 0`), index('lend_repayments_lb_idx').on(t.lendBorrowId), index('lend_repayments_user_idx').on(t.userId)])
 
+// Per-record sharing for a single lend_borrow row — same invite/accept/revoke lifecycle as
+// money_profile_shares (see its comment), but only two tiers ('read'/'admin', no 'edit'): logging
+// a repayment stays a real side-effecting write (mirrors a transaction, can touch a credit
+// card's outstanding balance) reserved for the owner alone, never shared.
+export const lendBorrowShares = pgTable('lend_borrow_shares', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  lendBorrowId: uuid('lend_borrow_id').notNull().references(() => lendBorrow.id, { onDelete: 'cascade' }),
+  ownerId: uuid('owner_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
+  invitedEmail: text('invited_email').notNull(),
+  role: text('role').notNull(),
+  status: text('status').notNull().default('pending'),
+  inviteToken: text('invite_token').notNull(),
+  invitedUserId: uuid('invited_user_id').references(() => authUsers.id, { onDelete: 'cascade' }),
+  invitedByUserId: uuid('invited_by_user_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  respondedAt: timestamp('responded_at', { withTimezone: true }),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+}, (t) => [
+  check('lend_borrow_shares_role_check', sql`${t.role} in ('read','admin')`),
+  check('lend_borrow_shares_status_check', sql`${t.status} in ('pending','accepted','revoked','declined')`),
+  unique('lend_borrow_shares_token_key').on(t.inviteToken),
+  uniqueIndex('lend_borrow_shares_record_email_key').on(t.lendBorrowId, t.invitedEmail).where(sql`${t.status} in ('pending','accepted')`),
+  index('lend_borrow_shares_record_idx').on(t.lendBorrowId),
+  index('lend_borrow_shares_email_idx').on(t.invitedEmail),
+  index('lend_borrow_shares_invited_user_idx').on(t.invitedUserId),
+])
+
 export const creditCards = pgTable('credit_cards', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
@@ -491,6 +518,41 @@ export const moneyProfileEntries = pgTable('money_profile_entries', {
   check('money_profile_entries_amount_check', sql`${t.amount} > 0`),
   index('money_profile_entries_profile_idx').on(t.profileId),
   index('money_profile_entries_user_idx').on(t.userId),
+])
+
+// A pending or accepted invite for someone else to access a money_profiles row that isn't
+// theirs, at a fixed permission tier. One row's status lifecycle covers both the invite and the
+// resulting share ('pending' -> 'accepted'/'revoked'/'declined') — see
+// drizzle/0029_money_profile_sharing.sql for the RLS policies this powers on money_profiles/
+// money_profile_entries (the first non-owner-only RLS in this app) and user_role_on_profile(),
+// the SECURITY DEFINER function every one of those policies calls through.
+export const moneyProfileShares = pgTable('money_profile_shares', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  profileId: uuid('profile_id').notNull().references(() => moneyProfiles.id, { onDelete: 'cascade' }),
+  // Denormalized copy of moneyProfiles.userId at invite time — lets RLS/queries avoid a second
+  // join to look up "am I the owner of the profile this share is about."
+  ownerId: uuid('owner_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
+  invitedEmail: text('invited_email').notNull(), // lowercased at write time
+  role: text('role').notNull(),
+  status: text('status').notNull().default('pending'),
+  inviteToken: text('invite_token').notNull(),
+  // Filled in on acceptance once we know the real account id; null while pending.
+  invitedUserId: uuid('invited_user_id').references(() => authUsers.id, { onDelete: 'cascade' }),
+  // Who sent it — usually the owner, but an admin-tier collaborator can also invite.
+  invitedByUserId: uuid('invited_by_user_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  respondedAt: timestamp('responded_at', { withTimezone: true }),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+}, (t) => [
+  check('money_profile_shares_role_check', sql`${t.role} in ('read','edit','admin')`),
+  check('money_profile_shares_status_check', sql`${t.status} in ('pending','accepted','revoked','declined')`),
+  unique('money_profile_shares_token_key').on(t.inviteToken),
+  // Partial, not blanket: re-inviting an email whose prior invite was revoked/declined is a
+  // plain new insert, not an upsert branch.
+  uniqueIndex('money_profile_shares_profile_email_key').on(t.profileId, t.invitedEmail).where(sql`${t.status} in ('pending','accepted')`),
+  index('money_profile_shares_profile_idx').on(t.profileId),
+  index('money_profile_shares_email_idx').on(t.invitedEmail),
+  index('money_profile_shares_invited_user_idx').on(t.invitedUserId),
 ])
 
 export const moneyRules = pgTable('money_rules', {
