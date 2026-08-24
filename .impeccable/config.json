@@ -1,0 +1,158 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "design-system-color",
+        "value": "#f87171",
+        "files": [
+          "features/settings/SettingsAppearance.jsx"
+        ],
+        "createdAt": "2026-08-23T04:53:03.789Z",
+        "reason": "decorative conic-gradient ring on the custom accent picker swatch, representing 'any hue is available' — not a palette addition, confined to this one control"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#fbbf24",
+        "files": [
+          "features/settings/SettingsAppearance.jsx"
+        ],
+        "createdAt": "2026-08-23T04:53:03.852Z",
+        "reason": "decorative conic-gradient ring on the custom accent picker swatch, representing 'any hue is available' — not a palette addition, confined to this one control"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#34d399",
+        "files": [
+          "features/settings/SettingsAppearance.jsx"
+        ],
+        "createdAt": "2026-08-23T04:53:03.957Z",
+        "reason": "decorative conic-gradient ring on the custom accent picker swatch, representing 'any hue is available' — not a palette addition, confined to this one control"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#38bdf8",
+        "files": [
+          "features/settings/SettingsAppearance.jsx"
+        ],
+        "createdAt": "2026-08-23T04:53:04.028Z",
+        "reason": "decorative conic-gradient ring on the custom accent picker swatch, representing 'any hue is available' — not a palette addition, confined to this one control"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#a78bfa",
+        "files": [
+          "features/settings/SettingsAppearance.jsx"
+        ],
+        "createdAt": "2026-08-23T04:53:04.078Z",
+        "reason": "decorative conic-gradient ring on the custom accent picker swatch, representing 'any hue is available' — not a palette addition, confined to this one control"
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": "11px",
+        "createdAt": "2026-08-23T05:02:15.724Z",
+        "reason": "documented in DESIGN.md as the Micro-label type tier (0.6875rem/11px) — the app's real dominant helper-text size, used consistently app-wide, not drift"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#333947",
+        "files": [
+          "features/auth/AuthScreen.jsx"
+        ],
+        "createdAt": "2026-08-23T06:34:20.288Z",
+        "reason": "graphite-metal material color for the realistic HeroCard mockup, not app UI chrome — mirrors how a real card's material has its own color, not the brand accent"
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": "10px",
+        "files": [
+          "features/auth/AuthScreen.jsx"
+        ],
+        "createdAt": "2026-08-23T06:34:20.317Z",
+        "reason": "real-card-scale micro print on the HeroCard mockup (issuer label) — realism was the explicit ask, below DESIGN.md's documented Micro-label floor by design"
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": "8px",
+        "files": [
+          "features/auth/AuthScreen.jsx"
+        ],
+        "createdAt": "2026-08-23T06:34:20.342Z",
+        "reason": "real-card-scale micro print on the HeroCard mockup (CARDHOLDER label) — same realism exception as the 10px issuer label"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#3a4150",
+        "files": [
+          "features/auth/AuthScreen.jsx"
+        ],
+        "createdAt": "2026-08-23T06:54:37.799Z",
+        "reason": "muted graphite material color for the non-interactive peek cards behind the front card, same realism exception as the front card's own material colors"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#1c2029",
+        "files": [
+          "features/auth/AuthScreen.jsx"
+        ],
+        "createdAt": "2026-08-23T06:54:37.829Z",
+        "reason": "muted graphite material color for the non-interactive peek cards, same realism exception as the front card"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#3d3423",
+        "files": [
+          "features/auth/AuthScreen.jsx"
+        ],
+        "createdAt": "2026-08-23T07:10:05.280Z",
+        "reason": "warm gold-metal material gradient for the hero card mockup, matching the new gold accent identity — not app UI chrome"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#201b12",
+        "files": [
+          "features/auth/AuthScreen.jsx"
+        ],
+        "createdAt": "2026-08-23T07:10:05.311Z",
+        "reason": "warm gold-metal material gradient for the hero card mockup, same realism exception"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#4a4234",
+        "files": [
+          "features/auth/AuthScreen.jsx"
+        ],
+        "createdAt": "2026-08-23T07:15:36.054Z",
+        "reason": "lighter gold-metal material for the echo layer peeking behind the hero card, same realism exception as the main card"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#211c14",
+        "files": [
+          "features/auth/AuthScreen.jsx"
+        ],
+        "createdAt": "2026-08-23T07:15:36.086Z",
+        "reason": "lighter gold-metal material for the echo layer, same realism exception"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#22d3ee",
+        "createdAt": "2026-08-23T10:27:14.702Z",
+        "reason": "pre-existing per-account fallback swatch (user-customizable via ColorPicker, same pattern as credit cards/categories/vault items) — not the app's single brand accent, not introduced by this edit"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#fb7185",
+        "createdAt": "2026-08-23T10:30:12.178Z",
+        "reason": "pre-existing default color for a new category (user-customizable via ColorPicker), same per-entity-color pattern as accounts/cards/vault items — not the brand accent, unchanged by this edit"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#a78bfa",
+        "createdAt": "2026-08-24T04:05:04.912Z",
+        "reason": "pre-existing default color for a new portfolio (user-customizable via ColorPicker), same per-entity-color pattern as accounts/categories/cards/vault items — not the brand accent, unchanged by this edit (just moved during the BottomSheet conversion)"
+      }
+    ]
+  }
+}

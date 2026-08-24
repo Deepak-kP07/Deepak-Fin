@@ -351,6 +351,12 @@ export const profiles = pgTable('profiles', {
   // Which dashboard sections are shown, and in what order. Shape matches moduleSettings:
   // { [sectionKey]: { enabled: boolean, order: number } }. See lib/moduleSettings.js.
   dashboardWidgets: jsonb('dashboard_widgets').notNull().default(sql`'{}'::jsonb`),
+  // The app's single global accent color, user-chosen in Settings > Appearance. Stored as a
+  // hex string; the client derives hue/saturation from it and drives the whole `accent-*`
+  // Tailwind scale (tailwind.config.js) via CSS custom properties — see DESIGN.md. Default is
+  // gold (lib/color.js's DEFAULT_ACCENT); existing profiles saved before this change keep
+  // whatever they'd already chosen.
+  accentColor: text('accent_color').notNull().default('#d4af37'),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 

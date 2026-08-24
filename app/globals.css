@@ -2,6 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
+@media (prefers-reduced-motion: reduce) {
+    .animate-marquee {
+        animation: none;
+    }
+    .card-flip-inner {
+        transition-duration: 150ms !important;
+    }
+}
+
 body {
     margin: 0;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
@@ -11,54 +20,16 @@ body {
     -moz-osx-font-smoothing: grayscale;
 }
 
-code {
-    font-family: source-code-pro, Menlo, Monaco, Consolas, "Courier New",
-        monospace;
-}
-
-.App {
-    text-align: center;
-}
-
-.App-logo {
-    height: 40vmin;
-    pointer-events: none;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-    .App-logo {
-        animation: App-logo-spin infinite 20s linear;
-    }
-}
-
-.App-header {
-    background-color: #0f0f10;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-size: calc(10px + 2vmin);
-    color: white;
-}
-
-.App-link {
-    color: #61dafb;
-}
-
-@keyframes App-logo-spin {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
-}
-
 
 
 @layer base {
   :root {
+        /* The app's single global brand accent (Settings > Appearance). Default is gold
+           (hsl(46 65% ...), matching lib/color.js's DEFAULT_ACCENT #d4af37); the accent-color
+           JS overwrites these two on <html> at runtime from the user's saved
+           profile.accent_color once it loads. See DESIGN.md. */
+        --accent-h: 46;
+        --accent-s: 65%;
         --background: 0 0% 100%;
         --foreground: 222.2 84% 4.9%;
         --card: 0 0% 100%;

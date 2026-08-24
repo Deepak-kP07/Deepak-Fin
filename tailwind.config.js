@@ -43,7 +43,23 @@ module.exports = {
           },
           accent: {
             DEFAULT: 'hsl(var(--accent))',
-            foreground: 'hsl(var(--accent-foreground))'
+            foreground: 'hsl(var(--accent-foreground))',
+            // The app's one signature brand accent (Settings > Appearance), user-chosen and
+            // stored as a hex color. --accent-h/--accent-s carry its hue/saturation; each shade
+            // below is that hue/saturation at a fixed lightness, mirroring Tailwind's own cyan
+            // ladder so existing spacing/contrast choices (accent-300 text, accent-400 hover,
+            // etc.) keep working for any color the user picks. See DESIGN.md.
+            50: 'hsl(var(--accent-h) var(--accent-s) 96% / <alpha-value>)',
+            100: 'hsl(var(--accent-h) var(--accent-s) 90% / <alpha-value>)',
+            200: 'hsl(var(--accent-h) var(--accent-s) 82% / <alpha-value>)',
+            300: 'hsl(var(--accent-h) var(--accent-s) 69% / <alpha-value>)',
+            400: 'hsl(var(--accent-h) var(--accent-s) 53% / <alpha-value>)',
+            500: 'hsl(var(--accent-h) var(--accent-s) 43% / <alpha-value>)',
+            600: 'hsl(var(--accent-h) var(--accent-s) 36% / <alpha-value>)',
+            700: 'hsl(var(--accent-h) var(--accent-s) 31% / <alpha-value>)',
+            800: 'hsl(var(--accent-h) var(--accent-s) 27% / <alpha-value>)',
+            900: 'hsl(var(--accent-h) var(--accent-s) 24% / <alpha-value>)',
+            950: 'hsl(var(--accent-h) var(--accent-s) 15% / <alpha-value>)',
           },
           popover: {
             DEFAULT: 'hsl(var(--popover))',
@@ -92,11 +108,16 @@ module.exports = {
             to: {
               height: '0'
             }
-          }
+          },
+          marquee: {
+            from: { transform: 'translateX(0)' },
+            to: { transform: 'translateX(-50%)' },
+          },
         },
         animation: {
           'accordion-down': 'accordion-down 0.2s ease-out',
-          'accordion-up': 'accordion-up 0.2s ease-out'
+          'accordion-up': 'accordion-up 0.2s ease-out',
+          marquee: 'marquee 26s linear infinite',
         }
       }
     },
