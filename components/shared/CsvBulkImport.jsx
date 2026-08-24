@@ -101,8 +101,8 @@ export function CsvBulkImport({
 
         {rows.length === 0 ? (
           <div className="mt-6">
-            <label className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-white/10 bg-white/[.02] px-6 py-14 text-center hover:border-cyan-300/40 hover:bg-cyan-300/5">
-              <ListChecks size={24} className="text-cyan-300" />
+            <label className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-white/10 bg-white/[.02] px-6 py-14 text-center hover:border-accent-300/40 hover:bg-accent-300/5">
+              <ListChecks size={24} className="text-accent-300" />
               <div className="mt-3 text-sm font-medium text-white">Choose a CSV or Excel file</div>
               <div className="mt-1 text-xs text-slate-500">{uploadHint}</div>
               <input type="file" accept=".csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={onFile} className="hidden" />
@@ -131,7 +131,7 @@ export function CsvBulkImport({
               <>
                 <div className="mt-5 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
                   <span>{preview.length} row{preview.length === 1 ? '' : 's'} detected{duplicateCount ? ` · ${duplicateCount} likely duplicate${duplicateCount === 1 ? '' : 's'} (unchecked by default)` : ''}{invalidCount ? ` · ${invalidCount} ${invalidLabel}` : ''}</span>
-                  <button type="button" onClick={() => setExcluded(excluded.size > 0 ? new Set() : new Set(preview.map((_, i) => i)))} className="text-cyan-300 hover:underline">{excluded.size > 0 ? 'Select all' : 'Deselect all'}</button>
+                  <button type="button" onClick={() => setExcluded(excluded.size > 0 ? new Set() : new Set(preview.map((_, i) => i)))} className="text-accent-300 hover:underline">{excluded.size > 0 ? 'Select all' : 'Deselect all'}</button>
                 </div>
                 <div className="mt-2 max-h-72 overflow-auto rounded-xl border border-white/10 bg-black/20 text-xs">
                   <table className="w-full">
@@ -151,7 +151,7 @@ export function CsvBulkImport({
               </>
             )}
             {belowTable?.(toImport)}
-            <button onClick={doImport} disabled={busy || toImport.length === 0} className="mt-5 w-full rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Importing…' : `Import ${toImport.length} ${itemLabel}${toImport.length === 1 ? '' : 's'}`}</button>
+            <button onClick={doImport} disabled={busy || toImport.length === 0} className="mt-5 w-full rounded-xl bg-gradient-to-r from-accent-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Importing…' : `Import ${toImport.length} ${itemLabel}${toImport.length === 1 ? '' : 's'}`}</button>
           </>
         )}
       </div>

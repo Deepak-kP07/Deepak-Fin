@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { X } from 'lucide-react'
 
 const TONES = {
-  cyan: 'border-cyan-300/20 bg-cyan-300/5 text-cyan-200',
+  cyan: 'border-accent-300/20 bg-accent-300/5 text-accent-200',
   amber: 'border-amber-300/20 bg-amber-300/5 text-amber-200',
   slate: 'border-slate-500/25 bg-slate-500/5 text-slate-300',
 }

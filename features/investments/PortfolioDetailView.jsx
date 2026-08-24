@@ -76,25 +76,25 @@ export function PortfolioDetailView({
           <div>
             <div className="flex items-center gap-2">
               <div className="text-lg font-semibold text-white">{portfolio.name}</div>
-              {kiteLinked && <span className="rounded-full bg-cyan-400/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-cyan-200">Kite</span>}
+              {kiteLinked && <span className="rounded-full bg-accent-400/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-accent-200">Kite</span>}
             </div>
             <div className="text-xs capitalize text-slate-500">{portfolio.broker.replace('_', ' ')} · {holdings.length} holding{holdings.length === 1 ? '' : 's'}</div>
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex w-full min-w-0 flex-wrap gap-2 sm:w-auto">
           {kiteLinked ? (
             <>
-              <button onClick={() => onSyncKite(portfolio)} disabled={kiteSyncBusy} className="flex items-center gap-2 rounded-xl bg-cyan-400/15 px-4 py-2.5 text-sm font-semibold text-cyan-200 hover:bg-cyan-400/25 disabled:opacity-50"><RefreshCw size={14} className={kiteSyncBusy ? 'animate-spin' : ''} />{kiteSyncBusy ? 'Syncing…' : 'Sync now'}</button>
+              <button onClick={() => onSyncKite(portfolio)} disabled={kiteSyncBusy} className="flex items-center gap-2 rounded-xl bg-accent-400/15 px-4 py-2.5 text-sm font-semibold text-accent-200 hover:bg-accent-400/25 disabled:opacity-50"><RefreshCw size={14} className={kiteSyncBusy ? 'animate-spin' : ''} />{kiteSyncBusy ? 'Syncing…' : 'Sync now'}</button>
               <button onClick={() => onUnlinkKite(portfolio)} className="flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-white/5"><Unlink size={14} />Unlink</button>
             </>
           ) : (
             <>
               <button onClick={() => onAddFunds(portfolio)} className="rounded-xl bg-emerald-400/15 px-4 py-2.5 text-sm font-semibold text-emerald-200 hover:bg-emerald-400/25">+ Funds</button>
               <button onClick={() => onWithdrawFunds(portfolio)} disabled={cash <= 0} className="rounded-xl border border-white/10 px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-white/5 disabled:opacity-50">− Withdraw</button>
-              <button onClick={() => onAddHolding(portfolio.id)} className="rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 px-4 py-2.5 text-sm font-semibold text-[#07101c]">+ Holding</button>
+              <button onClick={() => onAddHolding(portfolio.id)} className="rounded-xl bg-gradient-to-r from-accent-300 to-blue-500 px-4 py-2.5 text-sm font-semibold text-[#07101c]">+ Holding</button>
               <button onClick={() => onBulkImport(portfolio)} className="flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-white/5"><Download size={14} />Bulk import</button>
               {kiteConnected && canLinkKite && holdings.length === 0 && (
-                <button onClick={() => onLinkKite(portfolio)} className="flex items-center gap-2 rounded-xl border border-cyan-300/30 px-4 py-2.5 text-sm font-medium text-cyan-200 hover:bg-cyan-400/10"><Link2 size={14} />Link to Kite</button>
+                <button onClick={() => onLinkKite(portfolio)} className="flex items-center gap-2 rounded-xl border border-accent-300/30 px-4 py-2.5 text-sm font-medium text-accent-200 hover:bg-accent-400/10"><Link2 size={14} />Link to Kite</button>
               )}
             </>
           )}
@@ -116,7 +116,7 @@ export function PortfolioDetailView({
       )}
 
       <div className="grid gap-4 sm:grid-cols-4">
-        <StatCard label="Invested" value={showMoney ? money(invested) : '••••'} icon={Target} accent="bg-cyan-300/15 text-cyan-200" sub={<span>{holdings.length} holding{holdings.length === 1 ? '' : 's'}{sips.length > 0 ? ` · ${sips.length} SIP${sips.length === 1 ? '' : 's'}` : ''}{otherInvestments.length > 0 ? ` · ${otherInvestments.length} other` : ''}</span>} />
+        <StatCard label="Invested" value={showMoney ? money(invested) : '••••'} icon={Target} accent="bg-accent-300/15 text-accent-200" sub={<span>{holdings.length} holding{holdings.length === 1 ? '' : 's'}{sips.length > 0 ? ` · ${sips.length} SIP${sips.length === 1 ? '' : 's'}` : ''}{otherInvestments.length > 0 ? ` · ${otherInvestments.length} other` : ''}</span>} />
         <StatCard label="Current value" value={showMoney ? money(current) : '••••'} icon={TrendingUp} accent="bg-violet-400/15 text-violet-200" sub={<span>Everything except cash</span>} />
         <StatCard label="Cash available" value={showMoney ? money(cash) : '••••'} icon={PiggyBank} accent="bg-emerald-400/15 text-emerald-200" tone="text-emerald-300" sub={<span>Un-invested</span>} />
         <StatCard label="Unrealised P&L" value={showMoney ? (pnl >= 0 ? '+' : '−') + money(pnl).replace('-', '') : '••••'} icon={pnl >= 0 ? ArrowUpRight : ArrowDownRight} accent={pnl >= 0 ? 'bg-emerald-400/15 text-emerald-200' : 'bg-rose-400/15 text-rose-200'} tone={pnl >= 0 ? 'text-emerald-300' : 'text-rose-300'} sub={<span>{pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%</span>} />
@@ -179,7 +179,7 @@ export function PortfolioDetailView({
                         ) : (
                           <div className="flex items-center justify-end gap-1">
                             <span>{money2(h.current_price || h.avg_buy_price)}</span>
-                            <button onClick={() => onRefreshRowPrice(h)} title="Fetch live price" className="rounded-md p-1 text-cyan-300 hover:bg-white/5"><TrendingUp size={12} /></button>
+                            <button onClick={() => onRefreshRowPrice(h)} title="Fetch live price" className="rounded-md p-1 text-accent-300 hover:bg-white/5"><TrendingUp size={12} /></button>
                             <button onClick={() => onManualPriceEntry(h)} title="Enter price manually" className="rounded-md p-1 text-slate-500 hover:bg-white/5 hover:text-slate-300"><Pencil size={11} /></button>
                           </div>
                         )}
@@ -220,12 +220,12 @@ export function PortfolioDetailView({
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5">
                         <div className="truncate text-sm font-semibold text-white">{s.fund_name}</div>
-                        {isKite && <span className="shrink-0 rounded-full bg-cyan-400/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-widest text-cyan-200">Kite</span>}
+                        {isKite && <span className="shrink-0 rounded-full bg-accent-400/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-widest text-accent-200">Kite</span>}
                       </div>
                       <div className="text-xs text-slate-500">{s.folio_number ? `Folio ${s.folio_number}` : 'No folio number'}</div>
                     </div>
                     {!isKite && (
-                      <div className="flex shrink-0 gap-1 opacity-0 transition group-hover:opacity-100">
+                      <div className="flex shrink-0 gap-1 opacity-100 transition lg:opacity-0 lg:group-hover:opacity-100">
                         <button onClick={() => onEditSip(s)} className="rounded-lg p-1.5 text-slate-500 hover:bg-white/5 hover:text-white"><Pencil size={14} /></button>
                         <button onClick={() => onDeleteSip(s)} className="rounded-lg p-1.5 text-rose-300/70 hover:bg-rose-300/10"><Trash2 size={14} /></button>
                       </div>

@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { AlertTriangle, Calendar, Eye, EyeOff, Lock, Pencil, Plus, Target, Trash2, TrendingUp, Upload, X } from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
-import { StatCard } from '@/components/shared/StatCard'
 import { budgetInsights, categoryBreakdown, monthLabel, planTotals } from '@/lib/budgets'
 import { downloadBudgetsExport } from '@/lib/exportBudgets'
 import { money } from '@/lib/format'
@@ -49,25 +48,25 @@ export function BudgetsView({ data, onSetMonth, onCloseMonth, onReopenMonth, onD
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <div className="mb-2 text-xs uppercase tracking-widest text-cyan-200/70">Guardrails</div>
+          <div className="mb-2 text-xs uppercase tracking-widest text-accent-200/70">Guardrails</div>
           <h1 className="text-3xl font-semibold tracking-tight text-white">Budgets</h1>
         </div>
         <div className="flex gap-2">
           <button
             onClick={() => downloadBudgetsExport({ budgetMonths: budget_months, budgetMonthCategories: budget_month_categories, yearlyBudgets, categories, transactions }, new Date().toISOString().slice(0, 10))}
             disabled={budget_months.length === 0 && yearlyBudgets.length === 0}
-            className="flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-white/5 disabled:opacity-50"
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-white/5 disabled:opacity-50 sm:flex-none"
           ><Upload size={14} />Export</button>
-          <button onClick={() => onSetMonth(nextMonth.getFullYear(), nextMonth.getMonth())} className="flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-white/5"><Plus size={14} />Plan a month</button>
+          <button onClick={() => onSetMonth(nextMonth.getFullYear(), nextMonth.getMonth())} className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-white/5 sm:flex-none"><Plus size={14} />Plan a month</button>
           <button onClick={onToggleMoney} className="rounded-xl border border-white/10 p-2.5 text-slate-400 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
             {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
           </button>
         </div>
       </div>
 
-      <div className="rounded-2xl border border-white/10 bg-white/[.035] p-5">
+      <div className="rounded-3xl border border-white/10 bg-white/[.035] p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="text-sm font-semibold text-white">{monthLabel(now.getFullYear(), now.getMonth())}</div>
           {activePlan && (
@@ -83,10 +82,21 @@ export function BudgetsView({ data, onSetMonth, onCloseMonth, onReopenMonth, onD
           <EmptyState compact icon={Target} title="No budget set for this month" message="Set an overall monthly budget and however many category limits you want, all together." cta="Set this month's budget" onCta={() => onSetMonth(now.getFullYear(), now.getMonth())} />
         ) : (
           <>
-            <div className="mt-4 grid gap-4 sm:grid-cols-3">
-              <StatCard label="Budgeted" value={showMoney ? money(activeTotals.budgeted) : '••••'} icon={Target} accent="bg-violet-400/15 text-violet-200" />
-              <StatCard label="Spent so far" value={showMoney ? money(activeTotals.spent) : '••••'} icon={TrendingUp} accent="bg-rose-400/15 text-rose-200" tone="text-rose-300" sub={<span>{activeTotals.pct}% of budget</span>} />
-              <StatCard label={activeTotals.remaining >= 0 ? 'Remaining' : 'Over by'} value={showMoney ? money(Math.abs(activeTotals.remaining)) : '••••'} icon={Target} accent={activeTotals.remaining >= 0 ? 'bg-emerald-400/15 text-emerald-200' : 'bg-rose-400/15 text-rose-200'} tone={activeTotals.remaining >= 0 ? 'text-emerald-300' : 'text-rose-300'} />
+            <div className="mt-5">
+              <div className="text-xs uppercase tracking-widest text-slate-500">Budgeted</div>
+              <div className="mt-1 text-[clamp(2rem,6vw,3rem)] font-semibold leading-[1.1] tracking-[-0.01em] text-white">{showMoney ? money(activeTotals.budgeted) : '••••••'}</div>
+              <div className={`mt-1 text-sm ${activeTotals.remaining >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>{activeTotals.remaining >= 0 ? 'Remaining' : 'Over by'} {showMoney ? money(Math.abs(activeTotals.remaining)) : '••••'}</div>
+              <div className="mt-5 grid grid-cols-2 gap-3">
+                <div className="rounded-2xl bg-white/[.04] p-3.5">
+                  <div className="flex items-center gap-1.5 text-xs text-slate-400"><TrendingUp size={13} />Spent so far</div>
+                  <div className="mt-1 text-lg font-semibold text-rose-300">{showMoney ? money(activeTotals.spent) : '••••'}</div>
+                  <div className="text-[11px] text-slate-500">{activeTotals.pct}% of budget</div>
+                </div>
+                <div className="rounded-2xl bg-white/[.04] p-3.5">
+                  <div className="flex items-center gap-1.5 text-xs text-slate-400"><Target size={13} />{activeTotals.remaining >= 0 ? 'Remaining' : 'Over by'}</div>
+                  <div className={`mt-1 text-lg font-semibold ${activeTotals.remaining >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>{showMoney ? money(Math.abs(activeTotals.remaining)) : '••••'}</div>
+                </div>
+              </div>
             </div>
 
             {insights.filter((ins) => !dismissedInsights.has(ins.line.id)).length > 0 && (
@@ -144,11 +154,11 @@ export function BudgetsView({ data, onSetMonth, onCloseMonth, onReopenMonth, onD
               const t = planTotals(p, transactions)
               const isFuture = p.year > now.getFullYear() || (p.year === now.getFullYear() && p.month > now.getMonth())
               return (
-                <div key={p.id} onClick={() => onSetMonth(p.year, p.month)} className="cursor-pointer rounded-2xl border border-cyan-300/15 bg-cyan-300/[.03] p-5 transition hover:border-cyan-300/30 hover:bg-cyan-300/[.06]">
+                <div key={p.id} onClick={() => onSetMonth(p.year, p.month)} className="cursor-pointer rounded-2xl border border-accent-300/15 bg-accent-300/[.03] p-5 transition hover:border-accent-300/30 hover:bg-accent-300/[.06]">
                   <div className="flex items-center gap-2">
-                    <Calendar size={14} className="text-cyan-300/70" />
+                    <Calendar size={14} className="text-accent-300/70" />
                     <div className="text-sm font-semibold text-white">{monthLabel(p.year, p.month)}</div>
-                    <span className="rounded-full bg-cyan-400/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-widest text-cyan-200">{isFuture ? 'Upcoming' : 'Reopened'}</span>
+                    <span className="rounded-full bg-accent-400/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-widest text-accent-200">{isFuture ? 'Upcoming' : 'Reopened'}</span>
                   </div>
                   <div className="mt-3 text-xl font-semibold text-white">{showMoney ? money(t.budgeted) : '••••'}</div>
                   <div className="text-xs text-slate-500">{isFuture ? 'Planned' : `${money(t.spent)} spent so far`}</div>
@@ -167,7 +177,7 @@ export function BudgetsView({ data, onSetMonth, onCloseMonth, onReopenMonth, onD
               const t = planTotals(p, transactions)
               const tone = t.pct >= 100 ? 'text-rose-300' : t.pct >= 80 ? 'text-amber-300' : 'text-emerald-300'
               return (
-                <div key={p.id} onClick={() => setSelectedClosedId(p.id)} className="cursor-pointer rounded-2xl border border-white/10 bg-white/[.035] p-5 transition hover:border-cyan-300/30 hover:bg-white/[.05]">
+                <div key={p.id} onClick={() => setSelectedClosedId(p.id)} className="cursor-pointer rounded-2xl border border-white/10 bg-white/[.035] p-5 transition hover:border-accent-300/30 hover:bg-white/[.05]">
                   <div className="flex items-center gap-2">
                     <Calendar size={14} className="text-slate-500" />
                     <div className="text-sm font-semibold text-white">{monthLabel(p.year, p.month)}</div>
@@ -211,7 +221,7 @@ export function BudgetsView({ data, onSetMonth, onCloseMonth, onReopenMonth, onD
                         <div className="text-[11px] capitalize text-slate-500">yearly</div>
                       </div>
                     </div>
-                    <div className="flex gap-1 opacity-0 transition group-hover:opacity-100">
+                    <div className="flex gap-1 opacity-100 transition lg:opacity-0 lg:group-hover:opacity-100">
                       <button onClick={() => onEditYearly(b)} className="rounded-lg p-1.5 text-slate-500 hover:bg-white/5 hover:text-white"><Pencil size={14} /></button>
                       <button onClick={() => onDeleteYearly(b)} className="rounded-lg p-1.5 text-rose-300/70 hover:bg-rose-300/10"><Trash2 size={14} /></button>
                     </div>

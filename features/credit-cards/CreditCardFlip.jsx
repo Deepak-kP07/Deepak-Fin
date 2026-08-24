@@ -58,9 +58,9 @@ export function CreditCardFlip({ card, showMoney, onSpend, onPay, onViewDetails 
           <div className="space-y-1.5">
             <div className="flex gap-1.5">
               <button type="button" onClick={stop(() => onSpend(card))} className="flex-1 rounded-lg bg-white/[.06] py-1.5 text-[11px] font-semibold text-white hover:bg-white/[.1]">+ Log spend</button>
-              <button type="button" onClick={stop(() => onPay(card))} disabled={Number(card.current_outstanding) <= 0} className="flex-1 rounded-lg bg-gradient-to-r from-cyan-300 to-blue-500 py-1.5 text-[11px] font-semibold text-[#07101c] disabled:opacity-50">Pay bill</button>
+              <button type="button" onClick={stop(() => onPay(card))} disabled={Number(card.current_outstanding) <= 0} className="flex-1 rounded-lg bg-gradient-to-r from-accent-300 to-blue-500 py-1.5 text-[11px] font-semibold text-[#07101c] disabled:opacity-50">Pay bill</button>
             </div>
-            <button type="button" onClick={stop(() => onViewDetails(card))} className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-white/10 py-1.5 text-[11px] font-medium text-cyan-200 hover:bg-white/5">View full details <ArrowRight size={12} /></button>
+            <button type="button" onClick={stop(() => onViewDetails(card))} className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-white/10 py-1.5 text-[11px] font-medium text-accent-200 hover:bg-white/5">View full details <ArrowRight size={12} /></button>
           </div>
         </div>
       </div>

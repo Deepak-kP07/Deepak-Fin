@@ -1,3 +1,11 @@
+const withSerwist = require('@serwist/next').default({
+  swSrc: 'app/sw.js',
+  swDest: 'public/sw.js',
+  // Disabled in dev so the service worker never shadows Next's own HMR/dev-server fetches —
+  // it only ever runs against a real production build.
+  disable: process.env.NODE_ENV === 'development',
+})
+
 const nextConfig = {
   output: 'standalone',
   images: {
@@ -37,4 +45,4 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig;
+module.exports = withSerwist(nextConfig);

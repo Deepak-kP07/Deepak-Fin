@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { CreditCard, Eye, EyeOff, Landmark, Plus, Target } from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
-import { StatCard } from '@/components/shared/StatCard'
 import { money } from '@/lib/format'
 import { CreditCardFlip } from '@/features/credit-cards/CreditCardFlip'
 import { CreditCardDetailView } from '@/features/credit-cards/CreditCardDetailView'
@@ -39,13 +38,13 @@ export function CreditCardsView({ data, onAdd, onEdit, onDelete, onSpend, onPay,
 
   return (
     <div className="space-y-5">
-      <div className="flex items-end justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <div className="mb-2 text-xs uppercase tracking-widest text-cyan-200/70">Plastic tracker</div>
+          <div className="mb-2 text-xs uppercase tracking-widest text-accent-200/70">Plastic tracker</div>
           <h1 className="text-3xl font-semibold tracking-tight text-white">Credit cards</h1>
         </div>
         <div className="flex gap-2">
-          <button onClick={onAdd} className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 px-4 py-2.5 text-sm font-semibold text-[#07101c]"><Plus size={15} />Add card</button>
+          <button onClick={onAdd} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-accent-300 to-blue-500 px-4 py-2.5 text-sm font-semibold text-[#07101c] sm:flex-none"><Plus size={15} />Add card</button>
           <button onClick={onToggleMoney} className="rounded-xl border border-white/10 p-2.5 text-slate-400 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
             {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
           </button>
@@ -53,10 +52,23 @@ export function CreditCardsView({ data, onAdd, onEdit, onDelete, onSpend, onPay,
       </div>
 
       {credit_cards.length > 0 && (
-        <div className="grid gap-4 sm:grid-cols-3">
-          <StatCard label="Total outstanding" value={showMoney ? money(totalOutstanding) : '••••••'} icon={CreditCard} accent="bg-rose-400/15 text-rose-200" tone="text-rose-300" sub={<span className="text-rose-300">{credit_cards.length} card{credit_cards.length === 1 ? '' : 's'}</span>} />
-          <StatCard label="Total limit" value={showMoney ? money(totalLimit) : '••••••'} icon={Landmark} accent="bg-cyan-300/15 text-cyan-200" sub={<span>Combined limit</span>} />
-          <StatCard label="Overall utilisation" value={`${overallUtil}%`} icon={Target} accent="bg-violet-400/15 text-violet-200" sub={<span className={overallUtil <= 30 ? 'text-emerald-300' : overallUtil <= 60 ? 'text-amber-300' : 'text-rose-300'}>{overallUtil <= 30 ? 'Healthy' : overallUtil <= 60 ? 'Rising' : 'High'}</span>} tone={overallUtil <= 30 ? 'text-emerald-300' : 'text-amber-300'} />
+        <div className="rounded-3xl border border-white/10 bg-white/[.035] p-6">
+          <div className="text-xs uppercase tracking-widest text-slate-500">Total outstanding</div>
+          <div className="mt-1 text-[clamp(2rem,6vw,3rem)] font-semibold leading-[1.1] tracking-[-0.01em] text-white">
+            {showMoney ? money(totalOutstanding) : '••••••••'}
+          </div>
+          <div className="mt-1 text-sm text-slate-500">{credit_cards.length} card{credit_cards.length === 1 ? '' : 's'}</div>
+          <div className="mt-5 grid grid-cols-2 gap-3">
+            <div className="rounded-2xl bg-white/[.04] p-3.5">
+              <div className="flex items-center gap-1.5 text-xs text-slate-400"><Landmark size={13} />Total limit</div>
+              <div className="mt-1 text-lg font-semibold text-white">{showMoney ? money(totalLimit) : '••••'}</div>
+            </div>
+            <div className="rounded-2xl bg-white/[.04] p-3.5">
+              <div className="flex items-center gap-1.5 text-xs text-slate-400"><Target size={13} />Utilisation</div>
+              <div className={`mt-1 text-lg font-semibold ${overallUtil <= 30 ? 'text-emerald-300' : overallUtil <= 60 ? 'text-amber-300' : 'text-rose-300'}`}>{overallUtil}%</div>
+              <div className="text-[11px] text-slate-500">{overallUtil <= 30 ? 'Healthy' : overallUtil <= 60 ? 'Rising' : 'High'}</div>
+            </div>
+          </div>
         </div>
       )}
 

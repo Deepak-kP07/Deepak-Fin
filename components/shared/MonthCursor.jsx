@@ -21,7 +21,7 @@ export function MonthCursor({ cursor, onShift, showAll, onToggleAll }) {
       </div>
       <button
         type="button" onClick={onToggleAll}
-        className={`rounded-xl border px-3 py-2 text-[11px] font-semibold uppercase tracking-wider transition ${showAll ? 'border-cyan-300/40 bg-cyan-400/15 text-cyan-200' : 'border-white/10 text-slate-400 hover:bg-white/5 hover:text-white'}`}
+        className={`rounded-xl border px-3 py-2 text-[11px] font-semibold uppercase tracking-wider transition ${showAll ? 'border-accent-300/40 bg-accent-400/15 text-accent-200' : 'border-white/10 text-slate-400 hover:bg-white/5 hover:text-white'}`}
       >All</button>
     </div>
   )

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { MotionConfig } from 'framer-motion'
 import { createClient } from '@/lib/supabase/browser'
 import { removeAttachment, uploadAttachment, viewAttachment } from '@/lib/attachments'
 import { calcEmi, daysBetween, projectSchedule, totalInterest } from '@/lib/amortization'
@@ -9,6 +10,9 @@ import {
   monthAbbr, monthName, ordinal, paymentTypeLabel, todayISO,
 } from '@/lib/format'
 import { PALETTE } from '@/lib/palette'
+import { applyAccentColor } from '@/lib/color'
+import { clearSnapshot, loadSnapshot, saveSnapshot } from '@/lib/offline/db'
+import { createMutate, flushOutbox, getPendingCount, registerAutoFlush } from '@/lib/offline/mutate'
 import { useToast } from '@/components/shared/Toast'
 import { useConfirm } from '@/components/shared/ConfirmDialog'
 import { usePrompt } from '@/components/shared/PromptDialog'
@@ -22,6 +26,9 @@ import { Skeleton } from '@/components/shared/Skeleton'
 import { LoadingScreen } from '@/components/shared/LoadingScreen'
 import { Avatar } from '@/components/shared/Avatar'
 import { CreditCardBillAlert } from '@/components/shared/CreditCardBillAlert'
+import { InstallPrompt } from '@/components/shared/InstallPrompt'
+import { BottomSheet } from '@/components/shared/BottomSheet'
+import { ToggleSwitch } from '@/components/shared/ToggleSwitch'
 import { AuthScreen } from '@/features/auth/AuthScreen'
 import { CategoryForm } from '@/features/categories/CategoryForm'
 import { MoneyRulesWidget } from '@/features/money-rules/MoneyRulesWidget'
@@ -61,6 +68,7 @@ import { MoneyProfileEntryForm } from '@/features/familyCompany/MoneyProfileEntr
 import { MoneyProfileBulkImport } from '@/features/familyCompany/MoneyProfileBulkImport'
 import { FamilyCompanyView } from '@/features/familyCompany/FamilyCompanyView'
 import { VaultItemForm } from '@/features/vault/VaultItemForm'
+import { InsightsView } from '@/features/insights/InsightsView'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import {
@@ -68,13 +76,13 @@ import {
 } from 'recharts'
 import {
   ArrowDownRight, ArrowLeftRight, ArrowUpDown, ArrowUpRight, BarChart3, Briefcase, Calendar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock, CreditCard,
-  Download, Eye, EyeOff, FileText, Heart, History, Landmark, LayoutDashboard, LineChart, ListChecks, LogOut, Menu, MoreVertical, Mountain, Paperclip, PieChart as PieChartIcon, PiggyBank, Plus,
-  RefreshCw, Repeat, Search, ShieldCheck, Sparkles, Star, Tag, Target, TrendingDown, TrendingUp, Trash2, Pencil, Users,
+  Download, Eye, EyeOff, FileText, Heart, History, Landmark, LayoutDashboard, LineChart, ListChecks, LogOut, Menu, MoreHorizontal, MoreVertical, Mountain, Paperclip, PieChart as PieChartIcon, Plus,
+  RefreshCw, Repeat, Search, Settings, ShieldCheck, Star, Tag, Target, TrendingDown, TrendingUp, Trash2, Pencil, Users,
   Wallet, X, Zap,
 } from 'lucide-react'
 
 /* ---------------- Transaction Form ---------------- */
-function TransactionForm({ open, onClose, onSaved, editing, accounts, categories, creditCards = [], lendBorrow = [], loans = [], onAddAccount, onAddCategory, toast, profile, defaultAccountId = '', defaultRepayment = null }) {
+function TransactionForm({ open, onClose, onSaved, editing, accounts, categories, creditCards = [], lendBorrow = [], loans = [], onAddAccount, onAddCategory, toast, profile, defaultAccountId = '', defaultRepayment = null, mutate }) {
   const now = todayISO()
   const nowTime = new Date().toTimeString().slice(0, 5)
   const initial = useMemo(() => {
@@ -193,12 +201,21 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
     setBusy(true)
     try {
       const [repayKind, repayId] = purposeMode === 'repayment' ? (form.repay_value || '').split(':') : []
+      const isCreditCardFunded = typeof form.account_id === 'string' && form.account_id.startsWith('cc:')
+      const isCreditCardPayoff = form.type === 'transfer' && typeof form.to_account_id === 'string' && form.to_account_id.startsWith('cc:')
+      // These all route through endpoints with their own extra side effects (loan outstanding,
+      // credit card outstanding, lend/borrow repayment tracking) on top of the plain account-
+      // balance trigger — safe to replay from an offline queue once reconnected, but not safe to
+      // optimistic-apply locally the way the plain expense/income/transfer path below can.
+      if (!navigator.onLine && (purposeMode === 'repayment' || isCreditCardFunded || isCreditCardPayoff)) {
+        throw new Error('This kind of transaction needs a connection — try again once you’re back online.')
+      }
 
       if (purposeMode === 'repayment' && typeof form.account_id === 'string' && form.account_id.startsWith('cc:')) {
         throw new Error('Choose a bank, cash, or debit account to pay a repayment from — credit cards aren’t supported for this yet.')
       }
 
-      if (form.type === 'transfer' && typeof form.to_account_id === 'string' && form.to_account_id.startsWith('cc:')) {
+      if (isCreditCardPayoff) {
         // Paying a credit card bill is really a transfer into debt payoff — route through the
         // Credit Cards module's own endpoint so the outstanding balance updates correctly.
         const cardId = form.to_account_id.slice(3)
@@ -251,26 +268,31 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
         const debitCard = debitCards.find((c) => c.id === payload.account_id)
         if (debitCard) payload.account_id = debitCard.linked_account_id
       }
-      const response = await fetch(endpoint, { method: editing ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.error || data.message || 'Could not save')
+      const { record: data, queued } = await mutate({ table: 'transactions', method: editing ? 'PATCH' : 'POST', id: editing?.id, body: payload })
 
-      if (attachmentRemoved && editing?.attachment_path) {
-        await removeAttachment(`/api/finance/transactions/${data.id}/attachment`)
-      }
-      if (attachmentFile) {
-        const { error: uploadError } = await uploadAttachment(`/api/finance/transactions/${data.id}`, data.id, attachmentFile)
-        if (uploadError) toast.push('Transaction saved, but the attachment failed to upload', 'error')
+      // A queued (offline) write only has a temp id — Storage upload / attachment PATCH both
+      // need a real, already-persisted row, so they're deferred rather than attempted against
+      // an id the server doesn't know about yet.
+      if (!queued) {
+        if (attachmentRemoved && editing?.attachment_path) {
+          await removeAttachment(`/api/finance/transactions/${data.id}/attachment`)
+        }
+        if (attachmentFile) {
+          const { error: uploadError } = await uploadAttachment(`/api/finance/transactions/${data.id}`, data.id, attachmentFile)
+          if (uploadError) toast.push('Transaction saved, but the attachment failed to upload', 'error')
+        }
+      } else if (attachmentFile || attachmentRemoved) {
+        toast.push('Saved — the attachment change will need to be redone once you’re back online', 'warning')
       }
 
-      toast.push(editing ? 'Transaction updated' : 'Transaction added')
+      toast.push(queued ? `Transaction ${editing ? 'updated' : 'added'} — will sync when back online` : `Transaction ${editing ? 'updated' : 'added'}`)
       onSaved()
     } catch (e) { toast.push(e.message, 'error') } finally { setBusy(false) }
   }
 
   return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center" onClick={onClose}>
-      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-xl rounded-3xl border border-white/10 bg-[#141a28] p-6 shadow-2xl">
+    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center sm:p-4" onClick={onClose}>
+      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="max-h-[92vh] w-full overflow-y-auto rounded-t-3xl border-t border-white/10 bg-[#141a28] p-6 shadow-2xl sm:max-w-xl sm:rounded-3xl sm:border" style={{ paddingBottom: 'max(1.5rem, calc(env(safe-area-inset-bottom) + 1.5rem))' }}>
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold text-white">{editing ? 'Edit transaction' : 'Add transaction'}</h2>
@@ -280,7 +302,7 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
         </div>
 
         <div className="mt-5 grid grid-cols-3 gap-2">
-          {[{ v: 'expense', l: 'Expense', c: 'bg-rose-400/15 text-rose-200 border-rose-400/30' }, { v: 'income', l: 'Income', c: 'bg-emerald-400/15 text-emerald-200 border-emerald-400/30' }, { v: 'transfer', l: 'Transfer', c: 'bg-cyan-400/15 text-cyan-200 border-cyan-400/30' }].map((t) => (
+          {[{ v: 'expense', l: 'Expense', c: 'bg-rose-400/15 text-rose-200 border-rose-400/30' }, { v: 'income', l: 'Income', c: 'bg-emerald-400/15 text-emerald-200 border-emerald-400/30' }, { v: 'transfer', l: 'Transfer', c: 'bg-accent-400/15 text-accent-200 border-accent-400/30' }].map((t) => (
             <button key={t.v} type="button" onClick={() => { setPurposeMode('category'); setForm({ ...form, type: t.v, category_id: t.v === 'transfer' ? '' : (categories.find((c) => c.type === (t.v === 'income' ? 'income' : 'expense'))?.id || ''), linked_module: '', linked_module_id: '', repay_value: '' }) }} className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${form.type === t.v ? t.c : 'border-white/10 text-slate-400 hover:bg-white/5'}`}>{t.l}</button>
           ))}
         </div>
@@ -294,14 +316,14 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
 
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
           <label className="text-sm text-slate-300">Amount
-            <input required min="0.01" step="0.01" type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="0.00" />
+            <input required min="0.01" step="0.01" type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-accent-300/50" placeholder="0.00" />
           </label>
           <label className="text-sm text-slate-300">Date
-            <DateInput value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value, time: new Date().toTimeString().slice(0, 5) })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
+            <DateInput value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value, time: new Date().toTimeString().slice(0, 5) })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-accent-300/50" />
           </label>
 
           <label className="text-sm text-slate-300">{form.type === 'transfer' ? 'From account' : 'Account'}
-            <Select required={hasAnySource} value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none focus:border-cyan-300/50">
+            <Select required={hasAnySource} value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none focus:border-accent-300/50">
               <option value="">Choose account…</option>
               {sourceOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </Select>
@@ -309,7 +331,7 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
 
           {form.type === 'transfer' ? (
             <label className="text-sm text-slate-300">To account
-              <Select required value={form.to_account_id} onChange={(e) => setForm({ ...form, to_account_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none focus:border-cyan-300/50">
+              <Select required value={form.to_account_id} onChange={(e) => setForm({ ...form, to_account_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none focus:border-accent-300/50">
                 <option value="">Choose destination…</option>
                 {realAccounts.filter((a) => a.id !== form.account_id).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
                 {creditCards.filter((c) => Number(c.current_outstanding) > 0).map((c) => <option key={c.id} value={`cc:${c.id}`}>{c.name} · pay bill</option>)}
@@ -321,37 +343,37 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
                 <span>{purposeMode === 'repayment' ? (form.type === 'income' ? 'Repayment from' : 'Repaying') : 'Category'}</span>
                 {canRepay && (
                   <div className="flex gap-1">
-                    <button type="button" onClick={() => resetPurpose('category')} className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition ${purposeMode === 'category' ? 'bg-cyan-400/15 text-cyan-200' : 'text-slate-500 hover:bg-white/5'}`}>Category</button>
-                    <button type="button" onClick={() => resetPurpose('repayment')} className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition ${purposeMode === 'repayment' ? 'bg-cyan-400/15 text-cyan-200' : 'text-slate-500 hover:bg-white/5'}`}>Repayment</button>
+                    <button type="button" onClick={() => resetPurpose('category')} className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition ${purposeMode === 'category' ? 'bg-accent-400/15 text-accent-200' : 'text-slate-500 hover:bg-white/5'}`}>Category</button>
+                    <button type="button" onClick={() => resetPurpose('repayment')} className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition ${purposeMode === 'repayment' ? 'bg-accent-400/15 text-accent-200' : 'text-slate-500 hover:bg-white/5'}`}>Repayment</button>
                   </div>
                 )}
               </div>
               {purposeMode === 'repayment' && canRepay ? (
                 <>
-                  <Select required value={form.repay_value || ''} onChange={(e) => setForm({ ...form, repay_value: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none focus:border-cyan-300/50">
+                  <Select required value={form.repay_value || ''} onChange={(e) => setForm({ ...form, repay_value: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none focus:border-accent-300/50">
                     <option value="">Choose…</option>
                     {repayOptions.map((o) => <option key={`${o.kind}:${o.id}`} value={`${o.kind}:${o.id}`}>{o.label}</option>)}
                   </Select>
                   <div className="mt-1 text-[11px] text-slate-500">Auto-marks the debt as partially/fully repaid.</div>
                 </>
               ) : (
-                <CategorySelect value={form.category_id || ''} onChange={(e) => setForm({ ...form, category_id: e.target.value })} categories={catsForType} onAddCategory={onAddCategory} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
+                <CategorySelect value={form.category_id || ''} onChange={(e) => setForm({ ...form, category_id: e.target.value })} categories={catsForType} onAddCategory={onAddCategory} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none focus:border-accent-300/50" />
               )}
             </div>
           )}
 
           <label className="text-sm text-slate-300 sm:col-span-2">Description
-            <input required value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder={form.type === 'income' ? 'e.g. Salary, stipend, refund' : form.type === 'transfer' ? 'e.g. Moved to savings' : 'e.g. Groceries at BigBazaar'} />
+            <input required value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-accent-300/50" placeholder={form.type === 'income' ? 'e.g. Salary, stipend, refund' : form.type === 'transfer' ? 'e.g. Moved to savings' : 'e.g. Groceries at BigBazaar'} />
           </label>
           <label className="text-sm text-slate-300 sm:col-span-2">Notes
-            <input value={form.notes || ''} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="Optional context" />
+            <input value={form.notes || ''} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-accent-300/50" placeholder="Optional context" />
           </label>
 
           <div className="text-sm text-slate-300 sm:col-span-2">
             Receipt / attachment
             {editing?.attachment_path && !attachmentRemoved ? (
               <div className="mt-2 flex items-center justify-between rounded-xl border border-white/10 bg-white/[.04] px-3 py-3">
-                <button type="button" onClick={() => viewAttachment(`/api/finance/transactions/${editing.id}/attachment`)} className="flex min-w-0 items-center gap-2 truncate text-sm text-cyan-200 hover:underline"><Paperclip size={14} className="shrink-0 text-slate-500" />{editing.attachment_name || 'Attachment'}</button>
+                <button type="button" onClick={() => viewAttachment(`/api/finance/transactions/${editing.id}/attachment`)} className="flex min-w-0 items-center gap-2 truncate text-sm text-accent-200 hover:underline"><Paperclip size={14} className="shrink-0 text-slate-500" />{editing.attachment_name || 'Attachment'}</button>
                 <button type="button" onClick={() => setAttachmentRemoved(true)} className="shrink-0 rounded-lg p-1.5 text-rose-300/70 hover:bg-rose-300/10"><Trash2 size={14} /></button>
               </div>
             ) : (
@@ -384,7 +406,7 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
           )}
         </div>
 
-        <button disabled={busy || !hasAnySource} className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">
+        <button disabled={busy || !hasAnySource} className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-accent-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">
           {busy ? 'Saving…' : editing ? 'Update transaction' : 'Save transaction'} <ChevronRight size={16} />
         </button>
       </form>
@@ -517,7 +539,7 @@ function TransactionTicker({ items, categories, accounts, creditCards = [], show
           const cat = categories.find((c) => c.id === t.category_id)
           const acc = accounts.find((a) => a.id === t.account_id) || (t.linked_module === 'credit_card' ? creditCards.find((c) => c.id === t.linked_module_id) : null)
           const sign = t.type === 'income' || (t.type === 'transfer' && t.transfer_direction === 'in') ? '+' : '-'
-          const color = t.type === 'income' || (t.type === 'transfer' && t.transfer_direction === 'in') ? 'text-emerald-300' : t.type === 'transfer' ? 'text-cyan-300' : 'text-rose-300'
+          const color = t.type === 'income' || (t.type === 'transfer' && t.transfer_direction === 'in') ? 'text-emerald-300' : t.type === 'transfer' ? 'text-accent-300' : 'text-rose-300'
           return (
             <div key={`${t.id}-${i}`} className="flex items-center justify-between gap-3 border-b border-white/5 px-3.5 py-2">
               <div className="flex min-w-0 items-center gap-2.5">
@@ -595,15 +617,14 @@ function DashboardView({ data, showMoney, onOpenTxForm, setView, onManageMoneyRu
   const budgetUsedPct = budgetTotal > 0 ? Math.round(((thisMonth?.expense || 0) / budgetTotal) * 100) : 0
 
   const STAT_CARDS = [
-    { key: 'net_worth', available: true, node: <StatCard label="Net worth" value={showMoney ? money(netWorth) : '••••••'} sub={<span className="flex items-center gap-1"><ArrowUpRight size={13} />Cash + Investments − Debt</span>} icon={PiggyBank} accent="bg-gradient-to-br from-cyan-300 to-blue-500 text-[#07101c]" /> },
     { key: 'income_month', available: true, node: <StatCard label={`Income · ${thisMonth?.label || ''}`} value={showMoney ? money(thisMonth?.income || 0) : '••••'} sub={<span className="flex items-center gap-1"><ArrowUpRight size={13} />This month</span>} icon={TrendingUp} accent="bg-emerald-400/15 text-emerald-200" /> },
     { key: 'expense_month', available: true, node: <StatCard label={`Expense · ${thisMonth?.label || ''}`} value={showMoney ? money(thisMonth?.expense || 0) : '••••'} sub={<span className="flex items-center gap-1 text-rose-300"><ArrowDownRight size={13} />This month</span>} icon={TrendingDown} accent="bg-rose-400/15 text-rose-200" tone="text-rose-300" /> },
     { key: 'savings_rate', available: true, node: <StatCard label="Savings rate" value={`${savingsRate}%`} sub={<span className={savingsRate >= 20 ? 'text-emerald-300' : 'text-amber-300'}>{savingsRate >= 20 ? 'Great pace' : 'Aim for 20%+'}</span>} icon={Target} accent="bg-violet-400/15 text-violet-200" tone={savingsRate >= 20 ? 'text-emerald-300' : 'text-amber-300'} /> },
-    { key: 'net_cashflow', available: true, node: <StatCard label="Net cash flow" value={showMoney ? money(netCashflow) : '••••'} sub={<span className={netCashflow >= 0 ? 'text-emerald-300' : 'text-rose-300'}>{netCashflow >= 0 ? 'Positive' : 'Negative'} this month</span>} icon={ArrowLeftRight} accent="bg-cyan-400/15 text-cyan-200" tone={netCashflow >= 0 ? 'text-emerald-300' : 'text-rose-300'} /> },
+    { key: 'net_cashflow', available: true, node: <StatCard label="Net cash flow" value={showMoney ? money(netCashflow) : '••••'} sub={<span className={netCashflow >= 0 ? 'text-emerald-300' : 'text-rose-300'}>{netCashflow >= 0 ? 'Positive' : 'Negative'} this month</span>} icon={ArrowLeftRight} accent="bg-accent-400/15 text-accent-200" tone={netCashflow >= 0 ? 'text-emerald-300' : 'text-rose-300'} /> },
     { key: 'total_debt', available: moduleSettings.loans.enabled || moduleSettings.credit_cards.enabled, node: <StatCard label="Total debt" value={showMoney ? money(totalDebt) : '••••'} sub="Loans + credit cards" icon={CreditCard} accent="bg-rose-400/15 text-rose-200" /> },
     { key: 'total_invested', available: moduleSettings.investments.enabled, node: <StatCard label="Total invested" value={showMoney ? money(currentInv) : '••••'} sub={<span className={pnl >= 0 ? 'text-emerald-300' : 'text-rose-300'}>{pnl >= 0 ? '+' : '−'}{money(pnl).replace('-', '')} P&amp;L</span>} icon={TrendingUp} accent="bg-violet-400/15 text-violet-200" /> },
     { key: 'avg_monthly_spend', available: true, node: <StatCard label="Avg. monthly spend" value={showMoney ? money(avgMonthlySpend) : '••••'} sub="Last 6 months" icon={BarChart3} accent="bg-amber-400/15 text-amber-200" /> },
-    { key: 'transactions_count', available: true, node: <StatCard label="Transactions" value={String(allThisMonth.length)} sub="This month" icon={ListChecks} accent="bg-cyan-400/15 text-cyan-200" /> },
+    { key: 'transactions_count', available: true, node: <StatCard label="Transactions" value={String(allThisMonth.length)} sub="This month" icon={ListChecks} accent="bg-accent-400/15 text-accent-200" /> },
     { key: 'top_category', available: !!topCategory, node: topCategory && <StatCard label="Top category" value={topCategory.name} sub={showMoney ? money(topCategory.amount) : '••••'} icon={Tag} accent="bg-pink-400/15 text-pink-200" /> },
     { key: 'credit_utilization', available: moduleSettings.credit_cards.enabled && credit_cards.length > 0, node: <StatCard label="Credit utilization" value={`${creditUtilizationPct}%`} sub={creditUtilizationPct >= 70 ? 'Getting high' : 'Under control'} icon={PieChartIcon} accent="bg-rose-400/15 text-rose-200" tone={creditUtilizationPct >= 70 ? 'text-rose-300' : 'text-emerald-300'} /> },
     { key: 'budget_used_pct', available: moduleSettings.budgets.enabled && budgetTotal > 0, node: <StatCard label="Budget used" value={`${budgetUsedPct}%`} sub={budgetUsedPct > 100 ? 'Over budget' : 'On track'} icon={Zap} accent="bg-violet-400/15 text-violet-200" tone={budgetUsedPct > 100 ? 'text-rose-300' : 'text-emerald-300'} /> },
@@ -638,6 +659,34 @@ function DashboardView({ data, showMoney, onOpenTxForm, setView, onManageMoneyRu
       {widgets.credit_card_alert.enabled && moduleSettings.credit_cards.enabled && (
         <CreditCardBillAlert creditCards={credit_cards} transactions={transactions} onPay={onPayCardBill} showMoney={showMoney} />
       )}
+
+      {widgets.net_worth?.enabled && (
+        <div className="shrink-0 rounded-3xl border border-white/10 bg-white/[.035] p-6">
+          <div className="text-xs uppercase tracking-widest text-slate-500">Net worth</div>
+          <div className="mt-1 text-[clamp(2rem,6vw,3rem)] font-semibold leading-[1.1] tracking-[-0.01em] text-white">
+            {showMoney ? money(netWorth) : '••••••••'}
+          </div>
+          <div className={`mt-2 flex items-center gap-1.5 text-sm ${netCashflow >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+            {netCashflow >= 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
+            {showMoney ? money(Math.abs(netCashflow)) : '••••'} this month
+          </div>
+          <div className="mt-5 grid grid-cols-3 gap-2">
+            <button onClick={onOpenTxForm} className="flex flex-col items-center gap-1.5 rounded-2xl bg-white/[.04] py-3 text-xs text-slate-300 transition hover:bg-white/[.08]">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-accent-400/15 text-accent-200"><Plus size={18} /></div>
+              Add
+            </button>
+            <button onClick={() => setView('transactions')} className="flex flex-col items-center gap-1.5 rounded-2xl bg-white/[.04] py-3 text-xs text-slate-300 transition hover:bg-white/[.08]">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/[.06] text-slate-200"><BarChart3 size={18} /></div>
+              Ledger
+            </button>
+            <button onClick={() => setView('accounts')} className="flex flex-col items-center gap-1.5 rounded-2xl bg-white/[.04] py-3 text-xs text-slate-300 transition hover:bg-white/[.08]">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/[.06] text-slate-200"><Landmark size={18} /></div>
+              Accounts
+            </button>
+          </div>
+        </div>
+      )}
+
       {STAT_CARDS.length > 0 && (
         <div className="grid shrink-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {STAT_CARDS.map((s) => <div key={s.key}>{s.node}</div>)}
@@ -670,7 +719,7 @@ function DashboardView({ data, showMoney, onOpenTxForm, setView, onManageMoneyRu
             <button onClick={() => setView('bucket')} className="rounded-xl border border-white/10 bg-white/[.035] p-3 text-left transition hover:bg-white/[.06]">
               <div className="flex items-center justify-between">
                 <span className="text-xs text-slate-400">Bucket list</span>
-                <Mountain size={14} className="text-cyan-300" />
+                <Mountain size={14} className="text-accent-300" />
               </div>
               <div className="mt-1.5 text-lg font-semibold text-white">{bucket_list.length} item{bucket_list.length === 1 ? '' : 's'}</div>
               <div className="mt-0.5 text-[11px] text-slate-500">{bucket_list.filter((b) => (Date.now() - new Date(b.created_at).getTime()) / 86400000 >= 30).length} past 30 days</div>
@@ -713,7 +762,7 @@ function DashboardView({ data, showMoney, onOpenTxForm, setView, onManageMoneyRu
                   <div className="text-sm font-semibold text-white">Recent transactions</div>
                   <div className="text-xs text-slate-500">{thisMonth?.label || 'This month'}'s activity</div>
                 </div>
-                <button onClick={() => setView('transactions')} className="text-xs text-cyan-300 hover:underline">See all</button>
+                <button onClick={() => setView('transactions')} className="text-xs text-accent-300 hover:underline">See all</button>
               </div>
               {recent.length === 0 ? (
                 <EmptyState compact icon={Wallet} title="No transactions yet" message="Log your first income or expense to see it here." cta="Add transaction" onCta={onOpenTxForm} />
@@ -737,7 +786,7 @@ function DashboardView({ data, showMoney, onOpenTxForm, setView, onManageMoneyRu
                   <div className="text-sm font-semibold text-white">Balances</div>
                   <div className="text-xs text-slate-500">Accounts, cards &amp; investments</div>
                 </div>
-                <button onClick={() => setView('accounts')} className="text-xs text-cyan-300 hover:underline">Manage</button>
+                <button onClick={() => setView('accounts')} className="text-xs text-accent-300 hover:underline">Manage</button>
               </div>
               {balanceItems.length === 0 ? (
                 <EmptyState compact icon={Landmark} title="Nothing tracked yet" message="Add an account, card, or portfolio to see balances here." cta="Add account" onCta={() => setView('accounts')} />
@@ -828,7 +877,7 @@ function AttachmentViewer({ open, onClose, transaction }) {
           ) : (
             <div className="flex h-64 flex-col items-center justify-center gap-3 text-sm text-slate-400">
               <FileText size={28} />
-              <button type="button" onClick={download} disabled={downloading} className="rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 px-4 py-2 text-sm font-semibold text-[#07101c] disabled:opacity-60">{downloading ? 'Downloading…' : 'Download file'}</button>
+              <button type="button" onClick={download} disabled={downloading} className="rounded-xl bg-gradient-to-r from-accent-300 to-blue-500 px-4 py-2 text-sm font-semibold text-[#07101c] disabled:opacity-60">{downloading ? 'Downloading…' : 'Download file'}</button>
             </div>
           )}
         </div>
@@ -855,6 +904,8 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onImport, 
   const [exportBusy, setExportBusy] = useState(false)
   const [page, setPage] = useState(0)
   const [viewingAttachment, setViewingAttachment] = useState(null)
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
+  const activeFilterCount = [type !== 'all', accountId !== 'all', categoryId !== 'all'].filter(Boolean).length
   const rangeRef = useRef(null)
   const settingsRef = useRef(null)
   useEffect(() => {
@@ -923,8 +974,8 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onImport, 
     })
   }
   const sortIcon = (field) => {
-    if (sortBy === `${field}_asc`) return <ChevronUp size={12} className="text-cyan-300" />
-    if (sortBy === `${field}_desc`) return <ChevronDown size={12} className="text-cyan-300" />
+    if (sortBy === `${field}_asc`) return <ChevronUp size={12} className="text-accent-300" />
+    if (sortBy === `${field}_desc`) return <ChevronDown size={12} className="text-accent-300" />
     return <ArrowUpDown size={11} className="text-slate-600" />
   }
 
@@ -993,7 +1044,7 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onImport, 
       <CreditCardBillAlert creditCards={creditCards} transactions={transactions} onPay={onPayCardBill} showMoney={showMoney} />
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
-          <div className="mb-2 text-xs uppercase tracking-widest text-cyan-200/70">Money movement</div>
+          <div className="mb-2 text-xs uppercase tracking-widest text-accent-200/70">Money movement</div>
           <h1 className="text-3xl font-semibold tracking-tight text-white">Every rupee, accounted for</h1>
         </div>
         <div className="flex gap-2">
@@ -1003,31 +1054,31 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onImport, 
             <button type="button" disabled={!!customRange} onClick={() => shiftMonth(1)} className="rounded-r-xl p-2.5 text-slate-400 hover:bg-white/5 hover:text-white disabled:pointer-events-none" title="Next month"><ChevronRight size={15} /></button>
           </div>
           <div ref={rangeRef} className="relative">
-            <button type="button" onClick={() => { setRangeDraft(customRange || { start: '', end: '' }); setRangeOpen((o) => !o) }} className={`rounded-xl border p-2.5 transition ${customRange ? 'border-cyan-300/40 bg-cyan-400/10 text-cyan-200' : 'border-white/10 text-slate-400 hover:bg-white/5 hover:text-white'}`} title="Custom date range">
+            <button type="button" onClick={() => { setRangeDraft(customRange || { start: '', end: '' }); setRangeOpen((o) => !o) }} className={`rounded-xl border p-2.5 transition ${customRange ? 'border-accent-300/40 bg-accent-400/10 text-accent-200' : 'border-white/10 text-slate-400 hover:bg-white/5 hover:text-white'}`} title="Custom date range">
               <Calendar size={16} />
             </button>
             {rangeOpen && (
               <div className="absolute right-0 z-30 mt-2 w-72 rounded-2xl border border-white/10 bg-[#141a28] p-4 shadow-2xl">
                 <div className="mb-3 text-xs uppercase tracking-widest text-slate-500">Custom range</div>
                 <label className="mb-3 block text-sm text-slate-300">Start date
-                  <DateInput value={rangeDraft.start} onChange={(e) => setRangeDraft((d) => ({ ...d, start: e.target.value }))} className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-2.5 text-white outline-none focus:border-cyan-300/50" />
+                  <DateInput value={rangeDraft.start} onChange={(e) => setRangeDraft((d) => ({ ...d, start: e.target.value }))} className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-2.5 text-white outline-none focus:border-accent-300/50" />
                 </label>
                 <label className="mb-4 block text-sm text-slate-300">End date
-                  <DateInput value={rangeDraft.end} onChange={(e) => setRangeDraft((d) => ({ ...d, end: e.target.value }))} className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-2.5 text-white outline-none focus:border-cyan-300/50" />
+                  <DateInput value={rangeDraft.end} onChange={(e) => setRangeDraft((d) => ({ ...d, end: e.target.value }))} className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-2.5 text-white outline-none focus:border-accent-300/50" />
                 </label>
                 <div className="flex gap-2">
                   {customRange && (
                     <button type="button" onClick={() => { setCustomRange(null); setRangeDraft({ start: '', end: '' }); setRangeOpen(false) }} className="flex-1 rounded-xl border border-white/10 px-3 py-2.5 text-sm text-slate-300 hover:bg-white/5">Clear</button>
                   )}
-                  <button type="button" disabled={!rangeDraft.start || !rangeDraft.end || rangeDraft.start > rangeDraft.end} onClick={() => { setCustomRange({ start: rangeDraft.start, end: rangeDraft.end }); setRangeOpen(false) }} className="flex-1 rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 px-3 py-2.5 text-sm font-semibold text-[#07101c] disabled:opacity-50">Apply</button>
+                  <button type="button" disabled={!rangeDraft.start || !rangeDraft.end || rangeDraft.start > rangeDraft.end} onClick={() => { setCustomRange({ start: rangeDraft.start, end: rangeDraft.end }); setRangeOpen(false) }} className="flex-1 rounded-xl bg-gradient-to-r from-accent-300 to-blue-500 px-3 py-2.5 text-sm font-semibold text-[#07101c] disabled:opacity-50">Apply</button>
                 </div>
               </div>
             )}
           </div>
           <div className="flex items-center overflow-hidden rounded-xl border border-white/10">
-            <button type="button" onClick={() => setChartView(false)} title="Table view" className={`flex items-center px-3 py-2.5 transition ${!chartView ? 'bg-cyan-400/15 text-cyan-200' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}><ListChecks size={16} /></button>
+            <button type="button" onClick={() => setChartView(false)} title="Table view" className={`flex items-center px-3 py-2.5 transition ${!chartView ? 'bg-accent-400/15 text-accent-200' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}><ListChecks size={16} /></button>
             <div className="h-5 w-px shrink-0 bg-white/10" />
-            <button type="button" onClick={() => setChartView(true)} title="Chart view" className={`flex items-center px-3 py-2.5 transition ${chartView ? 'bg-cyan-400/15 text-cyan-200' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}><PieChartIcon size={16} /></button>
+            <button type="button" onClick={() => setChartView(true)} title="Chart view" className={`flex items-center px-3 py-2.5 transition ${chartView ? 'bg-accent-400/15 text-accent-200' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}><PieChartIcon size={16} /></button>
           </div>
           <button onClick={onToggleMoney} className="rounded-xl border border-white/10 p-2.5 text-slate-400 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
             {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
@@ -1035,10 +1086,24 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onImport, 
         </div>
       </div>
 
-      <div className="flex flex-col gap-3 sm:flex-row">
+      {/* Mobile: search plus one "Filters" trigger — the type/account/category selects and the
+          import/export/recurring menu all move into a sheet instead of four controls competing
+          for a 375px-wide row. Desktop keeps the full inline bar below unchanged. */}
+      <div className="flex gap-2 lg:hidden">
         <div className="relative flex-1">
           <Search size={16} className="absolute left-3 top-3 text-slate-600" />
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search transactions" className="w-full rounded-xl border border-white/10 bg-white/[.04] py-2.5 pl-10 pr-4 text-sm text-white outline-none focus:border-cyan-300/50" />
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search transactions" className="w-full rounded-xl border border-white/10 bg-white/[.04] py-2.5 pl-10 pr-4 text-sm text-white outline-none focus:border-accent-300/50" />
+        </div>
+        <button type="button" onClick={() => setMobileFiltersOpen(true)} className={`relative shrink-0 rounded-xl border p-2.5 transition ${activeFilterCount > 0 ? 'border-accent-300/40 bg-accent-400/10 text-accent-200' : 'border-white/10 text-slate-400 hover:bg-white/5 hover:text-white'}`} title="Filters">
+          <ListChecks size={16} />
+          {activeFilterCount > 0 && <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-accent-400 text-[9px] font-bold text-[#07101c]">{activeFilterCount}</span>}
+        </button>
+      </div>
+
+      <div className="hidden gap-3 lg:flex">
+        <div className="relative flex-1">
+          <Search size={16} className="absolute left-3 top-3 text-slate-600" />
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search transactions" className="w-full rounded-xl border border-white/10 bg-white/[.04] py-2.5 pl-10 pr-4 text-sm text-white outline-none focus:border-accent-300/50" />
         </div>
         <Select value={type} onChange={(e) => setType(e.target.value)} className="rounded-xl border border-white/10 bg-[#101621] px-4 py-2.5 text-sm text-slate-300 outline-none">
           <option value="all">All types</option><option value="income">Income</option><option value="expense">Expense</option><option value="transfer">Transfer</option>
@@ -1053,7 +1118,7 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onImport, 
           {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </Select>
         <div ref={settingsRef} className="relative">
-          <button type="button" onClick={() => setSettingsOpen((o) => !o)} className={`rounded-xl border p-2.5 transition ${settingsOpen ? 'border-cyan-300/40 bg-cyan-400/10 text-cyan-200' : 'border-white/10 text-slate-400 hover:bg-white/5 hover:text-white'}`} title="More options">
+          <button type="button" onClick={() => setSettingsOpen((o) => !o)} className={`rounded-xl border p-2.5 transition ${settingsOpen ? 'border-accent-300/40 bg-accent-400/10 text-accent-200' : 'border-white/10 text-slate-400 hover:bg-white/5 hover:text-white'}`} title="More options">
             <MoreVertical size={16} />
           </button>
           {settingsOpen && (
@@ -1067,6 +1132,39 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onImport, 
           )}
         </div>
       </div>
+
+      <BottomSheet open={mobileFiltersOpen} onOpenChange={setMobileFiltersOpen} title="Filters">
+        <div className="space-y-4 pb-4">
+          <label className="block text-sm text-slate-300">Type
+            <Select value={type} onChange={(e) => setType(e.target.value)} className="mt-1.5 w-full rounded-xl border border-white/10 bg-[#101621] px-4 py-2.5 text-sm text-slate-300 outline-none">
+              <option value="all">All types</option><option value="income">Income</option><option value="expense">Expense</option><option value="transfer">Transfer</option>
+            </Select>
+          </label>
+          <label className="block text-sm text-slate-300">Account
+            <Select value={accountId} onChange={(e) => setAccountId(e.target.value)} className="mt-1.5 w-full rounded-xl border border-white/10 bg-[#101621] px-4 py-2.5 text-sm text-slate-300 outline-none">
+              <option value="all">All accounts</option>
+              {accounts.filter((a) => a.type !== 'debit_card').map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+              {creditCards.map((c) => <option key={c.id} value={`cc:${c.id}`}>{c.name} (card)</option>)}
+            </Select>
+          </label>
+          <label className="block text-sm text-slate-300">Category
+            <Select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="mt-1.5 w-full rounded-xl border border-white/10 bg-[#101621] px-4 py-2.5 text-sm text-slate-300 outline-none">
+              <option value="all">All categories</option>
+              {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </Select>
+          </label>
+          <div onClick={() => setChartView((v) => !v)} className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-white/[.04] px-4 py-3 text-sm text-slate-300">
+            <span className="flex items-center gap-2"><PieChartIcon size={15} />Chart view</span>
+            <ToggleSwitch checked={chartView} onChange={() => setChartView((v) => !v)} />
+          </div>
+          <div className="border-t border-white/10 pt-2">
+            <button type="button" onClick={() => { setMobileFiltersOpen(false); onImport() }} className="block w-full rounded-lg px-1 py-2.5 text-left text-sm text-slate-300 hover:bg-white/5">Import CSV</button>
+            <button type="button" disabled={exportBusy} onClick={() => handleExport('csv')} className="block w-full rounded-lg px-1 py-2.5 text-left text-sm text-slate-300 hover:bg-white/5 disabled:opacity-50">Export as CSV</button>
+            <button type="button" disabled={exportBusy} onClick={() => handleExport('pdf')} className="block w-full rounded-lg px-1 py-2.5 text-left text-sm text-slate-300 hover:bg-white/5 disabled:opacity-50">Export as PDF</button>
+            <button type="button" onClick={() => { setMobileFiltersOpen(false); onOpenRecurring() }} className="flex w-full items-center gap-2 rounded-lg px-1 py-2.5 text-left text-sm text-slate-300 hover:bg-white/5"><Repeat size={14} />Recurring transactions</button>
+          </div>
+        </div>
+      </BottomSheet>
 
       {chartView ? (
         categoryBreakdown.length === 0 ? (
@@ -1126,33 +1224,56 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onImport, 
               const isIn = t.type === 'income' || (t.type === 'transfer' && t.transfer_direction === 'in')
               const isTransfer = t.type === 'transfer'
               const sign = isIn ? '+' : '-'
-              const color = isIn ? 'text-emerald-300' : isTransfer ? 'text-cyan-300' : 'text-rose-300'
+              const color = isIn ? 'text-emerald-300' : isTransfer ? 'text-accent-300' : 'text-rose-300'
               return (
-                <div key={t.id} className="grid grid-cols-1 gap-2 px-5 py-4 sm:grid-cols-[1.4fr_.9fr_.6fr_.6fr_auto] sm:items-center sm:gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/[.05]" style={{ color: cat?.color || (isTransfer ? '#22d3ee' : '#94a3b8') }}>
-                      {isTransfer ? <ArrowLeftRight size={16} /> : isIn ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-1.5 text-sm font-medium text-white">
-                        {t.description}
-                        {t.attachment_path && (
-                          <button type="button" onClick={(e) => { e.stopPropagation(); setViewingAttachment(t) }} className="shrink-0 text-slate-500 hover:text-cyan-300" title="View attachment"><Paperclip size={12} /></button>
-                        )}
-                        {t.recurring_source_id && <Repeat size={12} className="shrink-0 text-slate-500" title="Auto-generated from a recurring rule" />}
+                <div key={t.id} className="px-5 py-3 sm:py-4">
+                  {/* Mobile: icon-bubble + name/subtitle + trailing amount, one row — tap opens
+                      edit, a small trailing delete stays reachable without crowding the row. */}
+                  <div className="flex items-center gap-3 sm:hidden">
+                    <button type="button" onClick={() => onEditTx(t)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/[.05]" style={{ color: cat?.color || (isTransfer ? '#22d3ee' : '#94a3b8') }}>
+                        {isTransfer ? <ArrowLeftRight size={16} /> : isIn ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}
                       </div>
-                      {t.notes && <div className="text-[11px] text-slate-500">{t.notes}</div>}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 truncate text-sm font-medium text-white">
+                          <span className="truncate">{t.description}</span>
+                          {t.attachment_path && <Paperclip size={11} className="shrink-0 text-slate-500" />}
+                          {t.recurring_source_id && <Repeat size={11} className="shrink-0 text-slate-500" />}
+                        </div>
+                        <div className="truncate text-[11px] text-slate-500">{cat?.name || (isTransfer ? 'Transfer' : 'Uncategorised')} · {formatDate(t.date)}</div>
+                      </div>
+                    </button>
+                    <div className={`shrink-0 text-sm font-semibold ${color}`}>{showMoney ? `${sign}${money(t.amount).replace('-', '')}` : '••••'}</div>
+                    <button type="button" onClick={() => onDeleteTx(t)} className="shrink-0 rounded-lg p-1.5 text-slate-500 hover:bg-white/5"><Trash2 size={14} /></button>
+                  </div>
+
+                  {/* Desktop: unchanged full table row */}
+                  <div className="hidden sm:grid sm:grid-cols-[1.4fr_.9fr_.6fr_.6fr_auto] sm:items-center sm:gap-4">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/[.05]" style={{ color: cat?.color || (isTransfer ? '#22d3ee' : '#94a3b8') }}>
+                        {isTransfer ? <ArrowLeftRight size={16} /> : isIn ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-1.5 text-sm font-medium text-white">
+                          {t.description}
+                          {t.attachment_path && (
+                            <button type="button" onClick={(e) => { e.stopPropagation(); setViewingAttachment(t) }} className="shrink-0 text-slate-500 hover:text-accent-300" title="View attachment"><Paperclip size={12} /></button>
+                          )}
+                          {t.recurring_source_id && <Repeat size={12} className="shrink-0 text-slate-500" title="Auto-generated from a recurring rule" />}
+                        </div>
+                        {t.notes && <div className="text-[11px] text-slate-500">{t.notes}</div>}
+                      </div>
                     </div>
-                  </div>
-                  <div className="text-xs text-slate-400">
-                    <span className="inline-block rounded-md bg-white/[.05] px-2 py-0.5" style={{ color: cat?.color || '#94a3b8' }}>{cat?.name || (isTransfer ? (t.transfer_direction === 'in' ? 'Transfer in' : 'Transfer out') : 'Uncategorised')}</span>
-                    {acc && <span className="ml-2">{acc.name}</span>}
-                  </div>
-                  <div className="text-xs text-slate-500">{formatDateTime(t.date, t.time)}</div>
-                  <div className={`text-sm font-semibold sm:text-right ${color}`}>{showMoney ? `${sign}${money(t.amount).replace('-', '')}` : '••••'}</div>
-                  <div className="flex gap-1 sm:justify-end">
-                    <button onClick={() => onEditTx(t)} className="rounded-lg p-1.5 text-slate-500 hover:bg-white/5 hover:text-white"><Pencil size={14} /></button>
-                    <button onClick={() => onDeleteTx(t)} className="rounded-lg p-1.5 text-rose-300/70 hover:bg-rose-300/10"><Trash2 size={14} /></button>
+                    <div className="text-xs text-slate-400">
+                      <span className="inline-block rounded-md bg-white/[.05] px-2 py-0.5" style={{ color: cat?.color || '#94a3b8' }}>{cat?.name || (isTransfer ? (t.transfer_direction === 'in' ? 'Transfer in' : 'Transfer out') : 'Uncategorised')}</span>
+                      {acc && <span className="ml-2">{acc.name}</span>}
+                    </div>
+                    <div className="text-xs text-slate-500">{formatDateTime(t.date, t.time)}</div>
+                    <div className={`text-sm font-semibold sm:text-right ${color}`}>{showMoney ? `${sign}${money(t.amount).replace('-', '')}` : '••••'}</div>
+                    <div className="flex gap-1 sm:justify-end">
+                      <button onClick={() => onEditTx(t)} className="rounded-lg p-1.5 text-slate-500 hover:bg-white/5 hover:text-white"><Pencil size={14} /></button>
+                      <button onClick={() => onDeleteTx(t)} className="rounded-lg p-1.5 text-rose-300/70 hover:bg-rose-300/10"><Trash2 size={14} /></button>
+                    </div>
                   </div>
                 </div>
               )
@@ -1171,111 +1292,6 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onImport, 
       </section>
       )}
       <AttachmentViewer open={!!viewingAttachment} onClose={() => setViewingAttachment(null)} transaction={viewingAttachment} />
-    </div>
-  )
-}
-
-function InsightsView({ data }) {
-  const { transactions, categories } = data
-  const now = new Date()
-  const monthKey = `${now.getFullYear()}-${now.getMonth()}`
-  const monthTx = transactions.filter((t) => {
-    const d = new Date(t.date); return `${d.getFullYear()}-${d.getMonth()}` === monthKey && t.type !== 'transfer'
-  })
-  const income = monthTx.filter((t) => t.type === 'income').reduce((s, t) => s + Number(t.amount || 0), 0)
-  const expense = monthTx.filter((t) => t.type === 'expense').reduce((s, t) => s + Number(t.amount || 0), 0)
-  const savings = income - expense
-  const rate = income > 0 ? Math.round((savings / income) * 100) : 0
-
-  // Top expense categories
-  const byCat = {}
-  monthTx.filter((t) => t.type === 'expense').forEach((t) => {
-    const key = t.category_id || 'uncat'
-    byCat[key] = (byCat[key] || 0) + Number(t.amount || 0)
-  })
-  const topCats = Object.entries(byCat).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([id, value]) => {
-    const cat = categories.find((c) => c.id === id)
-    return { name: cat?.name || 'Uncategorised', value, color: cat?.color || '#64748b' }
-  })
-
-  const insights = []
-  if (income > 0) {
-    if (rate >= 30) insights.push({ tone: 'good', text: `Impressive! You're saving ${rate}% of your income this month — well above the 20% benchmark.` })
-    else if (rate >= 20) insights.push({ tone: 'good', text: `Solid month — you're saving ${rate}% of your income.` })
-    else if (rate >= 0) insights.push({ tone: 'warn', text: `Only ${rate}% saved so far this month. Try to trim one variable expense category.` })
-    else insights.push({ tone: 'warn', text: `You've spent more than you earned this month. Review your top category below.` })
-  }
-  if (topCats[0]) insights.push({ tone: 'info', text: `Biggest expense category: ${topCats[0].name} at ${money(topCats[0].value)}.` })
-  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
-  const daysPassed = now.getDate()
-  if (expense > 0) insights.push({ tone: 'info', text: `Daily burn: ${money(Math.round(expense / daysPassed))} · projected month ${money(Math.round((expense / daysPassed) * daysInMonth))}.` })
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <div className="mb-2 text-xs uppercase tracking-widest text-cyan-200/70">Smart spending</div>
-        <h1 className="text-3xl font-semibold tracking-tight text-white">Insights · {now.toLocaleString('en-IN', { month: 'long' })}</h1>
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-3">
-        <StatCard label="Income this month" value={money(income)} icon={TrendingUp} accent="bg-emerald-400/15 text-emerald-200" sub={<span>{monthTx.filter(t => t.type === 'income').length} entries</span>} />
-        <StatCard label="Expenses this month" value={money(expense)} icon={TrendingDown} accent="bg-rose-400/15 text-rose-200" tone="text-rose-300" sub={<span className="text-rose-300">{monthTx.filter(t => t.type === 'expense').length} entries</span>} />
-        <StatCard label="Savings" value={money(savings)} icon={PiggyBank} accent="bg-cyan-300/15 text-cyan-200" sub={<span className={rate >= 20 ? 'text-emerald-300' : 'text-amber-300'}>{rate}% of income</span>} tone={rate >= 20 ? 'text-emerald-300' : 'text-amber-300'} />
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-[1fr_1.2fr]">
-        <div className="rounded-2xl border border-white/10 bg-white/[.035] p-5">
-          <div className="mb-4 text-sm font-semibold text-white">Where money goes</div>
-          {topCats.length === 0 ? (
-            <EmptyState icon={Tag} title="No expense data" message="Log a few expenses to see your top categories." />
-          ) : (
-            <div className="h-72">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={topCats} dataKey="value" nameKey="name" innerRadius={55} outerRadius={95} stroke="none">
-                    {topCats.map((c, i) => <Cell key={i} fill={c.color} />)}
-                  </Pie>
-                  <Tooltip contentStyle={{ background: '#0f1420', border: '1px solid #ffffff22', borderRadius: 12, color: '#fff' }} formatter={(v) => money(v)} />
-                  <Legend iconType="circle" wrapperStyle={{ color: '#94a3b8', fontSize: 12 }} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-        </div>
-
-        <div className="rounded-2xl border border-white/10 bg-white/[.035] p-5">
-          <div className="mb-4 text-sm font-semibold text-white">Smart insights</div>
-          {insights.length === 0 ? (
-            <EmptyState icon={Sparkles} title="Nothing to analyse yet" message="Log a few transactions this month and we'll surface patterns." />
-          ) : (
-            <div className="space-y-3">
-              {insights.map((ins, i) => (
-                <div key={i} className={`flex gap-3 rounded-xl border px-4 py-3 text-sm ${ins.tone === 'good' ? 'border-emerald-400/25 bg-emerald-500/5 text-emerald-100' : ins.tone === 'warn' ? 'border-amber-400/25 bg-amber-500/5 text-amber-100' : 'border-cyan-400/20 bg-cyan-400/5 text-cyan-100'}`}>
-                  <Sparkles size={16} className="mt-0.5 flex-shrink-0" />
-                  <div>{ins.text}</div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div className="mt-6 space-y-2">
-            <div className="text-xs uppercase tracking-widest text-slate-500">Top categories</div>
-            {topCats.length === 0 ? <div className="text-sm text-slate-500">No expense categories yet.</div> : topCats.map((c) => {
-              const pct = expense > 0 ? Math.round((c.value / expense) * 100) : 0
-              return (
-                <div key={c.name}>
-                  <div className="flex items-center justify-between text-xs text-slate-400">
-                    <span>{c.name}</span><span className="text-white">{money(c.value)} · {pct}%</span>
-                  </div>
-                  <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white/5">
-                    <div className="h-full rounded-full" style={{ width: `${pct}%`, background: c.color }} />
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      </div>
     </div>
   )
 }
@@ -1301,6 +1317,8 @@ function Shell({ user, onLogout }) {
   const [showMoney, setShowMoney] = useState(true)
   const [data, setData] = useState({ accounts: [], categories: [], transactions: [], budgets: [], portfolios: [], holdings: [], sips: [], other_investments: [], kite_orders: [], loans: [], loan_payments: [], bucket_list: [], lend_borrow: [], lend_repayments: [], credit_cards: [], credit_card_transactions: [], scholarships: [], scholarship_payments: [], money_rules: [], recurring_transactions: [], money_profiles: [], money_profile_entries: [], budget_months: [], budget_month_categories: [], vault_items: [], profile: null })
   const [loading, setLoading] = useState(true)
+  const [pendingCount, setPendingCount] = useState(0)
+  const mutate = useMemo(() => createMutate(setData, setPendingCount), [])
 
   const toast = useToast()
   const confirm = useConfirm()
@@ -1371,13 +1389,25 @@ function Shell({ user, onLogout }) {
   const [moneyProfileBulkImportOpen, setMoneyProfileBulkImportOpen] = useState(false)
   const [moneyProfileBulkImportProfile, setMoneyProfileBulkImportProfile] = useState(null)
   const [settingsSection, setSettingsSection] = useState('profile')
+  const [moreOpen, setMoreOpen] = useState(false)
 
-  const refresh = async () => {
+  const refresh = async ({ silent = false } = {}) => {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      // Serwist's runtime cache may still have a stale /finance/summary response it could serve
+      // here — but trusting that would silently overwrite whatever's already correctly in `data`
+      // (freshly loaded from Dexie, or just optimistically updated by a queued offline mutation)
+      // with older data. Skip the round trip entirely rather than risk that. No error toast here
+      // either — every caller either already has its own accurate feedback (a mutation's own
+      // "will sync when back online" toast) or is the silent mount-time reconcile; offline is a
+      // normal, well-handled state now, not a failure worth alarming over.
+      setLoading(false)
+      return
+    }
     try {
       const response = await fetch('/api/finance/summary')
       if (!response.ok) throw new Error('Failed to load')
       const result = await response.json()
-      setData({
+      const snapshot = {
         accounts: result.accounts || [], categories: result.categories || [], transactions: result.transactions || [], budgets: result.budgets || [],
         portfolios: result.portfolios || [], holdings: result.holdings || [], sips: result.sips || [], other_investments: result.other_investments || [], kite_orders: result.kite_orders || [],
         loans: result.loans || [], loan_payments: result.loan_payments || [], bucket_list: result.bucket_list || [],
@@ -1390,9 +1420,16 @@ function Shell({ user, onLogout }) {
         budget_months: result.budget_months || [], budget_month_categories: result.budget_month_categories || [],
         vault_items: result.vault_items || [],
         profile: result.profile || null,
-      })
+      }
+      setData(snapshot)
+      // Best-effort — a Dexie failure (private browsing, storage quota) should never break the
+      // live app, same tolerance as the server-side opportunistic syncs this endpoint runs.
+      saveSnapshot(snapshot).catch(() => {})
     } catch (e) {
-      toast.push(e.message || 'Could not load data', 'error')
+      // silent: true means a cached snapshot is already on screen (see the mount effect below) —
+      // this failure just means the background reconcile couldn't reach the server, which is an
+      // expected, already-handled offline state, not a fresh error worth interrupting over.
+      if (!silent) toast.push(e.message || 'Could not load data', 'error')
     } finally { setLoading(false) }
   }
   // Same StrictMode double-invoke guard as App's initial auth check above — without it this
@@ -1401,7 +1438,23 @@ function Shell({ user, onLogout }) {
   useEffect(() => {
     if (didLoad.current) return
     didLoad.current = true
-    refresh()
+    ;(async () => {
+      const cached = await loadSnapshot().catch(() => null)
+      if (cached) { setData(cached); setLoading(false) }
+      refresh({ silent: !!cached })
+    })()
+  }, [])
+
+  // Whatever's still queued from a previous session (a tab closed mid-flush, an offline write
+  // that never got the chance to sync) resumes trying here, plus a listener for reconnect/tab-
+  // focus/service-worker-nudged retries going forward.
+  useEffect(() => {
+    getPendingCount().then(setPendingCount).catch(() => {})
+    if (navigator.onLine) flushOutbox(setData, setPendingCount).catch(() => {})
+    const onSyncIssue = (e) => toast.push(`Couldn't sync a change to ${e.detail?.table || 'something'} — it may need to be redone`, 'error')
+    window.addEventListener('outbox:sync-issue', onSyncIssue)
+    const cleanup = registerAutoFlush(setData, setPendingCount)
+    return () => { window.removeEventListener('outbox:sync-issue', onSyncIssue); cleanup() }
   }, [])
 
   const openTxForm = (t = null, defaultAccountId = '', defaultRepayment = null) => { setTxEditing(t); setTxDefaultAccountId(defaultAccountId); setTxDefaultRepayment(defaultRepayment); setTxFormOpen(true) }
@@ -1422,8 +1475,8 @@ function Shell({ user, onLogout }) {
 
   const deleteBudget = async (b) => {
     if (!(await confirm.ask('Delete this budget?'))) return
-    const response = await fetch(`/api/finance/budgets/${b.id}`, { method: 'DELETE' })
-    if (response.ok) { toast.push('Budget deleted'); await refresh() } else { toast.push('Delete failed', 'error') }
+    const { queued } = await mutate({ table: 'budgets', method: 'DELETE', id: b.id })
+    toast.push(queued ? 'Budget deleted — will sync when back online' : 'Budget deleted')
   }
 
   // Monthly budget plans — a plan + its category lines are opened/edited together.
@@ -1433,19 +1486,29 @@ function Shell({ user, onLogout }) {
   const openBudgetMonthForm = (year, month) => { setBudgetMonthFormInitial({ year, month }); setBudgetMonthFormOpen(true) }
   const closeBudgetMonthForm = () => setBudgetMonthFormOpen(false)
   const onBudgetMonthSaved = async () => { closeBudgetMonthForm(); await refresh() }
+  // close/reopen are deliberately kept as dedicated endpoints (not a generic PATCH) so they
+  // can't race a concurrent /budget_months/save — stays a direct online-only call, not mutate().
   const closeBudgetMonth = async (plan) => {
     if (!(await confirm.ask(`Close ${MONTH_NAMES[plan.month]} ${plan.year}'s budget? It moves into your history log — you can still reopen it later.`))) return
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      toast.push('Closing a budget month needs a connection — try again once you’re back online.', 'error')
+      return
+    }
     const response = await fetch(`/api/finance/budget_months/${plan.id}/close`, { method: 'POST' })
     if (response.ok) { toast.push('Month closed'); await refresh() } else { toast.push('Could not close', 'error') }
   }
   const reopenBudgetMonth = async (plan) => {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      toast.push('Reopening a budget month needs a connection — try again once you’re back online.', 'error')
+      return
+    }
     const response = await fetch(`/api/finance/budget_months/${plan.id}/reopen`, { method: 'POST' })
     if (response.ok) { toast.push('Month reopened'); await refresh() } else { toast.push('Could not reopen', 'error') }
   }
   const deleteBudgetMonth = async (plan) => {
     if (!(await confirm.ask(`Delete ${MONTH_NAMES[plan.month]} ${plan.year}'s budget? This can't be undone.`))) return
-    const response = await fetch(`/api/finance/budget_months/${plan.id}`, { method: 'DELETE' })
-    if (response.ok) { toast.push('Budget deleted'); await refresh() } else { toast.push('Delete failed', 'error') }
+    const { queued } = await mutate({ table: 'budget_months', method: 'DELETE', id: plan.id })
+    toast.push(queued ? 'Budget deleted — will sync when back online' : 'Budget deleted')
   }
 
   const openRecurringManager = () => setRecurringManagerOpen(true)
@@ -1476,13 +1539,16 @@ function Shell({ user, onLogout }) {
   const onBulkImported = async () => { closeBulkImport(); await refresh() }
   const deletePortfolio = async (p) => {
     if (!(await confirm.ask(`Delete portfolio "${p.name}"? Its holdings and other investments will be removed too — SIPs will just be unlinked, not deleted.`))) return
-    const response = await fetch(`/api/finance/portfolios/${p.id}`, { method: 'DELETE' })
-    if (response.ok) { toast.push('Portfolio deleted'); await refresh() } else { toast.push('Delete failed', 'error') }
+    const { queued } = await mutate({ table: 'portfolios', method: 'DELETE', id: p.id })
+    // The cascade (removing holdings/other investments, unlinking SIPs) happens server-side —
+    // while queued offline those child rows stay visible locally until the next real sync, same
+    // "stale until reconnect" tradeoff already accepted for derived balances.
+    toast.push(queued ? 'Portfolio deleted — will sync when back online' : 'Portfolio deleted')
   }
   const deleteHolding = async (h) => {
     if (!(await confirm.ask(`Remove ${h.symbol}?`))) return
-    const response = await fetch(`/api/finance/holdings/${h.id}`, { method: 'DELETE' })
-    if (response.ok) { toast.push('Holding removed'); await refresh() } else { toast.push('Delete failed', 'error') }
+    const { queued } = await mutate({ table: 'holdings', method: 'DELETE', id: h.id })
+    toast.push(queued ? 'Holding removed — will sync when back online' : 'Holding removed')
   }
   const openOtherInvestmentForm = (portfolioId) => { setOtherInvestmentEditing(null); setOtherInvestmentPortfolioId(portfolioId); setOtherInvestmentFormOpen(true) }
   const openOtherInvestmentEdit = (o) => { setOtherInvestmentEditing(o); setOtherInvestmentPortfolioId(o.portfolio_id); setOtherInvestmentFormOpen(true) }
@@ -1490,15 +1556,15 @@ function Shell({ user, onLogout }) {
   const onOtherInvestmentSaved = async () => { closeOtherInvestmentForm(); await refresh() }
   const deleteOtherInvestment = async (o) => {
     if (!(await confirm.ask(`Remove "${o.name}"?`))) return
-    const response = await fetch(`/api/finance/other_investments/${o.id}`, { method: 'DELETE' })
-    if (response.ok) { toast.push('Investment removed'); await refresh() } else { toast.push('Delete failed', 'error') }
+    const { queued } = await mutate({ table: 'other_investments', method: 'DELETE', id: o.id })
+    toast.push(queued ? 'Investment removed — will sync when back online' : 'Investment removed')
   }
   // Manual override — the price you type in directly, distinct from a live fetch below.
   const onManualPriceEntry = async (h) => {
     const price = await prompt.ask(`Update current price for ${h.symbol}`, { defaultValue: h.current_price || h.avg_buy_price, inputType: 'number', confirmLabel: 'Update' })
     if (!price || !Number.isFinite(Number(price))) return
-    const response = await fetch(`/api/finance/holdings/${h.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ current_price: Number(price), last_price_updated_at: new Date().toISOString() }) })
-    if (response.ok) { toast.push(`${h.symbol} updated`); await refresh() } else { toast.push('Update failed', 'error') }
+    const { queued } = await mutate({ table: 'holdings', method: 'PATCH', id: h.id, body: { current_price: Number(price), last_price_updated_at: new Date().toISOString() } })
+    toast.push(queued ? `${h.symbol} updated — will sync when back online` : `${h.symbol} updated`)
   }
   // Live fetch, scoped to just this one holding — reuses the same endpoint the toolbar's
   // "Refresh prices" button calls for everything, just with a single-symbol array.
@@ -1519,8 +1585,8 @@ function Shell({ user, onLogout }) {
   const onLoanPaid = async () => { closeLoanPay(); await refresh() }
   const deleteLoan = async (l) => {
     if (!(await confirm.ask(`Delete loan "${l.name}"? All payment records will be removed.`))) return
-    const response = await fetch(`/api/finance/loans/${l.id}`, { method: 'DELETE' })
-    if (response.ok) { toast.push('Loan deleted'); await refresh() } else { toast.push('Delete failed', 'error') }
+    const { queued } = await mutate({ table: 'loans', method: 'DELETE', id: l.id })
+    toast.push(queued ? 'Loan deleted — will sync when back online' : 'Loan deleted')
   }
   const deleteLoanPayment = async (p) => {
     if (!(await confirm.ask('Reverse this payment? The linked transaction and outstanding will restore.'))) return
@@ -1539,8 +1605,8 @@ function Shell({ user, onLogout }) {
   const onBucketSaved = async () => { closeBucketForm(); await refresh() }
   const deleteBucket = async (b) => {
     if (!(await confirm.ask(`Remove "${b.title}" from bucket list?`))) return
-    const response = await fetch(`/api/finance/bucket_list/${b.id}`, { method: 'DELETE' })
-    if (response.ok) { toast.push('Removed'); await refresh() } else { toast.push('Delete failed', 'error') }
+    const { queued } = await mutate({ table: 'bucket_list', method: 'DELETE', id: b.id })
+    toast.push(queued ? 'Removed — will sync when back online' : 'Removed')
   }
 
   // Lend/Borrow
@@ -1567,8 +1633,8 @@ function Shell({ user, onLogout }) {
   const onSipSaved = async () => { closeSipForm(); await refresh() }
   const deleteSip = async (s) => {
     if (!(await confirm.ask(`Delete SIP "${s.fund_name}"?`))) return
-    const response = await fetch(`/api/finance/sips/${s.id}`, { method: 'DELETE' })
-    if (response.ok) { toast.push('SIP deleted'); await refresh() } else { toast.push('Delete failed', 'error') }
+    const { queued } = await mutate({ table: 'sips', method: 'DELETE', id: s.id })
+    toast.push(queued ? 'SIP deleted — will sync when back online' : 'SIP deleted')
   }
 
   // Profile — the PATCH response already returns the full updated row, so this updates just
@@ -1585,6 +1651,7 @@ function Shell({ user, onLogout }) {
     }
   }
   useEffect(() => { if (data.profile?.theme) setTheme(data.profile.theme) }, [data.profile])
+  useEffect(() => { if (data.profile?.accent_color) applyAccentColor(data.profile.accent_color) }, [data.profile?.accent_color])
   // Every non-mandatory module is opt-in — if the one behind the current view gets turned off
   // (or data just loaded with it already off), fall back to the dashboard instead of showing a
   // nav-less dead view.
@@ -1593,6 +1660,13 @@ function Shell({ user, onLogout }) {
     if (moduleKey && data.profile && !resolveModuleSettings(data.profile)[moduleKey]?.enabled) setView('dashboard')
   }, [view, data.profile])
   const onThemeChange = async (t) => { setTheme(t); await fetch('/api/finance/profile', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ theme: t }) }); toast.push(`Theme: ${t}`, 'info') }
+  const onAccentChange = async (hex) => {
+    applyAccentColor(hex)
+    setData((d) => ({ ...d, profile: { ...d.profile, accent_color: hex } }))
+    const response = await fetch('/api/finance/profile', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ accent_color: hex }) })
+    if (!response.ok) { toast.push('Could not save accent color', 'error'); return }
+    toast.push('Accent color updated', 'info')
+  }
 
   // Credit cards
   const openCardForm = (c = null) => { setCardEditing(c); setCardFormOpen(true) }
@@ -1600,8 +1674,8 @@ function Shell({ user, onLogout }) {
   const onCardSaved = async () => { closeCardForm(); await refresh() }
   const deleteCard = async (c) => {
     if (!(await confirm.ask(`Delete card "${c.name}"? All linked spends will be removed.`))) return
-    const response = await fetch(`/api/finance/credit_cards/${c.id}`, { method: 'DELETE' })
-    if (response.ok) { toast.push('Card deleted'); await refresh() } else { toast.push('Delete failed', 'error') }
+    const { queued } = await mutate({ table: 'credit_cards', method: 'DELETE', id: c.id })
+    toast.push(queued ? 'Card deleted — will sync when back online' : 'Card deleted')
   }
   const openCardSpend = (c) => { setCardSpendTarget(c); setCardSpendOpen(true) }
   const closeCardSpend = () => { setCardSpendOpen(false); setCardSpendTarget(null) }
@@ -1619,6 +1693,10 @@ function Shell({ user, onLogout }) {
   const onVaultSaved = async () => { closeVaultForm(); await refresh() }
   const deleteVaultItem = async (item) => {
     if (!(await confirm.ask(`Delete "${item.label}" from the vault? This can't be undone.`))) return
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      toast.push('Deleting a vault item needs a connection — try again once you’re back online.', 'error')
+      return
+    }
     const response = await fetch(`/api/finance/vault_items/${item.id}`, { method: 'DELETE' })
     if (response.ok) { toast.push('Vault item deleted'); await refresh() } else { toast.push('Delete failed', 'error') }
   }
@@ -1656,8 +1734,8 @@ function Shell({ user, onLogout }) {
   const onMoneyProfileSaved = async () => { closeMoneyProfileForm(); await refresh() }
   const deleteMoneyProfile = async (p) => {
     if (!(await confirm.ask(`Delete profile "${p.name}"? Its entries will be removed too. Any transactions already mirrored into your accounts (for a linked profile) are left as-is — they really happened.`))) return
-    const response = await fetch(`/api/finance/money_profiles/${p.id}`, { method: 'DELETE' })
-    if (response.ok) { toast.push('Profile deleted'); await refresh() } else { toast.push('Delete failed', 'error') }
+    const { queued } = await mutate({ table: 'money_profiles', method: 'DELETE', id: p.id })
+    toast.push(queued ? 'Profile deleted — will sync when back online' : 'Profile deleted')
   }
   const openMoneyProfileEntryForm = (profileId) => { setMoneyProfileEntryEditing(null); setMoneyProfileEntryProfileId(profileId); setMoneyProfileEntryFormOpen(true) }
   const openMoneyProfileEntryEdit = (e) => { setMoneyProfileEntryEditing(e); setMoneyProfileEntryProfileId(e.profile_id); setMoneyProfileEntryFormOpen(true) }
@@ -1673,8 +1751,8 @@ function Shell({ user, onLogout }) {
   const onMoneyProfileBulkImported = async () => { closeMoneyProfileBulkImport(); await refresh() }
   const toggleMoneyProfileStatus = async (p) => {
     const nextStatus = p.status === 'closed' ? 'active' : 'closed'
-    const response = await fetch(`/api/finance/money_profiles/${p.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: nextStatus }) })
-    if (response.ok) { toast.push(nextStatus === 'closed' ? 'Profile closed' : 'Profile reactivated'); await refresh() } else { toast.push('Update failed', 'error') }
+    const { queued } = await mutate({ table: 'money_profiles', method: 'PATCH', id: p.id, body: { status: nextStatus } })
+    toast.push((nextStatus === 'closed' ? 'Profile closed' : 'Profile reactivated') + (queued ? ' — will sync when back online' : ''))
   }
   // Money rules
   const addRule = async (rule_text) => {
@@ -1727,18 +1805,18 @@ function Shell({ user, onLogout }) {
 
   const deleteTx = async (t) => {
     if (!(await confirm.ask('Delete this transaction? Balances will be recomputed.'))) return
-    const response = await fetch(`/api/finance/transactions/${t.id}`, { method: 'DELETE' })
-    if (response.ok) { toast.push('Transaction deleted'); await refresh() } else { toast.push('Delete failed', 'error') }
+    const { queued } = await mutate({ table: 'transactions', method: 'DELETE', id: t.id })
+    toast.push(queued ? 'Transaction deleted — will sync when back online' : 'Transaction deleted')
   }
   const deleteAccount = async (a) => {
     if (!(await confirm.ask(`Delete "${a.name}"? Its transactions stay but lose the account link.`))) return
-    const response = await fetch(`/api/finance/accounts/${a.id}`, { method: 'DELETE' })
-    if (response.ok) { toast.push('Account deleted'); await refresh() } else { toast.push('Delete failed', 'error') }
+    const { queued } = await mutate({ table: 'accounts', method: 'DELETE', id: a.id })
+    toast.push(queued ? 'Account deleted — will sync when back online' : 'Account deleted')
   }
   const deleteCategory = async (c) => {
     if (!(await confirm.ask(`Delete category "${c.name}"?`))) return
-    const response = await fetch(`/api/finance/categories/${c.id}`, { method: 'DELETE' })
-    if (response.ok) { toast.push('Category deleted'); await refresh() } else { toast.push('Delete failed', 'error') }
+    const { queued } = await mutate({ table: 'categories', method: 'DELETE', id: c.id })
+    toast.push(queued ? 'Category deleted — will sync when back online' : 'Category deleted')
   }
   // Swaps order_index between two adjacent categories/accounts — a plain two-PATCH swap rather
   // than a dedicated bulk-reorder endpoint, since the list only ever moves one step at a time.
@@ -1786,12 +1864,17 @@ function Shell({ user, onLogout }) {
   ]
   const avatarUrl = data.profile?.avatar_url || user?.user_metadata?.avatar_url || user?.user_metadata?.picture || ''
   const fitScreen = view === 'dashboard' || view === 'profile'
-  const bottomNav = [
+  // The 3 mandatory modules keep permanent bottom-tab slots, same rule as the desktop sidebar —
+  // every optional module the user has enabled, plus Settings, lives one tap away in the "More"
+  // sheet instead of each claiming its own slot. This is what makes mobile show curated primary
+  // destinations rather than the web version's full list.
+  const primaryMobileNav = [
     { key: 'dashboard', label: 'Home', icon: LayoutDashboard },
     { key: 'transactions', label: 'Ledger', icon: BarChart3 },
-    { key: 'investments', label: 'Invest', icon: TrendingUp },
-    { key: 'profile', label: 'You', icon: Sparkles },
+    { key: 'accounts', label: 'Accounts', icon: Landmark },
   ]
+  const morePanelItems = [...nav.filter((n) => !['dashboard', 'transactions', 'accounts'].includes(n.key)), { key: 'profile', label: 'Settings', icon: Settings }]
+  const isMoreActive = morePanelItems.some((n) => n.key === view)
 
   return (
     <div className="min-h-screen bg-[#080b12] text-slate-100">
@@ -1813,10 +1896,13 @@ function Shell({ user, onLogout }) {
           </nav>
           <div className="mt-auto flex w-full items-center gap-1 rounded-2xl border border-white/10 bg-white/[.035] p-2.5">
             <button onClick={() => setView('profile')} className={`flex min-w-0 flex-1 items-center gap-3 rounded-xl px-1.5 py-1 text-left transition hover:bg-white/[.06] ${view === 'profile' ? 'bg-white/[.06]' : ''}`}>
-              <Avatar src={avatarUrl} name={firstName} email={user?.email} size={36} />
+              <div className="relative shrink-0">
+                <Avatar src={avatarUrl} name={firstName} email={user?.email} size={36} />
+                {pendingCount > 0 && <span className="absolute -right-0.5 -top-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full border-2 border-[#080b12] bg-amber-300" title={`${pendingCount} change${pendingCount === 1 ? '' : 's'} pending sync`} />}
+              </div>
               <div className="min-w-0">
                 <div className="truncate text-sm font-medium text-white">{firstName}</div>
-                <div className="truncate text-[11px] text-slate-500">{user?.email}</div>
+                <div className="truncate text-[11px] text-slate-500">{pendingCount > 0 ? `${pendingCount} pending sync` : user?.email}</div>
               </div>
             </button>
             <button onClick={onLogout} title="Sign out" className="shrink-0 rounded-lg border border-transparent p-2 text-slate-500 transition hover:border-white/10 hover:bg-white/5 hover:text-white"><LogOut size={15} /></button>
@@ -1824,16 +1910,23 @@ function Shell({ user, onLogout }) {
         </aside>
 
         {/* Main */}
-        <main className={`flex-1 px-5 pb-24 pt-6 lg:px-10 lg:pb-10 ${fitScreen ? 'flex flex-col lg:h-screen' : ''}`}>
+        <main className={`min-w-0 flex-1 px-5 pb-24 pt-6 lg:px-10 lg:pb-10 ${fitScreen ? 'flex flex-col lg:h-screen' : ''}`}>
           {view === 'dashboard' && (
             <header className={`flex shrink-0 items-center justify-between ${fitScreen ? 'mb-3' : 'mb-8'}`}>
               <div>
                 <div className="text-xs uppercase tracking-widest text-slate-500">Welcome back</div>
                 <div className="mt-1 text-xl font-semibold text-white">Hi, {firstName} 👋</div>
               </div>
+              <div className="flex shrink-0 items-center gap-2">
+                {pendingCount > 0 && (
+                  <button onClick={() => setView('profile')} className="flex items-center gap-1.5 rounded-full border border-amber-300/30 bg-amber-300/10 px-2.5 py-1.5 text-[11px] font-medium text-amber-200 lg:hidden">
+                    <span className="h-1.5 w-1.5 rounded-full bg-amber-300" />{pendingCount} pending
+                  </button>
+                )}
               <button onClick={() => setShowMoney((v) => !v)} className="rounded-xl border border-white/10 p-2.5 text-slate-400 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
                 {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
               </button>
+              </div>
             </header>
           )}
 
@@ -1852,14 +1945,15 @@ function Shell({ user, onLogout }) {
               {view === 'cards' && <CreditCardsView data={data} onAdd={() => openCardForm()} onEdit={openCardForm} onDelete={deleteCard} onSpend={openCardSpend} onPay={openCardPay} onDeleteSpend={deleteCardSpend} onDeleteTx={deleteTx} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'scholarships' && <ScholarshipsView data={data} onAdd={() => openScholarshipForm()} onEdit={openScholarshipForm} onDelete={deleteScholarship} onPay={openScholarshipPay} onRefresh={refresh} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} toast={toast} />}
               {view === 'loans' && <LoansView data={data} onAdd={() => openLoanForm()} onEdit={openLoanForm} onDelete={deleteLoan} onPay={openLoanPay} onDeletePayment={deleteLoanPayment} onSync={syncLoanOutstanding} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
-              {view === 'lend' && <LendBorrowView data={data} onAdd={() => openLendForm()} onEdit={openLendForm} onDelete={deleteLend} onDeleteTx={deleteTx} onLogRepayment={(record) => openTxForm(null, '', { value: `lend:${record.id}`, type: record.type === 'lent' ? 'income' : 'expense' })} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
+              {view === 'lend' && <LendBorrowView data={data} onAdd={() => openLendForm()} onEdit={openLendForm} onDelete={deleteLend} onDeleteTx={deleteTx} onLogRepayment={(record) => openTxForm(null, '', { value: `lend:${record.id}`, type: record.type === 'lent' ? 'income' : 'expense' })} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} toast={toast} />}
               {view === 'family_company' && <FamilyCompanyView data={data} onAddProfile={() => openMoneyProfileForm()} onEditProfile={openMoneyProfileForm} onDeleteProfile={deleteMoneyProfile} onAddEntry={openMoneyProfileEntryForm} onEditEntry={openMoneyProfileEntryEdit} onDeleteEntry={deleteMoneyProfileEntry} onBulkImport={openMoneyProfileBulkImport} onToggleStatus={toggleMoneyProfileStatus} />}
               {view === 'bucket' && <BucketListView data={data} onAdd={() => openBucketForm()} onEdit={openBucketForm} onDelete={deleteBucket} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'insights' && <InsightsView data={data} />}
               {view === 'profile' && (
                 <SettingsShell
                   activeSection={settingsSection} onSectionChange={setSettingsSection}
-                  data={data} user={user} theme={theme} onThemeChange={onThemeChange} onSaveProfile={onSaveProfile}
+                  data={data} user={user} theme={theme} onThemeChange={onThemeChange} onSaveProfile={onSaveProfile} toast={toast}
+                  accentColor={data.profile?.accent_color} onAccentChange={onAccentChange}
                   onAddCategory={(defaultType) => openCatForm(null, defaultType)} onEditCategory={openCatForm} onDeleteCategory={deleteCategory}
                   onReorderCategory={reorderCategory} onToggleCategoryModule={toggleCategoryModule}
                   onReorderAccount={reorderAccount}
@@ -1874,28 +1968,48 @@ function Shell({ user, onLogout }) {
       </div>
 
       {/* Floating quick add */}
-      <button onClick={() => openTxForm()} className="fixed bottom-24 right-5 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-cyan-300 to-blue-500 text-[#07101c] shadow-2xl shadow-cyan-500/30 transition hover:scale-105 lg:bottom-8 lg:right-8" title="Quick add transaction">
+      <button onClick={() => openTxForm()} className="fixed bottom-24 right-5 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-accent-300 to-blue-500 text-[#07101c] shadow-2xl shadow-accent-500/30 transition hover:scale-105 lg:bottom-8 lg:right-8" title="Quick add transaction">
         <Plus size={24} />
       </button>
 
+      <InstallPrompt />
+
       {/* Mobile bottom nav */}
-      <nav className="fixed bottom-0 left-0 right-0 z-20 border-t border-white/10 bg-[#0b0f18]/95 backdrop-blur-xl lg:hidden">
+      <nav className="fixed bottom-0 left-0 right-0 z-20 border-t border-white/10 bg-[#0b0f18]/95 backdrop-blur-xl lg:hidden" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         <div className="mx-auto grid max-w-md grid-cols-4">
-          {bottomNav.map((n) => (
-            <button key={n.key} onClick={() => setView(n.key)} className={`flex flex-col items-center gap-1 py-3 text-[11px] ${view === n.key ? 'text-cyan-300' : 'text-slate-500'}`}>
+          {primaryMobileNav.map((n) => (
+            <button key={n.key} onClick={() => setView(n.key)} className={`flex flex-col items-center gap-1 py-3 text-[11px] ${view === n.key ? 'text-accent-300' : 'text-slate-500'}`}>
               <n.icon size={18} />{n.label}
             </button>
           ))}
+          <button onClick={() => setMoreOpen(true)} className={`flex flex-col items-center gap-1 py-3 text-[11px] ${isMoreActive ? 'text-accent-300' : 'text-slate-500'}`}>
+            <MoreHorizontal size={18} />More
+          </button>
         </div>
       </nav>
 
+      <BottomSheet open={moreOpen} onOpenChange={setMoreOpen} title="More">
+        <div className="grid grid-cols-3 gap-3 pb-4">
+          {morePanelItems.map((n) => (
+            <button
+              key={n.key}
+              onClick={() => { setView(n.key); setMoreOpen(false) }}
+              className={`flex flex-col items-center gap-2 rounded-xl border p-4 text-center text-xs transition ${view === n.key ? 'border-accent-300/30 bg-accent-400/10 text-accent-200' : 'border-white/10 bg-white/[.04] text-slate-300 hover:bg-white/[.06]'}`}
+            >
+              <n.icon size={20} />
+              <span>{n.label}</span>
+            </button>
+          ))}
+        </div>
+      </BottomSheet>
+
       {/* Modals */}
-      <TransactionForm open={txFormOpen} onClose={closeTxForm} onSaved={onTxSaved} editing={txEditing} accounts={data.accounts} categories={data.categories} creditCards={data.credit_cards} lendBorrow={data.lend_borrow} loans={data.loans} onAddAccount={() => { closeTxForm(); openAccForm() }} onAddCategory={() => openCatForm()} toast={toast} profile={data.profile} defaultAccountId={txDefaultAccountId} defaultRepayment={txDefaultRepayment} />
-      <AccountForm open={accFormOpen} onClose={closeAccForm} onSaved={onAccSaved} editing={accEditing} accounts={data.accounts} toast={toast} />
-      <CategoryForm open={catFormOpen} onClose={closeCatForm} onSaved={onCatSaved} editing={catEditing} defaultType={catFormDefaultType} toast={toast} />
+      <TransactionForm open={txFormOpen} onClose={closeTxForm} onSaved={onTxSaved} editing={txEditing} accounts={data.accounts} categories={data.categories} creditCards={data.credit_cards} lendBorrow={data.lend_borrow} loans={data.loans} onAddAccount={() => { closeTxForm(); openAccForm() }} onAddCategory={() => openCatForm()} toast={toast} profile={data.profile} defaultAccountId={txDefaultAccountId} defaultRepayment={txDefaultRepayment} mutate={mutate} />
+      <AccountForm open={accFormOpen} onClose={closeAccForm} onSaved={onAccSaved} editing={accEditing} accounts={data.accounts} toast={toast} mutate={mutate} />
+      <CategoryForm open={catFormOpen} onClose={closeCatForm} onSaved={onCatSaved} editing={catEditing} defaultType={catFormDefaultType} toast={toast} mutate={mutate} />
       <RecurringManager open={recurringManagerOpen} onClose={closeRecurringManager} rules={data.recurring_transactions} onAdd={() => openRecurringForm()} onEdit={openRecurringForm} onToggle={toggleRecurring} onDelete={deleteRecurring} showMoney={showMoney} />
       <RecurringForm open={recurringFormOpen} onClose={closeRecurringForm} onSaved={onRecurringSaved} editing={recurringEditing} accounts={data.accounts} categories={data.categories} toast={toast} />
-      <BudgetForm open={budgetFormOpen} onClose={closeBudgetForm} onSaved={onBudgetSaved} editing={budgetEditing} categories={data.categories} toast={toast} />
+      <BudgetForm open={budgetFormOpen} onClose={closeBudgetForm} onSaved={onBudgetSaved} editing={budgetEditing} categories={data.categories} toast={toast} mutate={mutate} />
       <BudgetMonthForm
         open={budgetMonthFormOpen} onClose={closeBudgetMonthForm} onSaved={onBudgetMonthSaved}
         initialYear={budgetMonthFormInitial.year} initialMonth={budgetMonthFormInitial.month}
@@ -1903,24 +2017,24 @@ function Shell({ user, onLogout }) {
         categories={data.categories} onAddCategory={() => openCatForm()} toast={toast}
       />
       <CsvImport open={csvOpen} onClose={() => setCsvOpen(false)} onImported={async () => { setCsvOpen(false); await refresh() }} accounts={data.accounts} categories={data.categories} transactions={data.transactions} toast={toast} />
-      <PortfolioForm open={portfolioFormOpen} onClose={closePortfolioForm} onSaved={onPortfolioSaved} editing={portfolioEditing} accounts={data.accounts} toast={toast} />
-      <HoldingForm open={holdingFormOpen} onClose={closeHoldingForm} onSaved={onHoldingSaved} editing={holdingEditing} portfolios={data.portfolios} defaultPortfolioId={holdingDefaultPortfolio} profile={data.profile} toast={toast} />
-      <OtherInvestmentForm open={otherInvestmentFormOpen} onClose={closeOtherInvestmentForm} onSaved={onOtherInvestmentSaved} editing={otherInvestmentEditing} portfolioId={otherInvestmentPortfolioId} toast={toast} />
+      <PortfolioForm open={portfolioFormOpen} onClose={closePortfolioForm} onSaved={onPortfolioSaved} editing={portfolioEditing} accounts={data.accounts} toast={toast} mutate={mutate} />
+      <HoldingForm open={holdingFormOpen} onClose={closeHoldingForm} onSaved={onHoldingSaved} editing={holdingEditing} portfolios={data.portfolios} defaultPortfolioId={holdingDefaultPortfolio} profile={data.profile} toast={toast} mutate={mutate} />
+      <OtherInvestmentForm open={otherInvestmentFormOpen} onClose={closeOtherInvestmentForm} onSaved={onOtherInvestmentSaved} editing={otherInvestmentEditing} portfolioId={otherInvestmentPortfolioId} toast={toast} mutate={mutate} />
       <HoldingsBulkImport open={bulkImportOpen} onClose={closeBulkImport} onImported={onBulkImported} portfolio={bulkImportPortfolio} toast={toast} />
       <LoanForm open={loanFormOpen} onClose={closeLoanForm} onSaved={onLoanSaved} editing={loanEditing} accounts={data.accounts} toast={toast} />
       <LoanPaymentForm open={loanPayOpen} onClose={closeLoanPay} onSaved={onLoanPaid} loan={loanPayLoan} accounts={data.accounts} creditCards={data.credit_cards} toast={toast} />
-      <BucketForm open={bucketFormOpen} onClose={closeBucketForm} onSaved={onBucketSaved} editing={bucketEditing} toast={toast} />
+      <BucketForm open={bucketFormOpen} onClose={closeBucketForm} onSaved={onBucketSaved} editing={bucketEditing} toast={toast} mutate={mutate} />
       <LendForm open={lendFormOpen} onClose={closeLendForm} onSaved={onLendSaved} editing={lendEditing} accounts={data.accounts} creditCards={data.credit_cards} toast={toast} />
       <PortfolioFundsForm open={fundsFormOpen} onClose={closeFundsForm} onSaved={onFundsSaved} portfolio={fundsPortfolio} accounts={data.accounts} toast={toast} />
       <WithdrawFundsForm open={withdrawFormOpen} onClose={closeWithdrawForm} onSaved={onWithdrawSaved} portfolio={withdrawPortfolio} accounts={data.accounts} toast={toast} />
-      <SipForm open={sipFormOpen} onClose={closeSipForm} onSaved={onSipSaved} editing={sipEditing} portfolios={data.portfolios} toast={toast} />
-      <CreditCardForm open={cardFormOpen} onClose={closeCardForm} onSaved={onCardSaved} editing={cardEditing} toast={toast} />
+      <SipForm open={sipFormOpen} onClose={closeSipForm} onSaved={onSipSaved} editing={sipEditing} portfolios={data.portfolios} toast={toast} mutate={mutate} />
+      <CreditCardForm open={cardFormOpen} onClose={closeCardForm} onSaved={onCardSaved} editing={cardEditing} toast={toast} mutate={mutate} />
       <VaultItemForm open={vaultFormOpen} onClose={closeVaultForm} onSaved={onVaultSaved} editing={vaultEditing} accounts={data.accounts} toast={toast} defaultType={vaultDefaultType} />
       <CardSpendForm open={cardSpendOpen} onClose={closeCardSpend} onSaved={onCardSpendSaved} card={cardSpendTarget} categories={data.categories} toast={toast} />
       <CardPayForm open={cardPayOpen} onClose={closeCardPay} onSaved={onCardPaid} card={cardPayTarget} accounts={data.accounts} toast={toast} />
       <ScholarshipForm open={scholarshipFormOpen} onClose={closeScholarshipForm} onSaved={onScholarshipSaved} editing={scholarshipEditing} accounts={data.accounts} toast={toast} />
       <ScholarshipPayForm open={scholarshipPayOpen} onClose={closeScholarshipPay} onSaved={onScholarshipPaid} scholarship={scholarshipPayTarget} accounts={data.accounts} toast={toast} />
-      <MoneyProfileForm open={moneyProfileFormOpen} onClose={closeMoneyProfileForm} onSaved={onMoneyProfileSaved} editing={moneyProfileEditing} accounts={data.accounts} toast={toast} />
+      <MoneyProfileForm open={moneyProfileFormOpen} onClose={closeMoneyProfileForm} onSaved={onMoneyProfileSaved} editing={moneyProfileEditing} accounts={data.accounts} toast={toast} mutate={mutate} />
       <MoneyProfileEntryForm open={moneyProfileEntryFormOpen} onClose={closeMoneyProfileEntryForm} onSaved={onMoneyProfileEntrySaved} editing={moneyProfileEntryEditing} profile={data.money_profiles?.find((p) => p.id === moneyProfileEntryProfileId)} categories={data.categories} onAddCategory={() => openCatForm()} toast={toast} />
       <MoneyProfileBulkImport open={moneyProfileBulkImportOpen} onClose={closeMoneyProfileBulkImport} onImported={onMoneyProfileBulkImported} profile={moneyProfileBulkImportProfile} categories={data.categories} toast={toast} />
     </div>
@@ -1928,7 +2042,7 @@ function Shell({ user, onLogout }) {
 }
 
 /* ---------------- Root ---------------- */
-function App() {
+function AppInner() {
   const [user, setUser] = useState(undefined)
   const [authError, setAuthError] = useState('')
   // React StrictMode (on by default in dev) intentionally double-invokes a fresh mount's effects
@@ -1946,11 +2060,31 @@ function App() {
       const qs = params.toString()
       window.history.replaceState({}, '', window.location.pathname + (qs ? `?${qs}` : ''))
     }
-    fetch('/api/auth/me').then((r) => r.ok ? r.json() : { user: null }).then((d) => setUser(d.user)).catch(() => setUser(null))
+    fetch('/api/auth/me')
+      .then((r) => r.ok ? r.json() : { user: null })
+      .catch(async () => {
+        // The request itself failed (offline, DNS, etc.) rather than the server explicitly
+        // saying "not authenticated" — those are different things. A real 401 here means "log
+        // this browser out"; a network failure with no server opinion at all shouldn't bounce a
+        // previously-signed-in user to the landing page when there's cached data from their last
+        // session sitting right there in Dexie, ready to paint. Only fall back to a minimal user
+        // reconstructed from that cache in this network-failure case — an actual 401 still wins.
+        const cached = await loadSnapshot().catch(() => null)
+        return { user: cached?.profile?.id ? { id: cached.profile.id } : null }
+      })
+      .then((d) => setUser(d.user))
   }, [])
   if (user === undefined) return <LoadingScreen />
   if (!user) return <AuthScreen onAuth={setUser} initialError={authError} />
-  return <Shell user={user} onLogout={async () => { await fetch('/api/auth/logout', { method: 'POST' }); setUser(null) }} />
+  return <Shell user={user} onLogout={async () => { await fetch('/api/auth/logout', { method: 'POST' }); await clearSnapshot().catch(() => {}); setUser(null) }} />
 }
 
-export default App
+// Respects prefers-reduced-motion for every Framer Motion animation in the app (pulse loading,
+// future page/tab transitions) with zero per-component logic — one global switch.
+export default function App() {
+  return (
+    <MotionConfig reducedMotion="user">
+      <AppInner />
+    </MotionConfig>
+  )
+}

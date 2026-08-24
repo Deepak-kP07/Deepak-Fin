@@ -75,9 +75,9 @@ export function CreditCardDetailView({ card, cardTransactions, allTransactions, 
         <div className="w-72 sm:w-80">
           <BankCardFace name={card.name} subtitle={card.bank || 'Credit card'} last4={card.last4} color={card.color || '#a78bfa'} />
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex w-full min-w-0 flex-wrap gap-2 sm:w-auto">
           <button onClick={() => onSpend(card)} className="rounded-xl bg-white/[.06] px-4 py-2.5 text-sm font-semibold text-white hover:bg-white/[.1]">+ Log spend</button>
-          <button onClick={() => onPay(card)} disabled={Number(card.current_outstanding) <= 0} className="rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 px-4 py-2.5 text-sm font-semibold text-[#07101c] disabled:opacity-50">Pay bill</button>
+          <button onClick={() => onPay(card)} disabled={Number(card.current_outstanding) <= 0} className="rounded-xl bg-gradient-to-r from-accent-300 to-blue-500 px-4 py-2.5 text-sm font-semibold text-[#07101c] disabled:opacity-50">Pay bill</button>
           <button onClick={() => onEdit(card)} className="rounded-xl border border-white/10 p-2.5 text-slate-400 hover:bg-white/5 hover:text-white"><Pencil size={15} /></button>
           <button onClick={() => onDelete(card)} className="rounded-xl border border-white/10 p-2.5 text-rose-300/70 hover:bg-rose-300/10"><Trash2 size={15} /></button>
           <button onClick={onToggleMoney} className="rounded-xl border border-white/10 p-2.5 text-slate-400 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>

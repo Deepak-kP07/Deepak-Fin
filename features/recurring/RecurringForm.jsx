@@ -38,14 +38,14 @@ export function RecurringForm({ open, onClose, onSaved, editing, accounts, categ
         <div className="mt-5 grid gap-4">
           <div className="grid grid-cols-2 gap-2">
             {[{ v: 'expense', l: 'Expense' }, { v: 'income', l: 'Income' }].map((t) => (
-              <button key={t.v} type="button" onClick={() => setForm({ ...form, type: t.v, category_id: '' })} className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${form.type === t.v ? 'border-cyan-400/30 bg-cyan-400/15 text-cyan-200' : 'border-white/10 text-slate-400 hover:bg-white/5'}`}>{t.l}</button>
+              <button key={t.v} type="button" onClick={() => setForm({ ...form, type: t.v, category_id: '' })} className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${form.type === t.v ? 'border-accent-400/30 bg-accent-400/15 text-accent-200' : 'border-white/10 text-slate-400 hover:bg-white/5'}`}>{t.l}</button>
             ))}
           </div>
           <label className="text-sm text-slate-300">Description
-            <input required value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="e.g. Rent, Salary, Netflix" />
+            <input required value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-accent-300/50" placeholder="e.g. Rent, Salary, Netflix" />
           </label>
           <label className="text-sm text-slate-300">Amount
-            <input required type="number" step="0.01" min="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
+            <input required type="number" step="0.01" min="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-accent-300/50" />
           </label>
           <label className="text-sm text-slate-300">Account
             <Select required value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
@@ -54,7 +54,7 @@ export function RecurringForm({ open, onClose, onSaved, editing, accounts, categ
             </Select>
           </label>
           <label className="text-sm text-slate-300">Category
-            <CategorySelect value={form.category_id || ''} onChange={(e) => setForm({ ...form, category_id: e.target.value })} categories={catsForType} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
+            <CategorySelect value={form.category_id || ''} onChange={(e) => setForm({ ...form, category_id: e.target.value })} categories={catsForType} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none focus:border-accent-300/50" />
           </label>
           <div className="grid grid-cols-2 gap-3">
             <label className="text-sm text-slate-300">Repeats
@@ -65,15 +65,15 @@ export function RecurringForm({ open, onClose, onSaved, editing, accounts, categ
               </Select>
             </label>
             <label className="text-sm text-slate-300">Next due
-              <DateInput value={form.next_due_date} onChange={(e) => setForm({ ...form, next_due_date: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" />
+              <DateInput value={form.next_due_date} onChange={(e) => setForm({ ...form, next_due_date: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-accent-300/50" />
             </label>
           </div>
           <div className="text-[11px] text-slate-500">Any occurrences already due by the time you save will be logged immediately, then it repeats {form.frequency} from there.</div>
           <label className="text-sm text-slate-300">Notes
-            <input value={form.notes || ''} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50" placeholder="Optional" />
+            <input value={form.notes || ''} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-accent-300/50" placeholder="Optional" />
           </label>
         </div>
-        <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : editing ? 'Update rule' : 'Save recurring rule'}</button>
+        <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-accent-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : editing ? 'Update rule' : 'Save recurring rule'}</button>
       </form>
     </div>
   )

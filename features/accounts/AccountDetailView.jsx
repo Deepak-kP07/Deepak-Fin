@@ -61,7 +61,7 @@ export function AccountDetailView({ account, debitCard, transactions, categories
           </div>
         )}
         <div className="flex flex-wrap gap-2">
-          <button onClick={() => onAddTransaction(account.id)} className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 px-4 py-2.5 text-sm font-semibold text-[#07101c]"><Plus size={15} />Add transaction</button>
+          <button onClick={() => onAddTransaction(account.id)} className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-accent-300 to-blue-500 px-4 py-2.5 text-sm font-semibold text-[#07101c]"><Plus size={15} />Add transaction</button>
           <button onClick={() => onEdit(account)} className="rounded-xl border border-white/10 p-2.5 text-slate-400 hover:bg-white/5 hover:text-white"><Pencil size={15} /></button>
           <button onClick={() => onDelete(account)} className="rounded-xl border border-white/10 p-2.5 text-rose-300/70 hover:bg-rose-300/10"><Trash2 size={15} /></button>
           <button onClick={onToggleMoney} className="rounded-xl border border-white/10 p-2.5 text-slate-400 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
@@ -73,12 +73,12 @@ export function AccountDetailView({ account, debitCard, transactions, categories
       {debitCard && (
         <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[.035] px-5 py-3">
           <div className="text-sm text-white">{account.name}</div>
-          <button onClick={() => onEditCard(debitCard)} className="text-xs text-cyan-300 hover:underline">Edit card</button>
+          <button onClick={() => onEditCard(debitCard)} className="text-xs text-accent-300 hover:underline">Edit card</button>
         </div>
       )}
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <StatCard label="Current balance" value={showMoney ? money(account.current_balance) : '••••'} icon={Landmark} accent="bg-cyan-300/15 text-cyan-200" sub={<span>Opening {money(account.opening_balance)}</span>} />
+        <StatCard label="Current balance" value={showMoney ? money(account.current_balance) : '••••'} icon={Landmark} accent="bg-accent-300/15 text-accent-200" sub={<span>Opening {money(account.opening_balance)}</span>} />
         <StatCard label="Money in" value={showMoney ? money(inflow) : '••••'} icon={ArrowUpRight} accent="bg-emerald-400/15 text-emerald-200" tone="text-emerald-300" sub={<span>{activity.length} total transaction{activity.length === 1 ? '' : 's'}</span>} />
         <StatCard label="Money out" value={showMoney ? money(outflow) : '••••'} icon={ArrowDownRight} accent="bg-rose-400/15 text-rose-200" tone="text-rose-300" sub={<span>All time</span>} />
       </div>
@@ -119,7 +119,7 @@ export function AccountDetailView({ account, debitCard, transactions, categories
                 const cat = categories.find((c) => c.id === t.category_id)
                 const isIn = t.type === 'income' || (t.type === 'transfer' && t.transfer_direction === 'in')
                 const isTransfer = t.type === 'transfer'
-                const color = isIn ? 'text-emerald-300' : isTransfer ? 'text-cyan-300' : 'text-rose-300'
+                const color = isIn ? 'text-emerald-300' : isTransfer ? 'text-accent-300' : 'text-rose-300'
                 return (
                   <div key={t.id} className="grid grid-cols-1 gap-2 px-5 py-4 sm:grid-cols-[1.4fr_.9fr_.6fr_.6fr_auto] sm:items-center sm:gap-4">
                     <div className="flex items-center gap-3">

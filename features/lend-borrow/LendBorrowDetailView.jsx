@@ -1,11 +1,10 @@
 'use client'
 
-import { ArrowDownRight, ArrowUpRight, ChevronRight, Eye, EyeOff, Pencil, Target, Trash2, User } from 'lucide-react'
-import { StatCard } from '@/components/shared/StatCard'
+import { ArrowDownRight, ArrowUpRight, ChevronRight, Eye, EyeOff, Pencil, Trash2, User } from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { formatDate, money } from '@/lib/format'
 
-export function LendBorrowDetailView({ record, repayments, accounts, transactions, onBack, onEdit, onDelete, onDeleteTx, onLogRepayment, showMoney, onToggleMoney }) {
+export function LendBorrowDetailView({ record, repayments, accounts, transactions, onBack, onEdit, onDelete, onDeleteTx, onLogRepayment, showMoney, onToggleMoney, toast }) {
   const isLent = record.type === 'lent'
   const isSettled = record.status === 'returned'
   const repaid = Number(record.amount_repaid || 0)
@@ -17,7 +16,16 @@ export function LendBorrowDetailView({ record, repayments, accounts, transaction
     .filter((r) => r.lend_borrow_id === record.id)
     .sort((a, b) => new Date(b.date) - new Date(a.date))
 
+  // Deleting a lend-linked transaction reverses lend_repayments/amount_repaid/status
+  // server-side (reverseLendRepayment) — that reversal only runs once the delete actually
+  // reaches the server, so an offline optimistic delete would leave this screen showing a
+  // stale repaid amount/status with no visible "pending sync" signal on that number. Blocked
+  // the same way TransactionForm already blocks creating a repayment offline.
   const deletePayment = (r) => {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      toast.push('Deleting a payment needs a connection — try again once you’re back online.', 'error')
+      return
+    }
     const tx = transactions.find((t) => t.id === r.linked_transaction_id)
     if (tx) onDeleteTx(tx)
   }
@@ -26,7 +34,7 @@ export function LendBorrowDetailView({ record, repayments, accounts, transaction
     <div className="space-y-5 pb-8">
       <button onClick={onBack} className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-white"><ChevronRight size={14} className="rotate-180" /> Back to lend &amp; borrow</button>
 
-      <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
         <div className="flex items-center gap-3">
           <div className={`flex h-14 w-14 items-center justify-center rounded-2xl ${isLent ? 'bg-emerald-400/15 text-emerald-200' : 'bg-rose-400/15 text-rose-200'}`}>
             <User size={22} />
@@ -35,14 +43,14 @@ export function LendBorrowDetailView({ record, repayments, accounts, transaction
             <div className="flex flex-wrap items-center gap-2">
               <div className="text-lg font-semibold text-white">{record.person_name}</div>
               <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-widest ${isLent ? 'bg-emerald-400/15 text-emerald-200' : 'bg-rose-400/15 text-rose-200'}`}>{isLent ? 'lent' : 'borrowed'}</span>
-              <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-widest ${record.status === 'returned' ? 'bg-emerald-400/15 text-emerald-200' : record.status === 'partial' ? 'bg-amber-400/15 text-amber-200' : 'bg-cyan-400/15 text-cyan-200'}`}>{record.status}</span>
+              <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-widest ${record.status === 'returned' ? 'bg-emerald-400/15 text-emerald-200' : record.status === 'partial' ? 'bg-amber-400/15 text-amber-200' : 'bg-accent-400/15 text-accent-200'}`}>{record.status}</span>
               {overdue && <span className="rounded-full bg-rose-400/15 px-2 py-0.5 text-[10px] uppercase tracking-widest text-rose-200">overdue</span>}
             </div>
             <div className="mt-1 text-xs text-slate-500">{record.reason || (isLent ? 'Lent' : 'Borrowed')} · {formatDate(record.date)}{account ? ` · ${account.name}` : ''}{record.due_date ? ` · due ${formatDate(record.due_date)}` : ''}</div>
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <button onClick={() => onLogRepayment(record)} disabled={isSettled} title={isSettled ? 'Already fully settled' : undefined} className="rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 px-4 py-2.5 text-sm font-semibold text-[#07101c] disabled:opacity-40">+ Log {isLent ? 'repayment' : 'payment'}</button>
+        <div className="flex w-full min-w-0 flex-wrap gap-2 sm:w-auto">
+          <button onClick={() => onLogRepayment(record)} disabled={isSettled} title={isSettled ? 'Already fully settled' : undefined} className="rounded-xl bg-gradient-to-r from-accent-300 to-blue-500 px-4 py-2.5 text-sm font-semibold text-[#07101c] disabled:opacity-40">+ Log {isLent ? 'repayment' : 'payment'}</button>
           <button onClick={() => onEdit(record)} className="rounded-xl border border-white/10 p-2.5 text-slate-400 hover:bg-white/5 hover:text-white"><Pencil size={15} /></button>
           <button onClick={() => onDelete(record)} className="rounded-xl border border-white/10 p-2.5 text-rose-300/70 hover:bg-rose-300/10"><Trash2 size={15} /></button>
           <button onClick={onToggleMoney} className="rounded-xl border border-white/10 p-2.5 text-slate-400 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
@@ -51,15 +59,24 @@ export function LendBorrowDetailView({ record, repayments, accounts, transaction
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <StatCard label={isLent ? 'They still owe you' : 'You still owe'} value={showMoney ? money(pending) : '••••'} icon={isLent ? ArrowUpRight : ArrowDownRight} accent={isLent ? 'bg-emerald-400/15 text-emerald-200' : 'bg-rose-400/15 text-rose-200'} tone={isLent ? 'text-emerald-300' : 'text-rose-300'} sub={<span>of {money(record.amount)} total</span>} />
-        <StatCard label={isLent ? 'Repaid to you' : 'Paid by you'} value={showMoney ? money(repaid) : '••••'} icon={isLent ? ArrowDownRight : ArrowUpRight} accent="bg-cyan-300/15 text-cyan-200" sub={<span>{paymentsForThis.length} payment{paymentsForThis.length === 1 ? '' : 's'}</span>} />
-        <StatCard label="Settled" value={`${pct}%`} icon={Target} accent="bg-violet-400/15 text-violet-200" tone={pct >= 100 ? 'text-emerald-300' : pct > 0 ? 'text-amber-300' : 'text-slate-400'} sub={<span>{pct >= 100 ? 'Fully settled' : 'In progress'}</span>} />
-      </div>
-
-      <div className="rounded-2xl border border-white/10 bg-white/[.035] p-5">
-        <div className="mt-1 h-2 overflow-hidden rounded-full bg-white/5">
+      <div className="rounded-3xl border border-white/10 bg-white/[.035] p-6">
+        <div className="text-xs uppercase tracking-widest text-slate-500">{isLent ? 'They still owe you' : 'You still owe'}</div>
+        <div className="mt-1 text-[clamp(2rem,6vw,3rem)] font-semibold leading-[1.1] tracking-[-0.01em] text-white">{showMoney ? money(pending) : '••••'}</div>
+        <div className="mt-1 text-sm text-slate-500">of {money(record.amount)} total</div>
+        <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/5">
           <div className={`h-full rounded-full transition-all ${isLent ? 'bg-emerald-400' : 'bg-rose-400'}`} style={{ width: `${pct}%` }} />
+        </div>
+        <div className="mt-5 grid grid-cols-2 gap-3">
+          <div className="rounded-2xl bg-white/[.04] p-3.5">
+            <div className="text-xs text-slate-400">{isLent ? 'Repaid to you' : 'Paid by you'}</div>
+            <div className="mt-1 text-lg font-semibold text-accent-300">{showMoney ? money(repaid) : '••••'}</div>
+            <div className="text-[11px] text-slate-500">{paymentsForThis.length} payment{paymentsForThis.length === 1 ? '' : 's'}</div>
+          </div>
+          <div className="rounded-2xl bg-white/[.04] p-3.5">
+            <div className="text-xs text-slate-400">Settled</div>
+            <div className={`mt-1 text-lg font-semibold ${pct >= 100 ? 'text-emerald-300' : pct > 0 ? 'text-amber-300' : 'text-slate-400'}`}>{pct}%</div>
+            <div className="text-[11px] text-slate-500">{pct >= 100 ? 'Fully settled' : 'In progress'}</div>
+          </div>
         </div>
       </div>
 

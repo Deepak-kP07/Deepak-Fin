@@ -5,7 +5,7 @@ import {
   ArrowDownRight, ArrowUpRight, CheckCircle2, ChevronDown, ChevronRight, Clock, Eye, EyeOff,
   Landmark, Pencil, RefreshCw, Sparkles, Target, Trash2,
 } from 'lucide-react'
-import { projectSchedule } from '@/lib/amortization'
+import { nextLoanDueDate, projectSchedule } from '@/lib/amortization'
 import { formatDate, liveOutstanding, money, monthAbbr, ordinal, paymentTypeLabel, todayISO } from '@/lib/format'
 import { StatCard } from '@/components/shared/StatCard'
 import { DismissibleBanner } from '@/components/shared/DismissibleBanner'
@@ -31,14 +31,7 @@ export function LoanDetailView({ loan, payments, accounts, onBack, onPay, onDele
 
   // Anchor the projection at the actual next EMI due date (not just "today") so the real
   // day-count for the first projected month is accurate.
-  const nextDueDate = useMemo(() => {
-    const now = new Date()
-    if (!loan.emi_due_day) return todayISO()
-    const day = Number(loan.emi_due_day)
-    let due = new Date(now.getFullYear(), now.getMonth(), day)
-    if (now > due) due = new Date(now.getFullYear(), now.getMonth() + 1, day)
-    return due.toISOString().slice(0, 10)
-  }, [loan.emi_due_day])
+  const nextDueDate = useMemo(() => nextLoanDueDate(loan) || todayISO(), [loan.emi_due_day])
 
   const schedule = useMemo(() => loan.status === 'closed' ? [] : projectSchedule({ outstanding, annualRatePct: rate, emiAmount: emi, startDate: nextDueDate }), [outstanding, rate, emi, loan.status, nextDueDate])
   const monthsRemaining = schedule.length
@@ -132,13 +125,13 @@ export function LoanDetailView({ loan, payments, accounts, onBack, onPay, onDele
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-3xl font-semibold tracking-tight text-white">{loan.name}</h1>
-            <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-widest ${loan.status === 'closed' ? 'bg-emerald-400/15 text-emerald-200' : 'bg-cyan-400/15 text-cyan-200'}`}>{loan.status}</span>
+            <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-widest ${loan.status === 'closed' ? 'bg-emerald-400/15 text-emerald-200' : 'bg-accent-400/15 text-accent-200'}`}>{loan.status}</span>
           </div>
           <div className="mt-1 text-sm text-slate-500">{loan.lender || 'Lender'}{account ? ` · Paying from ${account.name}` : ''}</div>
         </div>
-        <div className="flex gap-2">
-          <button onClick={() => onPay(loan)} disabled={loan.status === 'closed'} className="rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 px-4 py-2.5 text-sm font-semibold text-[#07101c] disabled:opacity-50">Log payment</button>
-          <button onClick={() => setSyncOpen((o) => !o)} className={`flex items-center gap-1.5 rounded-xl border px-3 py-2.5 text-sm font-medium transition ${syncOpen ? 'border-cyan-300/40 bg-cyan-400/10 text-cyan-200' : 'border-white/10 text-slate-400 hover:bg-white/5 hover:text-white'}`}><RefreshCw size={15} /><span className="hidden sm:inline">Sync</span></button>
+        <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+          <button onClick={() => onPay(loan)} disabled={loan.status === 'closed'} className="rounded-xl bg-gradient-to-r from-accent-300 to-blue-500 px-4 py-2.5 text-sm font-semibold text-[#07101c] disabled:opacity-50">Log payment</button>
+          <button onClick={() => setSyncOpen((o) => !o)} className={`flex items-center gap-1.5 rounded-xl border px-3 py-2.5 text-sm font-medium transition ${syncOpen ? 'border-accent-300/40 bg-accent-400/10 text-accent-200' : 'border-white/10 text-slate-400 hover:bg-white/5 hover:text-white'}`}><RefreshCw size={15} /><span className="hidden sm:inline">Sync</span></button>
           <button onClick={() => onEdit(loan)} className="rounded-xl border border-white/10 p-2.5 text-slate-400 hover:bg-white/5 hover:text-white"><Pencil size={15} /></button>
           <button onClick={() => onDelete(loan)} className="rounded-xl border border-white/10 p-2.5 text-rose-300/70 hover:bg-rose-300/10"><Trash2 size={15} /></button>
           <button onClick={onToggleMoney} className="rounded-xl border border-white/10 p-2.5 text-slate-400 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
@@ -148,11 +141,11 @@ export function LoanDetailView({ loan, payments, accounts, onBack, onPay, onDele
       </div>
 
       {syncOpen && (
-        <div className="rounded-xl border border-cyan-300/20 bg-cyan-400/[.03] p-4">
+        <div className="rounded-xl border border-accent-300/20 bg-accent-400/[.03] p-4">
           <div className="text-sm text-slate-300">Sync with your lender's app</div>
           <div className="mt-1 text-[11px] text-slate-500">The Outstanding figure above already includes today's not-yet-billed interest, same as your lender's app. If there's still a small gap after that — rounding, an unmodeled fee — enter your lender's figure here to close it, without logging it as a payment.</div>
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <input type="number" step="0.01" min="0" value={syncValue} onChange={(e) => setSyncValue(e.target.value)} placeholder={String(Math.round(todaysOutstanding))} className="w-40 rounded-xl border border-white/10 bg-white/[.04] px-3 py-2 text-sm text-white outline-none focus:border-cyan-300/50" />
+            <input type="number" step="0.01" min="0" value={syncValue} onChange={(e) => setSyncValue(e.target.value)} placeholder={String(Math.round(todaysOutstanding))} className="w-40 rounded-xl border border-white/10 bg-white/[.04] px-3 py-2 text-sm text-white outline-none focus:border-accent-300/50" />
             <button
               type="button"
               disabled={syncBusy || !syncValue}
@@ -161,7 +154,7 @@ export function LoanDetailView({ loan, payments, accounts, onBack, onPay, onDele
                 await onSync(loan, Number(syncValue))
                 setSyncBusy(false); setSyncOpen(false); setSyncValue('')
               }}
-              className="rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 px-4 py-2 text-sm font-semibold text-[#07101c] disabled:opacity-50"
+              className="rounded-xl bg-gradient-to-r from-accent-300 to-blue-500 px-4 py-2 text-sm font-semibold text-[#07101c] disabled:opacity-50"
             >{syncBusy ? 'Syncing…' : 'Sync'}</button>
             {syncValue && (
               <span className="text-[11px] text-slate-500">
@@ -186,7 +179,7 @@ export function LoanDetailView({ loan, payments, accounts, onBack, onPay, onDele
 
       <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-6">
         <StatCard label="Outstanding" value={showMoney ? money(todaysOutstanding) : '••••'} icon={Landmark} accent="bg-rose-400/15 text-rose-200" tone="text-rose-300" sub={<span>{cleared}% cleared{accruedSinceLastPayment > 0.5 ? ` · +${money(accruedSinceLastPayment)} accrued today` : ''}</span>} />
-        <StatCard label="EMI" value={showMoney ? money(emi) : '••••'} icon={RefreshCw} accent="bg-cyan-300/15 text-cyan-200" sub={<span>{rate}% p.a.</span>} />
+        <StatCard label="EMI" value={showMoney ? money(emi) : '••••'} icon={RefreshCw} accent="bg-accent-300/15 text-accent-200" sub={<span>{rate}% p.a.</span>} />
         <StatCard label="EMIs paid" value={String(emisPaid)} icon={Target} accent="bg-violet-400/15 text-violet-200" sub={<span>of ~{loan.status === 'closed' ? emisPaid : emisPaid + monthsRemaining} total</span>} />
         <StatCard label="EMIs remaining" value={loan.status === 'closed' ? '0' : String(monthsRemaining)} icon={Target} accent="bg-emerald-400/15 text-emerald-200" sub={<span>{payoffDate ? `payoff ~${formatDate(payoffDate)}` : 'Paid off'}</span>} />
         <StatCard label="Interest paid" value={showMoney ? money(totalInterestPaid) : '••••'} icon={ArrowDownRight} accent="bg-amber-400/15 text-amber-200" tone="text-amber-300" sub={<span>so far</span>} />
@@ -203,10 +196,10 @@ export function LoanDetailView({ loan, payments, accounts, onBack, onPay, onDele
           </div>
           <div className="divide-y divide-white/5">
             {prepaymentEvents.map((p) => (
-              <div key={p.id} className="grid grid-cols-[1.2fr_1fr_1fr] items-center gap-3 px-5 py-3 text-sm">
+              <div key={p.id} className="grid grid-cols-1 items-center gap-1.5 px-5 py-3 text-sm sm:grid-cols-[1.2fr_1fr_1fr] sm:gap-3 sm:gap-y-0">
                 <div className="text-slate-300">{formatDate(p.payment_date)}<span className="ml-1 text-[11px] text-slate-500">{p.extra < Number(p.amount) - 0.01 ? '· on top of EMI' : '· standalone'}</span></div>
                 <div className="font-medium text-white">{showMoney ? `+${money(p.extra)}` : '••••'} extra</div>
-                <div className="text-right text-emerald-300">{showMoney ? money(p.interest_saved || 0) : '••••'} saved</div>
+                <div className="text-emerald-300 sm:text-right">{showMoney ? money(p.interest_saved || 0) : '••••'} saved</div>
               </div>
             ))}
           </div>
@@ -233,7 +226,7 @@ export function LoanDetailView({ loan, payments, accounts, onBack, onPay, onDele
                 return (
                   <div key={p.id} className="grid grid-cols-1 gap-2 px-5 py-4 sm:grid-cols-[1.4fr_.9fr_.6fr_.6fr_auto] sm:items-center sm:gap-4">
                     <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/[.05] text-cyan-200">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/[.05] text-accent-200">
                         {p.type === 'adjustment' ? <RefreshCw size={16} /> : <ArrowDownRight size={16} />}
                       </div>
                       <div className="min-w-0">
@@ -242,7 +235,7 @@ export function LoanDetailView({ loan, payments, accounts, onBack, onPay, onDele
                       </div>
                     </div>
                     <div className="text-xs text-slate-400">
-                      <span className="inline-block rounded-md bg-white/[.05] px-2 py-0.5 text-cyan-200">{typeLabel}</span>
+                      <span className="inline-block rounded-md bg-white/[.05] px-2 py-0.5 text-accent-200">{typeLabel}</span>
                     </div>
                     <div className="text-xs text-slate-500">paid {formatDate(p.payment_date)}</div>
                     <div className="text-sm font-semibold text-white sm:text-right">{showMoney ? money(p.amount) : '••••'}</div>
@@ -267,7 +260,7 @@ export function LoanDetailView({ loan, payments, accounts, onBack, onPay, onDele
             <div className="max-h-[28rem] overflow-y-auto border-t border-white/10">
               {Object.entries(emiCalendarByYear).map(([year, months]) => (
                 <div key={year}>
-                  <div className="sticky top-0 border-b border-white/5 bg-[#161d2c] px-5 py-2 text-xs font-semibold text-cyan-200/80">{year}</div>
+                  <div className="sticky top-0 border-b border-white/5 bg-[#161d2c] px-5 py-2 text-xs font-semibold text-accent-200/80">{year}</div>
                   <div className="grid grid-cols-2 gap-x-4 gap-y-1 px-5 py-3 sm:grid-cols-3">
                     {months.map((m) => (
                       <div key={m.date.toISOString()} className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm ${m.status === 'saved' ? 'text-slate-600' : 'text-slate-300'}`}>

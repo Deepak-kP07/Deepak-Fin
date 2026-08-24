@@ -1,9 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { ArrowDownRight, ArrowUpRight, Eye, EyeOff, Link2, Plus, ShieldCheck, Target } from 'lucide-react'
+import { ArrowDownRight, ArrowUpRight, Eye, EyeOff, Link2, Plus, ShieldCheck } from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
-import { StatCard } from '@/components/shared/StatCard'
 import { formatDate, money } from '@/lib/format'
 import { scholarshipDisplayStatus } from '@/lib/scholarships'
 import { ScholarshipDetailView } from '@/features/scholarships/ScholarshipDetailView'
@@ -39,24 +38,38 @@ export function ScholarshipsView({ data, onAdd, onEdit, onDelete, onPay, onRefre
 
   return (
     <div className="space-y-5">
-      <div className="flex items-end justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <div className="mb-2 text-xs uppercase tracking-widest text-cyan-200/70">Scholarship trail</div>
+          <div className="mb-2 text-xs uppercase tracking-widest text-accent-200/70">Scholarship trail</div>
           <h1 className="text-3xl font-semibold tracking-tight text-white">Scholarships &amp; fees</h1>
         </div>
         <div className="flex gap-2">
-          <button onClick={onAdd} className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 px-4 py-2.5 text-sm font-semibold text-[#07101c]"><Plus size={15} />Add scholarship</button>
+          <button onClick={onAdd} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-accent-300 to-blue-500 px-4 py-2.5 text-sm font-semibold text-[#07101c] sm:flex-none"><Plus size={15} />Add scholarship</button>
           <button onClick={onToggleMoney} className="rounded-xl border border-white/10 p-2.5 text-slate-400 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
             {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
           </button>
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <StatCard label="Received" value={showMoney ? money(totalReceived) : '••••'} icon={ArrowUpRight} accent="bg-emerald-400/15 text-emerald-200" sub={<span>{receivedScholarships.length} batch(es)</span>} />
-        <StatCard label="Paid to college" value={showMoney ? money(totalPaidCollege) : '••••'} icon={ArrowDownRight} accent="bg-cyan-400/15 text-cyan-200" sub={<span>{scholarship_payments.length} payment(s)</span>} />
-        <StatCard label="Pending to college" value={showMoney ? money(pendingToCollege) : '••••'} icon={Target} accent="bg-amber-400/15 text-amber-200" tone={pendingToCollege > 0 ? 'text-amber-300' : 'text-emerald-300'} sub={<span className={pendingToCollege > 0 ? 'text-amber-300' : 'text-emerald-300'}>{pendingToCollege > 0 ? 'Due to college' : 'All paid'}</span>} />
-      </div>
+      {scholarships.length > 0 && (
+        <div className="rounded-3xl border border-white/10 bg-white/[.035] p-6">
+          <div className="text-xs uppercase tracking-widest text-slate-500">Pending to college</div>
+          <div className={`mt-1 text-[clamp(2rem,6vw,3rem)] font-semibold leading-[1.1] tracking-[-0.01em] ${pendingToCollege > 0 ? 'text-amber-300' : 'text-emerald-300'}`}>{showMoney ? money(pendingToCollege) : '••••••'}</div>
+          <div className="mt-1 text-sm text-slate-500">{pendingToCollege > 0 ? 'Due to college' : 'All paid'}</div>
+          <div className="mt-5 grid grid-cols-2 gap-3">
+            <div className="rounded-2xl bg-white/[.04] p-3.5">
+              <div className="flex items-center gap-1.5 text-xs text-slate-400"><ArrowUpRight size={13} />Received</div>
+              <div className="mt-1 text-lg font-semibold text-emerald-300">{showMoney ? money(totalReceived) : '••••'}</div>
+              <div className="text-[11px] text-slate-500">{receivedScholarships.length} batch(es)</div>
+            </div>
+            <div className="rounded-2xl bg-white/[.04] p-3.5">
+              <div className="flex items-center gap-1.5 text-xs text-slate-400"><ArrowDownRight size={13} />Paid to college</div>
+              <div className="mt-1 text-lg font-semibold text-accent-300">{showMoney ? money(totalPaidCollege) : '••••'}</div>
+              <div className="text-[11px] text-slate-500">{scholarship_payments.length} payment(s)</div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {scholarships.length === 0 ? (
         <div className="rounded-2xl border border-white/10 bg-white/[.035]">
@@ -71,11 +84,11 @@ export function ScholarshipsView({ data, onAdd, onEdit, onDelete, onPay, onRefre
             const pending = Math.max(0, total - paid)
             const displayStatus = scholarshipDisplayStatus(s)
             return (
-              <div key={s.id} onClick={() => setSelectedId(s.id)} className="cursor-pointer rounded-2xl border border-white/10 bg-white/[.035] p-5 transition hover:border-cyan-300/30 hover:bg-white/[.05]">
+              <div key={s.id} onClick={() => setSelectedId(s.id)} className="cursor-pointer rounded-2xl border border-white/10 bg-white/[.035] p-5 transition hover:border-accent-300/30 hover:bg-white/[.05]">
                 <div className="flex items-center gap-2">
                   <div className="text-base font-semibold text-white">{s.name}</div>
-                  <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-widest ${displayStatus === 'paid' ? 'bg-emerald-400/15 text-emerald-200' : displayStatus === 'received' ? 'bg-cyan-400/15 text-cyan-200' : 'bg-slate-500/15 text-slate-300'}`}>{displayStatus}</span>
-                  {s.received_to_account_id && <span className="flex shrink-0 items-center gap-1 rounded-full bg-cyan-400/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-widest text-cyan-200"><Link2 size={9} />Linked</span>}
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-widest ${displayStatus === 'paid' ? 'bg-emerald-400/15 text-emerald-200' : displayStatus === 'received' ? 'bg-accent-400/15 text-accent-200' : 'bg-slate-500/15 text-slate-300'}`}>{displayStatus}</span>
+                  {s.received_to_account_id && <span className="flex shrink-0 items-center gap-1 rounded-full bg-accent-400/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-widest text-accent-200"><Link2 size={9} />Linked</span>}
                 </div>
                 <div className="mt-1 text-xs text-slate-500">{s.source || '—'} · {s.academic_year || '—'}</div>
                 <div className="mt-4 flex items-baseline justify-between">

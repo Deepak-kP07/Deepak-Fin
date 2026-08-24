@@ -13,7 +13,7 @@ export function RecurringManager({ open, onClose, rules, onAdd, onEdit, onToggle
           </div>
           <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-white/5"><X size={18} /></button>
         </div>
-        <button type="button" onClick={onAdd} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 py-3 text-sm font-semibold text-[#07101c]"><Plus size={15} />New recurring transaction</button>
+        <button type="button" onClick={onAdd} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-accent-300 to-blue-500 py-3 text-sm font-semibold text-[#07101c]"><Plus size={15} />New recurring transaction</button>
         <div className="mt-4 space-y-2">
           {rules.length === 0 ? (
             <div className="rounded-2xl border border-white/10 bg-white/[.02] py-8 text-center text-sm text-slate-500">No recurring rules yet.</div>

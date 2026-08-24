@@ -524,3 +524,36 @@ export const vaultItems = pgTable('vault_items', {
   check('vault_items_type_check', sql`${t.itemType} in ('bank_account','debit_card','credit_card')`),
   index('vault_items_user_idx').on(t.userId),
 ])
+
+// One row per subscribed browser/device (a user can have several) — the Web Push endpoint +
+// keys handed back by the browser's PushManager on subscribe. Written by the client's own
+// finance route (like every other table here); read only by the cron trigger route, via the
+// service-role client, to actually send a push.
+export const pushSubscriptions = pgTable('push_subscriptions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
+  endpoint: text('endpoint').notNull(),
+  p256dh: text('p256dh').notNull(),
+  auth: text('auth').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  unique('push_subscriptions_user_endpoint_key').on(t.userId, t.endpoint),
+  index('push_subscriptions_user_idx').on(t.userId),
+])
+
+// Dedup ledger for the cron trigger route — one row per (user, notification type, the specific
+// card/loan/budget/recurring-rule it's about, and the due date or cycle it's about). Checked
+// before sending and written after, so a card due again next cycle notifies again on its own
+// (a fresh periodKey), but the same cycle never double-sends even across multiple cron runs.
+export const notificationEvents = pgTable('notification_events', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
+  type: text('type').notNull(),
+  entityId: uuid('entity_id').notNull(),
+  periodKey: text('period_key').notNull(),
+  sentAt: timestamp('sent_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  check('notification_events_type_check', sql`${t.type} in ('card_due','loan_due','recurring_generated','budget_overspend')`),
+  unique('notification_events_dedup_key').on(t.userId, t.type, t.entityId, t.periodKey),
+  index('notification_events_user_idx').on(t.userId),
+])

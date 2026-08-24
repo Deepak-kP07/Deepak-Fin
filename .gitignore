@@ -32,6 +32,11 @@ node_modules/
 next-env.d.ts
 *.tsbuildinfo
 
+# Serwist regenerates the service worker bundle + sourcemap fresh on every `next build` from
+# app/sw.js — the source is committed, the build output isn't.
+/public/sw.js
+/public/sw.js.map
+
 # Production builds
 /build
 dist/

@@ -17,7 +17,7 @@ export function usePrompt() {
   const view = state && (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={() => close(null)}>
       <form onSubmit={(e) => { e.preventDefault(); close(value) }} onClick={(e) => e.stopPropagation()} className="w-full max-w-sm rounded-3xl border border-white/10 bg-[#141a28] p-6 shadow-2xl">
-        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-cyan-400/15 text-cyan-200"><Pencil size={18} /></div>
+        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-accent-400/15 text-accent-200"><Pencil size={18} /></div>
         <p className="mt-4 text-sm text-slate-200">{state.message}</p>
         <input
           autoFocus
@@ -27,11 +27,11 @@ export function usePrompt() {
           onChange={(e) => setValue(e.target.value)}
           placeholder={state.placeholder}
           onFocus={(e) => e.target.select()}
-          className="mt-3 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-2.5 text-white outline-none focus:border-cyan-300/50"
+          className="mt-3 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-2.5 text-white outline-none focus:border-accent-300/50"
         />
         <div className="mt-6 flex justify-end gap-2">
           <button type="button" onClick={() => close(null)} className="rounded-xl border border-white/10 px-4 py-2.5 text-sm text-slate-300 hover:bg-white/5">Cancel</button>
-          <button type="submit" className="rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 px-4 py-2.5 text-sm font-semibold text-[#07101c] hover:opacity-90">{state.confirmLabel}</button>
+          <button type="submit" className="rounded-xl bg-gradient-to-r from-accent-300 to-blue-500 px-4 py-2.5 text-sm font-semibold text-[#07101c] hover:opacity-90">{state.confirmLabel}</button>
         </div>
       </form>
     </div>

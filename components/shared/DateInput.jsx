@@ -27,7 +27,7 @@ export function DateInput({ value, onChange, className, placeholder }) {
   const pick = (d) => { onChange({ target: { value: isoOf(d) } }); setOpen(false) }
   const goToday = () => { onChange({ target: { value: todayISO() } }); setViewDate(new Date()); setOpen(false) }
   const clear = () => { onChange({ target: { value: '' } }); setOpen(false) }
-  const base = className || 'w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-cyan-300/50'
+  const base = className || 'w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-accent-300/50'
 
   return (
     <div ref={ref} className="relative">
@@ -52,13 +52,13 @@ export function DateInput({ value, onChange, className, placeholder }) {
               const isSelected = iso === value
               const isToday = iso === todayISO()
               return (
-                <button key={i} type="button" onClick={() => pick(d)} className={`h-8 rounded-lg text-xs transition ${isSelected ? 'bg-cyan-400 font-semibold text-[#07101c]' : isToday ? 'border border-cyan-300/40 text-cyan-200' : 'text-slate-300 hover:bg-white/10'}`}>{d}</button>
+                <button key={i} type="button" onClick={() => pick(d)} className={`h-8 rounded-lg text-xs transition ${isSelected ? 'bg-accent-400 font-semibold text-[#07101c]' : isToday ? 'border border-accent-300/40 text-accent-200' : 'text-slate-300 hover:bg-white/10'}`}>{d}</button>
               )
             })}
           </div>
           <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-2 text-xs">
             <button type="button" onClick={clear} className="font-medium text-slate-400 hover:text-white">Clear</button>
-            <button type="button" onClick={goToday} className="font-medium text-cyan-300 hover:text-cyan-200">Today</button>
+            <button type="button" onClick={goToday} className="font-medium text-accent-300 hover:text-accent-200">Today</button>
           </div>
         </div>
       )}

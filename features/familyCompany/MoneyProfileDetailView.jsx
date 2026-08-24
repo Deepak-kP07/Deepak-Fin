@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { ChevronRight, Download, Link2, Lock, Pencil, Trash2, Unlock, Upload, Users, Wallet } from 'lucide-react'
-import { StatCard } from '@/components/shared/StatCard'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { MonthCursor } from '@/components/shared/MonthCursor'
 import { DismissibleBanner } from '@/components/shared/DismissibleBanner'
@@ -35,7 +34,7 @@ export function MoneyProfileDetailView({
     <div className="space-y-5 pb-8">
       <button onClick={onBack} className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-white"><ChevronRight size={14} className="rotate-180" /> Back to Family / Company</button>
 
-      <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
         <div className="flex items-center gap-3">
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-400/15 text-violet-200">
             <Users size={22} />
@@ -43,14 +42,14 @@ export function MoneyProfileDetailView({
           <div>
             <div className="flex items-center gap-2">
               <div className="text-lg font-semibold text-white">{profile.name}</div>
-              {linkedAccount && <span className="flex items-center gap-1 rounded-full bg-cyan-400/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-cyan-200"><Link2 size={10} />Linked</span>}
+              {linkedAccount && <span className="flex items-center gap-1 rounded-full bg-accent-400/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-accent-200"><Link2 size={10} />Linked</span>}
               {isClosed && <span className="rounded-full bg-slate-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-slate-300">Closed</span>}
             </div>
             <div className="text-xs capitalize text-slate-500">{profile.profile_type} · {entries.length} entr{entries.length === 1 ? 'y' : 'ies'}</div>
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <button onClick={() => onAddEntry(profile.id)} disabled={isClosed} title={isClosed ? 'Reactivate this profile to add entries' : undefined} className="rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 px-4 py-2.5 text-sm font-semibold text-[#07101c] disabled:opacity-40">+ Add entry</button>
+        <div className="flex w-full min-w-0 flex-wrap gap-2 sm:w-auto">
+          <button onClick={() => onAddEntry(profile.id)} disabled={isClosed} title={isClosed ? 'Reactivate this profile to add entries' : undefined} className="rounded-xl bg-gradient-to-r from-accent-300 to-blue-500 px-4 py-2.5 text-sm font-semibold text-[#07101c] disabled:opacity-40">+ Add entry</button>
           <button onClick={() => onBulkImport(profile)} disabled={isClosed} title={isClosed ? 'Reactivate this profile to add entries' : undefined} className="flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-white/5 disabled:opacity-40"><Download size={14} />Bulk import</button>
           <button
             onClick={() => downloadFamilyCompanyExport(
@@ -80,11 +79,24 @@ export function MoneyProfileDetailView({
         </DismissibleBanner>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Current balance" value={money(balance)} icon={Wallet} accent="bg-violet-400/15 text-violet-200" sub={<span>Opening {money(opening)}</span>} />
-        <StatCard label="Total income" value={money(income)} icon={Wallet} accent="bg-emerald-400/15 text-emerald-200" tone="text-emerald-300" />
-        <StatCard label="Total capital" value={money(capital)} icon={Wallet} accent="bg-cyan-400/15 text-cyan-200" tone="text-cyan-300" />
-        <StatCard label="Total expense" value={money(expense)} icon={Wallet} accent="bg-rose-400/15 text-rose-200" tone="text-rose-300" />
+      <div className="rounded-3xl border border-white/10 bg-white/[.035] p-6">
+        <div className="text-xs uppercase tracking-widest text-slate-500">Current balance</div>
+        <div className="mt-1 text-[clamp(2rem,6vw,3rem)] font-semibold leading-[1.1] tracking-[-0.01em] text-white">{money(balance)}</div>
+        <div className="mt-1 text-sm text-slate-500">Opening {money(opening)}</div>
+        <div className="mt-5 grid grid-cols-3 gap-3">
+          <div className="rounded-2xl bg-white/[.04] p-3.5">
+            <div className="text-xs text-slate-400">Total income</div>
+            <div className="mt-1 text-lg font-semibold text-emerald-300">{money(income)}</div>
+          </div>
+          <div className="rounded-2xl bg-white/[.04] p-3.5">
+            <div className="text-xs text-slate-400">Total capital</div>
+            <div className="mt-1 text-lg font-semibold text-accent-300">{money(capital)}</div>
+          </div>
+          <div className="rounded-2xl bg-white/[.04] p-3.5">
+            <div className="text-xs text-slate-400">Total expense</div>
+            <div className="mt-1 text-lg font-semibold text-rose-300">{money(expense)}</div>
+          </div>
+        </div>
       </div>
 
       <div className="rounded-2xl border border-white/10 bg-white/[.035]">

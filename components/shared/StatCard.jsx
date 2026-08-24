@@ -1,4 +1,4 @@
-export function StatCard({ label, value, sub, icon: Icon, accent = 'bg-cyan-300/10 text-cyan-200', tone = 'text-emerald-300' }) {
+export function StatCard({ label, value, sub, icon: Icon, accent = 'bg-accent-300/10 text-accent-200', tone = 'text-emerald-300' }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-white/[.035] p-3.5">
       <div className="flex items-center justify-between">

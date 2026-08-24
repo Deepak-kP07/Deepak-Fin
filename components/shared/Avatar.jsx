@@ -20,7 +20,7 @@ export function Avatar({ src, name, email, size = 36, rounded = 'rounded-xl', cl
   }
   return (
     <div
-      className={`flex shrink-0 items-center justify-center bg-gradient-to-br from-cyan-300 to-blue-600 font-semibold text-[#07101c] ${rounded} ${className}`}
+      className={`flex shrink-0 items-center justify-center bg-gradient-to-br from-accent-300 to-blue-600 font-semibold text-[#07101c] ${rounded} ${className}`}
       style={{ height: size, width: size, fontSize: Math.round(size * 0.4) }}
     >
       {initials}

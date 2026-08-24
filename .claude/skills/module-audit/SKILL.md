@@ -1,6 +1,6 @@
 ---
 name: module-audit
-description: Full-app audit of the Deepak-Fin finance modules (Dashboard, Transactions, Accounts, Investments, Loans, Scholarships, Lend/Borrow, Zopkit, Credit Cards, Bucket List, Money Rules) — checks cross-module data flow, formatting/UI consistency, duplicate code, API route auth/validation, security (RLS, secrets, input validation), and feature completeness. Use when the user asks to audit the app, check module consistency, find duplicate code, review API routes, run a security check, or verify feature completeness across modules.
+description: Full-app audit of the Personal Finance app's modules (Dashboard, Transactions, Accounts, Investments, Loans, Scholarships, Lend/Borrow, Zopkit, Credit Cards, Bucket List, Money Rules) — checks cross-module data flow, formatting/UI consistency, duplicate code, API route auth/validation, security (RLS, secrets, input validation), and feature completeness. Use when the user asks to audit the app, check module consistency, find duplicate code, review API routes, run a security check, or verify feature completeness across modules.
 ---
 
 # Module Audit

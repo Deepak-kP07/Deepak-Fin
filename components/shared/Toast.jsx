@@ -12,9 +12,9 @@ export function useToast() {
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), tone === 'warning' ? 5000 : 3200)
   }
   const view = (
-    <div className="pointer-events-none fixed right-4 top-4 z-[60] flex flex-col gap-2">
+    <div className="pointer-events-none fixed right-4 top-[calc(env(safe-area-inset-top)+7rem)] z-[60] flex flex-col items-end gap-2 sm:top-4">
       {toasts.map((t) => (
-        <div key={t.id} className={`pointer-events-auto rounded-xl border px-4 py-3 text-sm shadow-lg backdrop-blur-xl ${t.tone === 'error' ? 'border-rose-400/30 bg-rose-500/10 text-rose-100' : t.tone === 'warning' ? 'border-amber-300/30 bg-amber-400/10 text-amber-100' : t.tone === 'info' ? 'border-cyan-300/30 bg-cyan-400/10 text-cyan-100' : 'border-emerald-400/30 bg-emerald-500/10 text-emerald-100'}`}>{t.message}</div>
+        <div key={t.id} className={`pointer-events-auto rounded-xl border px-4 py-3 text-sm shadow-lg backdrop-blur-xl ${t.tone === 'error' ? 'border-rose-400/30 bg-rose-500/10 text-rose-100' : t.tone === 'warning' ? 'border-amber-300/30 bg-amber-400/10 text-amber-100' : t.tone === 'info' ? 'border-accent-300/30 bg-accent-400/10 text-accent-100' : 'border-emerald-400/30 bg-emerald-500/10 text-emerald-100'}`}>{t.message}</div>
       ))}
     </div>
   )

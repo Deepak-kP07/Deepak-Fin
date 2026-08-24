@@ -35,11 +35,13 @@ export function FamilyCompanyView({
     )
   }
 
+  const totalBalance = profiles.reduce((s, p) => s + profileTotals(p, entries.filter((e) => e.profile_id === p.id)).balance, 0)
+
   return (
     <div className="space-y-5">
-      <div className="flex items-end justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <div className="mb-2 text-xs uppercase tracking-widest text-cyan-200/70">Managed on their behalf</div>
+          <div className="mb-2 text-xs uppercase tracking-widest text-accent-200/70">Managed on their behalf</div>
           <h1 className="text-3xl font-semibold tracking-tight text-white">Family / Company</h1>
         </div>
         <div className="flex gap-2">
@@ -47,11 +49,19 @@ export function FamilyCompanyView({
             onClick={() => downloadFamilyCompanyExport({ profiles, entries, categories }, 'family-company', new Date().toISOString().slice(0, 10))}
             disabled={profiles.length === 0}
             title="Export every profile's entries as one CSV"
-            className="flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-white/5 disabled:opacity-50"
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-white/5 disabled:opacity-50 sm:flex-none"
           ><Upload size={14} />Export</button>
-          <button onClick={onAddProfile} className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-300 to-blue-500 px-4 py-2.5 text-sm font-semibold text-[#07101c]"><Plus size={15} />New profile</button>
+          <button onClick={onAddProfile} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-accent-300 to-blue-500 px-4 py-2.5 text-sm font-semibold text-[#07101c] sm:flex-none"><Plus size={15} />New profile</button>
         </div>
       </div>
+
+      {profiles.length > 0 && (
+        <div className="rounded-3xl border border-white/10 bg-white/[.035] p-6">
+          <div className="text-xs uppercase tracking-widest text-slate-500">Total held for others</div>
+          <div className="mt-1 text-[clamp(2rem,6vw,3rem)] font-semibold leading-[1.1] tracking-[-0.01em] text-white">{money(totalBalance)}</div>
+          <div className="mt-1 text-sm text-slate-500">{profiles.length} profile{profiles.length === 1 ? '' : 's'}</div>
+        </div>
+      )}
 
       {profiles.length === 0 ? (
         <div className="rounded-2xl border border-white/10 bg-white/[.035]">
@@ -64,7 +74,7 @@ export function FamilyCompanyView({
             const { income, expense, balance } = profileTotals(p, pEntries)
             const isClosed = p.status === 'closed'
             return (
-              <div key={p.id} onClick={() => setSelectedProfileId(p.id)} className={`cursor-pointer rounded-2xl border p-5 transition ${isClosed ? 'border-white/5 bg-white/[.02] hover:bg-white/[.035]' : 'border-white/10 bg-white/[.035] hover:border-cyan-300/30 hover:bg-white/[.05]'}`}>
+              <div key={p.id} onClick={() => setSelectedProfileId(p.id)} className={`cursor-pointer rounded-2xl border p-5 transition ${isClosed ? 'border-white/5 bg-white/[.02] hover:bg-white/[.035]' : 'border-white/10 bg-white/[.035] hover:border-accent-300/30 hover:bg-white/[.05]'}`}>
                 <div className="flex items-center gap-3">
                   <div className={`flex h-11 w-11 items-center justify-center rounded-2xl ${isClosed ? 'bg-slate-500/15 text-slate-400' : 'bg-violet-400/15 text-violet-200'}`}>
                     <Users size={18} />
@@ -72,7 +82,7 @@ export function FamilyCompanyView({
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5">
                       <div className="truncate text-sm font-semibold text-white">{p.name}</div>
-                      {p.linked_account_id && <span className="flex shrink-0 items-center gap-1 rounded-full bg-cyan-400/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-widest text-cyan-200"><Link2 size={9} />Linked</span>}
+                      {p.linked_account_id && <span className="flex shrink-0 items-center gap-1 rounded-full bg-accent-400/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-widest text-accent-200"><Link2 size={9} />Linked</span>}
                       {isClosed && <span className="shrink-0 rounded-full bg-slate-500/20 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-widest text-slate-300">Closed</span>}
                     </div>
                     <div className="text-xs capitalize text-slate-500">{p.profile_type} · {pEntries.length > 0 ? `${pEntries.length} entr${pEntries.length === 1 ? 'y' : 'ies'}` : 'empty'}</div>
