@@ -325,6 +325,12 @@ export const profiles = pgTable('profiles', {
   avatarUrl: text('avatar_url'),
   theme: text('theme').notNull().default('dark'),
   currency: text('currency').notNull().default('INR'),
+  // Each user's own Kite Connect app registration (developers.kite.trade) — not a shared env
+  // var, since Zerodha's free/personal app tier only lets the registering account authenticate
+  // through it. kiteApiKey isn't secret (Zerodha puts it straight in the login redirect URL);
+  // kiteApiSecretEncrypted is, so it's AES-256-GCM encrypted the same way as vault_items.
+  kiteApiKey: text('kite_api_key'),
+  kiteApiSecretEncrypted: text('kite_api_secret_encrypted'),
   kiteAccessToken: text('kite_access_token'),
   kiteAccessTokenAt: timestamp('kite_access_token_at', { withTimezone: true }),
   // Set by the sync services themselves on every attempt (regardless of whether it produced

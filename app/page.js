@@ -1659,6 +1659,29 @@ function Shell({ user, onLogout }) {
       toast.push('Could not save', 'error')
     }
   }
+  // Each user's own Kite Connect app (Settings > Kite Connect) — /kite/credentials only returns
+  // the non-secret key back, so the profile slice is patched directly rather than replaced
+  // wholesale the way onSaveProfile does with its full-row PATCH response.
+  const saveKiteCredentials = async (payload) => {
+    const response = await fetch('/api/kite/credentials', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+    if (response.ok) {
+      const { kite_api_key } = await response.json()
+      setData((d) => ({ ...d, profile: { ...d.profile, kite_api_key } }))
+      toast.push('Kite app saved')
+    } else {
+      const err = await response.json().catch(() => ({}))
+      toast.push(err.error || 'Could not save Kite app', 'error')
+    }
+  }
+  const removeKiteCredentials = async () => {
+    const response = await fetch('/api/kite/credentials', { method: 'DELETE' })
+    if (response.ok) {
+      setData((d) => ({ ...d, profile: { ...d.profile, kite_api_key: null, kite_connected: false, kite_broken: false } }))
+      toast.push('Kite app disconnected')
+    } else {
+      toast.push('Could not disconnect', 'error')
+    }
+  }
   useEffect(() => { if (data.profile?.theme) setTheme(data.profile.theme) }, [data.profile])
   useEffect(() => { if (data.profile?.accent_color) applyAccentColor(data.profile.accent_color) }, [data.profile?.accent_color])
   // Every non-mandatory module is opt-in — if the one behind the current view gets turned off
@@ -1780,6 +1803,8 @@ function Shell({ user, onLogout }) {
     const response = await fetch(`/api/finance/money_rules/${r.id}`, { method: 'DELETE' })
     if (response.ok) { toast.push('Rule deleted'); await refresh() }
   }
+  // /api/kite/login itself falls back to the app owner's Kite app if this user hasn't set up
+  // their own (Settings > Kite Connect), so there's always something to try here.
   const connectKite = () => { window.location.href = '/api/kite/login' }
   const linkPortfolioKite = async (p) => {
     setKiteSyncBusy(true)
@@ -1964,6 +1989,7 @@ function Shell({ user, onLogout }) {
                 <SettingsShell
                   activeSection={settingsSection} onSectionChange={setSettingsSection}
                   data={data} user={user} theme={theme} onThemeChange={onThemeChange} onSaveProfile={onSaveProfile} toast={toast}
+                  onSaveKiteCredentials={saveKiteCredentials} onRemoveKiteCredentials={removeKiteCredentials}
                   accentColor={data.profile?.accent_color} onAccentChange={onAccentChange}
                   onAddCategory={(defaultType) => openCatForm(null, defaultType)} onEditCategory={openCatForm} onDeleteCategory={deleteCategory}
                   onReorderCategory={reorderCategory} onToggleCategoryModule={toggleCategoryModule}

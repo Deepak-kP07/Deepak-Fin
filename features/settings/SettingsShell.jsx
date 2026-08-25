@@ -1,6 +1,6 @@
 'use client'
 
-import { Bell, KeyRound, LayoutDashboard, LayoutGrid, LogOut, Palette, ShieldAlert, Star, Tag, Landmark as LandmarkIcon, User } from 'lucide-react'
+import { Bell, KeyRound, LayoutDashboard, LayoutGrid, Link2, LogOut, Palette, ShieldAlert, Star, Tag, Landmark as LandmarkIcon, User } from 'lucide-react'
 import { SettingsProfile } from './SettingsProfile'
 import { SettingsAppearance } from './SettingsAppearance'
 import { SettingsGuardrails } from './SettingsGuardrails'
@@ -11,6 +11,7 @@ import { SettingsCategories } from './SettingsCategories'
 import { SettingsAccounts } from './SettingsAccounts'
 import { SettingsVault } from './SettingsVault'
 import { SettingsMoneyRules } from './SettingsMoneyRules'
+import { SettingsKite } from './SettingsKite'
 
 const SECTIONS = [
   { key: 'profile', label: 'Profile', icon: User, Component: SettingsProfile },
@@ -23,6 +24,7 @@ const SECTIONS = [
   { key: 'accounts', label: 'Accounts', icon: LandmarkIcon, Component: SettingsAccounts },
   { key: 'vault', label: 'Vault', icon: KeyRound, Component: SettingsVault },
   { key: 'money_rules', label: 'Money rules', icon: Star, Component: SettingsMoneyRules },
+  { key: 'kite', label: 'Kite Connect', icon: Link2, Component: SettingsKite },
 ]
 
 export function SettingsShell({ activeSection, onSectionChange, onLogout, ...rest }) {

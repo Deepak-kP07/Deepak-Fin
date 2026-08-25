@@ -11,10 +11,26 @@ import { applyLendRepayment, reverseLendRepayment } from '@/lib/server/services/
 import { addInterval, generateDueRecurring } from '@/lib/server/services/recurring'
 import { syncProfileFromAuth } from '@/lib/server/services/profile'
 import { syncPortfolioFromKite, syncMutualFundsFromKite, syncKiteOrders, isKiteTokenFresh } from '@/lib/server/services/kiteSync'
+import { encryptVaultPayload, decryptVaultPayload } from '@/lib/server/vaultCrypto'
 import { closeStaleBudgetMonths } from '@/lib/server/services/budgets'
 import { randomUUID } from '@/lib/server/randomUUID'
 import { listMoneyProfiles, listMoneyProfileEntries } from '@/lib/server/moneyProfileCrud'
 import { listLendBorrow, listLendRepayments } from '@/lib/server/lendBorrowCrud'
+
+// Shared by /kite/login and /kite/callback — both are full-page browser navigations (Zerodha's
+// redirect, or window.location from the app), so they render a small standalone page rather than
+// JSON.
+function kitePageHtml(title, bodyHtml) {
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Kite login</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{background:#080b12;color:#e2e8f0;font-family:system-ui;padding:40px;text-align:center;max-width:640px;margin:0 auto}code{background:#1e293b;padding:6px 10px;border-radius:6px;color:#67e8f9;word-break:break-all}h1{margin-bottom:4px}p{color:#94a3b8;font-size:14px;line-height:1.6}a{display:inline-block;margin-top:24px;background:linear-gradient(90deg,#67e8f9,#3b82f6);color:#07101c;padding:12px 24px;border-radius:12px;font-weight:600;text-decoration:none}</style></head><body><h1>${title}</h1><p>${bodyHtml}</p><a href="/">Back to Personal Finance</a></body></html>`
+}
+
+// A bearer-like live token and an encrypted secret respectively — neither has any reason to ever
+// reach the browser, unlike kite_api_key (Zerodha puts that one straight in login redirect URLs).
+function stripKiteSecrets(row) {
+  if (!row) return row
+  const { kite_access_token, kite_api_secret_encrypted, ...rest } = row
+  return rest
+}
 
 export async function OPTIONS() {
   return handleCORS(new NextResponse(null, { status: 200 }))
@@ -166,7 +182,7 @@ async function handleRoute(request, { params }) {
       // checks whether it's present and still fresh, which is exactly what kite_connected is.
       let profileSafe = profile
       if (profile) {
-        const { kite_access_token, ...rest } = profile
+        const { kite_access_token, kite_api_secret_encrypted, ...rest } = profile
         // kite_connected only proves a token exists and is recent; kite_broken is the real
         // "did the last actual API call work" signal, set by the sync services themselves.
         profileSafe = { ...rest, kite_connected: !!kiteTokenFresh, kite_broken: !!profile.kite_last_error }
@@ -182,11 +198,12 @@ async function handleRoute(request, { params }) {
       const user = await currentUser(supabase)
       if (!user) return cors(NextResponse.json({ error: 'Not authenticated' }, { status: 401 }))
       const { symbols = [] } = await request.json()
-      const kiteKey = process.env.KITE_API_KEY
-      let kiteToken = process.env.KITE_ACCESS_TOKEN
-      let kiteSource = 'env'
-      const { data: profile } = await supabase.from('profiles').select('kite_access_token,kite_access_token_at').eq('id', user.id).maybeSingle()
-      if (isKiteTokenFresh(profile?.kite_access_token, profile?.kite_access_token_at)) { kiteToken = profile.kite_access_token; kiteSource = 'user' }
+      const { data: profile } = await supabase.from('profiles').select('kite_access_token,kite_access_token_at,kite_api_key').eq('id', user.id).maybeSingle()
+      // Falls back to the app owner's own Kite app (KITE_API_KEY) when this user hasn't set up
+      // their own — see /kite/login for the same fallback on the OAuth side. A saved personal
+      // key always takes precedence once set.
+      const kiteKey = profile?.kite_api_key || process.env.KITE_API_KEY
+      const kiteToken = isKiteTokenFresh(profile?.kite_access_token, profile?.kite_access_token_at) ? profile.kite_access_token : null
       const out = {}
       let usedKite = false
       if (kiteKey && kiteToken && symbols.length > 0) {
@@ -219,13 +236,26 @@ async function handleRoute(request, { params }) {
         if (!out[s.symbol]) continue
         await supabase.from('holdings').update({ current_price: out[s.symbol].price, last_price_updated_at: nowIso }).eq('user_id', user.id).eq('symbol', s.symbol).eq('exchange', s.exchange)
       }
-      return cors(NextResponse.json({ prices: out, updated_at: nowIso, kite_active: usedKite, kite_source: usedKite ? kiteSource : null }))
+      return cors(NextResponse.json({ prices: out, updated_at: nowIso, kite_active: usedKite, kite_source: usedKite ? 'user' : null }))
     }
 
     // ---- KITE OAuth: login redirect ----
     if (route === '/kite/login' && method === 'GET') {
-      const kiteKey = process.env.KITE_API_KEY
-      if (!kiteKey) return cors(NextResponse.json({ error: 'KITE_API_KEY not set' }, { status: 400 }))
+      const user = await currentUser(supabase)
+      const { data: loginProfile } = user ? await supabase.from('profiles').select('kite_api_key').eq('id', user.id).maybeSingle() : { data: null }
+      // Defaults to the app owner's own Kite app (KITE_API_KEY in .env) so nobody has to set up
+      // their own before their very first connect — Zerodha's own login page still asks for
+      // *their* username/password, so the resulting access_token comes back scoped to whoever
+      // actually logs in, not to the app owner. Settings > Kite Connect lets anyone save their
+      // own key instead, which then always wins over this default from that point on.
+      const kiteKey = loginProfile?.kite_api_key || process.env.KITE_API_KEY
+      if (!user || !kiteKey) {
+        const html = kitePageHtml(
+          !user ? '⚠️ Sign in first' : '⚠️ Kite isn’t set up',
+          !user ? 'Please sign in to Personal Finance, then click <b>Connect Kite</b> from Investments and try again.' : 'No Kite Connect app is configured yet. Add one in <b>Settings &gt; Kite Connect</b>, or ask the app owner to set KITE_API_KEY.'
+        )
+        return cors(new NextResponse(html, { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } }))
+      }
       return NextResponse.redirect(`https://kite.zerodha.com/connect/login?api_key=${kiteKey}&v=3`, 302)
     }
 
@@ -234,10 +264,17 @@ async function handleRoute(request, { params }) {
       const url = new URL(request.url)
       const requestToken = url.searchParams.get('request_token')
       const status = url.searchParams.get('status')
-      const kiteKey = process.env.KITE_API_KEY, kiteSecret = process.env.KITE_API_SECRET
       let accessToken = null, exchangeError = null, user_id = null
       const user = await currentUser(supabase)
       user_id = user?.id
+      let kiteKey = null, kiteSecret = null
+      if (user_id) {
+        const { data: credsProfile } = await supabase.from('profiles').select('kite_api_key,kite_api_secret_encrypted').eq('id', user_id).maybeSingle()
+        // Same default-to-owner's-app fallback as /kite/login — must match whichever key/secret
+        // pair actually initiated this login there, or the checksum below won't verify.
+        kiteKey = credsProfile?.kite_api_key || process.env.KITE_API_KEY || null
+        kiteSecret = (credsProfile?.kite_api_secret_encrypted ? decryptVaultPayload(credsProfile.kite_api_secret_encrypted)?.secret : null) || process.env.KITE_API_SECRET || null
+      }
       if (requestToken && kiteKey && kiteSecret) {
         try {
           const checksum = crypto.createHash('sha256').update(kiteKey + requestToken + kiteSecret).digest('hex')
@@ -268,11 +305,40 @@ async function handleRoute(request, { params }) {
         } catch (e) { exchangeError = String(e) }
       }
       const ok = !!accessToken
-      const html = `<!doctype html><html><head><meta charset="utf-8"><title>Kite login</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{background:#080b12;color:#e2e8f0;font-family:system-ui;padding:40px;text-align:center;max-width:640px;margin:0 auto}code{background:#1e293b;padding:6px 10px;border-radius:6px;color:#67e8f9;word-break:break-all}h1{margin-bottom:4px}p{color:#94a3b8;font-size:14px;line-height:1.6}a{display:inline-block;margin-top:24px;background:linear-gradient(90deg,#67e8f9,#3b82f6);color:#07101c;padding:12px 24px;border-radius:12px;font-weight:600;text-decoration:none}</style></head><body><h1>${ok ? '✅ Kite connected' : status === 'success' && !user_id ? '⚠️ Sign in first' : '⚠️ Kite connection failed'}</h1>${ok ? `<p>Live NSE/BSE prices are now active for your account. You&#39;ll need to reconnect tomorrow after 6 AM IST when Zerodha rotates the token.</p>` : !user_id ? `<p>Please sign in to Personal Finance, then click <b>Connect Kite</b> from Investments and try again.</p>` : `<p>${exchangeError ? 'Kite said: <code>' + exchangeError.slice(0, 300) + '</code>' : 'No request_token received.'}</p>`}<a href="/">Back to Personal Finance</a></body></html>`
+      const notConfigured = !!user_id && (!kiteKey || !kiteSecret)
+      const title = ok ? '✅ Kite connected' : status === 'success' && !user_id ? '⚠️ Sign in first' : notConfigured ? '⚠️ Kite isn’t set up' : '⚠️ Kite connection failed'
+      const body = ok
+        ? `Live NSE/BSE prices are now active for your account. You&#39;ll need to reconnect tomorrow after 6 AM IST when Zerodha rotates the token.`
+        : !user_id
+        ? `Please sign in to Personal Finance, then click <b>Connect Kite</b> from Investments and try again.`
+        : notConfigured
+        ? `No Kite Connect app is configured yet. Add one in <b>Settings &gt; Kite Connect</b>, or ask the app owner to set KITE_API_KEY/KITE_API_SECRET.`
+        : `${exchangeError ? 'Kite said: <code>' + exchangeError.slice(0, 300) + '</code>' : 'No request_token received.'}`
+      const html = kitePageHtml(title, body)
       return applyCookies(new NextResponse(html, { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } }), cookiesToSet)
     }
     if (route === '/kite/postback' && (method === 'POST' || method === 'GET')) {
       try { const body = method === 'POST' ? await request.json().catch(() => null) : null; console.log('[kite/postback]', body) } catch {}
+      return cors(NextResponse.json({ ok: true }))
+    }
+
+    // ---- KITE app credentials: each user's own Kite Connect app (Settings > Kite Connect) ----
+    if (route === '/kite/credentials' && method === 'POST') {
+      const user = await currentUser(supabase)
+      if (!user) return cors(NextResponse.json({ error: 'Not authenticated' }, { status: 401 }))
+      const body = await request.json()
+      const apiKey = String(body.api_key || '').trim()
+      const apiSecret = String(body.api_secret || '').trim()
+      if (!apiKey || !apiSecret) return cors(NextResponse.json({ error: 'Both API key and API secret are required.' }, { status: 400 }))
+      await supabase.from('profiles').update({ kite_api_key: apiKey, kite_api_secret_encrypted: encryptVaultPayload({ secret: apiSecret }) }).eq('id', user.id)
+      return cors(NextResponse.json({ ok: true, kite_api_key: apiKey }))
+    }
+    if (route === '/kite/credentials' && method === 'DELETE') {
+      const user = await currentUser(supabase)
+      if (!user) return cors(NextResponse.json({ error: 'Not authenticated' }, { status: 401 }))
+      // A full disconnect — an access token is meaningless once the key/secret pair that issued
+      // it is gone, so it's cleared alongside rather than left behind as an orphaned row.
+      await supabase.from('profiles').update({ kite_api_key: null, kite_api_secret_encrypted: null, kite_access_token: null, kite_access_token_at: null, kite_last_error: null }).eq('id', user.id)
       return cors(NextResponse.json({ ok: true }))
     }
 
@@ -409,19 +475,19 @@ async function handleRoute(request, { params }) {
         const { data: row } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle()
         if (!row) {
           const { data: created } = await supabase.from('profiles').insert({ id: user.id, full_name: user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')?.[0] || '', avatar_url: user.user_metadata?.avatar_url || user.user_metadata?.picture || null }).select().single()
-          return cors(NextResponse.json(created))
+          return cors(NextResponse.json(stripKiteSecrets(created)))
         }
-        return cors(NextResponse.json(row))
+        return cors(NextResponse.json(stripKiteSecrets(row)))
       }
       const body = await request.json()
       const payload = pickFields('profiles', body)
       const { data: existing } = await supabase.from('profiles').select('id').eq('id', user.id).maybeSingle()
       if (!existing) {
         const { data: created } = await supabase.from('profiles').insert({ id: user.id, ...payload }).select().single()
-        return cors(NextResponse.json(created))
+        return cors(NextResponse.json(stripKiteSecrets(created)))
       }
       const { data: updated } = await supabase.from('profiles').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', user.id).select().maybeSingle()
-      return cors(NextResponse.json(updated))
+      return cors(NextResponse.json(stripKiteSecrets(updated)))
     }
 
     // ---- PORTFOLIO: add_funds / withdraw_funds now live at
