@@ -16,6 +16,7 @@ import { closeStaleBudgetMonths } from '@/lib/server/services/budgets'
 import { randomUUID } from '@/lib/server/randomUUID'
 import { listMoneyProfiles, listMoneyProfileEntries } from '@/lib/server/moneyProfileCrud'
 import { listLendBorrow, listLendRepayments } from '@/lib/server/lendBorrowCrud'
+import { sendWelcomeEmail } from '@/lib/email'
 
 // Shared by /kite/login and /kite/callback — both are full-page browser navigations (Zerodha's
 // redirect, or window.location from the app), so they render a small standalone page rather than
@@ -53,6 +54,10 @@ async function handleRoute(request, { params }) {
         options: { data: { full_name: body.name || '' } },
       })
       if (error) return cors(NextResponse.json({ message: error.message }, { status: error.status || 400 }))
+      // Best-effort, same as every other non-critical side effect in this app (push
+      // notifications, Kite syncs) — signUp() only ever succeeds once per email, so this never
+      // re-sends on a later login without needing any "already welcomed" bookkeeping.
+      if (data.user?.email) sendWelcomeEmail({ to: data.user.email, name: body.name }).catch(() => {})
       return cors(NextResponse.json({ user: data.user, access_token: data.session?.access_token || null }))
     }
     if (route === '/auth/login' && method === 'POST') {
@@ -83,13 +88,34 @@ async function handleRoute(request, { params }) {
       const code = url.searchParams.get('code')
       const redirectUrl = new URL('/', url.origin)
       if (code) {
-        const { error } = await supabase.auth.exchangeCodeForSession(code)
+        const { data, error } = await supabase.auth.exchangeCodeForSession(code)
         if (error) redirectUrl.searchParams.set('auth_error', error.message)
+        // Google sign-in has no separate "signup" step to hook a welcome email into — this
+        // callback fires on every login. created_at vs last_sign_in_at within a few seconds of
+        // each other is the closest signal Supabase gives for "this is genuinely their first
+        // sign-in", so that's what gates it instead of a new DB column just to track this.
+        const user = data?.user
+        if (user?.email && user.created_at && user.last_sign_in_at) {
+          const isFirstSignIn = Math.abs(new Date(user.last_sign_in_at) - new Date(user.created_at)) < 15000
+          if (isFirstSignIn) sendWelcomeEmail({ to: user.email, name: user.user_metadata?.full_name }).catch(() => {})
+        }
       } else {
         const oauthError = url.searchParams.get('error_description') || url.searchParams.get('error')
         if (oauthError) redirectUrl.searchParams.set('auth_error', oauthError)
       }
       return applyCookies(NextResponse.redirect(redirectUrl), cookiesToSet)
+    }
+    // Google sign-in via client-side Google Identity Services + signInWithIdToken (see
+    // AuthScreen.jsx) never hits /auth/oauth_callback above, so it needs its own hook for the
+    // same "first sign-in" welcome email. Reads the email/first-sign-in signal from the caller's
+    // own session rather than the request body, so this can't be used to spam an arbitrary address.
+    if (route === '/auth/google_welcome' && method === 'POST') {
+      const user = await currentUser(supabase)
+      if (user?.email && user.created_at && user.last_sign_in_at) {
+        const isFirstSignIn = Math.abs(new Date(user.last_sign_in_at) - new Date(user.created_at)) < 15000
+        if (isFirstSignIn) sendWelcomeEmail({ to: user.email, name: user.user_metadata?.full_name }).catch(() => {})
+      }
+      return cors(NextResponse.json({ ok: true }))
     }
 
     // ---- FINANCE SUMMARY ----

@@ -1,12 +1,34 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import Script from 'next/script'
 import { MotionConfig, motion, useMotionValue, useTransform } from 'framer-motion'
 import { createClient } from '@/lib/supabase/browser'
 import {
   ArrowLeft, Banknote, ChevronRight, CreditCard, Eye, EyeOff, Landmark, LayoutDashboard,
   LineChart, Repeat, ShieldCheck, Sparkle, Wifi,
 } from 'lucide-react'
+
+// SHA-256 hex digest of the nonce we hand to Google — Google puts this hash in the ID token's
+// `nonce` claim, and Supabase's signInWithIdToken is handed the original (unhashed) value to
+// verify against it. Without this round trip Supabase rejects the token.
+async function sha256Hex(value) {
+  const digest = await window.crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))
+  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+// crypto.randomUUID() is a newer addition to the Web Crypto API than crypto.subtle/getRandomValues
+// — some Android WebViews (and any non-secure-context load) implement one but not the other. This
+// used to be a bare `crypto.randomUUID()` call, which threw on those browsers and killed the whole
+// setup effect before initialize()/renderButton() ever ran, silently leaving the Google button dead
+// — that's the "first attempt does nothing" behavior that made sign-in feel like it needed two tries.
+function randomNonce() {
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID()
+  if (typeof crypto.getRandomValues === 'function') {
+    return Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('')
+  }
+  return `${Date.now().toString(16)}${Math.random().toString(16).slice(2)}`
+}
 
 // The 6 most universally-recognizable modules (out of the 11 the app actually ships —
 // PROJECT_CONTEXT.md §5) — shown on the landing marquee as a representative sample, not the
@@ -23,17 +45,6 @@ const TOP_MODULES = [
 const wordFade = { hidden: { opacity: 0, y: 22, filter: 'blur(8px)' }, show: { opacity: 1, y: 0, filter: 'blur(0px)', transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1] } } }
 const HEADLINE = [['Your', 'entire', 'financial', 'life.'], ['One', 'calm', 'view.']]
 const GRAIN_URL = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")"
-
-function GoogleIcon(props) {
-  return (
-    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true" {...props}>
-      <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84c-.21 1.13-.84 2.09-1.8 2.73v2.27h2.91c1.7-1.57 2.69-3.88 2.69-6.64z" />
-      <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.17l-2.91-2.27c-.81.54-1.84.86-3.05.86-2.35 0-4.34-1.58-5.05-3.71H.96v2.34C2.44 15.98 5.48 18 9 18z" />
-      <path fill="#FBBC05" d="M3.95 10.71c-.18-.54-.28-1.11-.28-1.71s.1-1.17.28-1.71V4.95H.96A8.99 8.99 0 0 0 0 9c0 1.45.35 2.83.96 4.05l2.99-2.34z" />
-      <path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0 5.48 0 2.44 2.02.96 4.95l2.99 2.34C4.66 5.16 6.65 3.58 9 3.58z" />
-    </svg>
-  )
-}
 
 // The front/back faces of the interactive card, and the front-only faces of the static peek
 // cards behind it. All rendered in CSS (no image assets exist for this — see DESIGN.md):
@@ -255,6 +266,9 @@ export function AuthScreen({ onAuth, initialError, initialMode = 'landing', init
   const [feedback, setFeedback] = useState(initialError ? { type: 'error', message: initialError } : null)
   const [busy, setBusy] = useState(false)
   const [googleBusy, setGoogleBusy] = useState(false)
+  const [googleScriptReady, setGoogleScriptReady] = useState(false)
+  const googleButtonRef = useRef(null)
+  const googleNonceRef = useRef(null)
   const heroX = useMotionValue(0)
   const heroY = useMotionValue(0)
   const glowX = useTransform(heroX, [-1, 1], [-20, 20])
@@ -283,17 +297,57 @@ export function AuthScreen({ onAuth, initialError, initialMode = 'landing', init
     } catch (caught) { setFeedback({ type: 'error', message: caught.message }) } finally { setBusy(false) }
   }
 
-  const signInWithGoogle = async () => {
-    setFeedback(null); setGoogleBusy(true)
-    try {
-      const supabase = createClient()
-      const { error: oauthError } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: { redirectTo: `${window.location.origin}/api/auth/oauth_callback` },
-      })
-      if (oauthError) throw oauthError
-    } catch (caught) { setFeedback({ type: 'error', message: caught.message }); setGoogleBusy(false) }
-  }
+  // Renders Google's own "Continue with Google" button (its click flow runs entirely on this
+  // page's origin via Google Identity Services), rather than Supabase's signInWithOAuth, which
+  // redirects through the Supabase project's own domain — that's what put the raw
+  // "<project-ref>.supabase.co" address in front of users on Google's account chooser. The ID
+  // token that button produces is handed to Supabase directly, with no redirect involved.
+  useEffect(() => {
+    if (!googleScriptReady || mode === 'landing') return
+    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
+    if (!clientId || !window.google?.accounts?.id || !googleButtonRef.current) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const nonce = randomNonce()
+        const hashedNonce = await sha256Hex(nonce)
+        if (cancelled || !googleButtonRef.current) return
+        googleNonceRef.current = nonce
+        window.google.accounts.id.initialize({
+          client_id: clientId,
+          nonce: hashedNonce,
+          use_fedcm_for_prompt: true,
+          callback: async (response) => {
+            setFeedback(null); setGoogleBusy(true)
+            try {
+              const supabase = createClient()
+              const { data, error: idTokenError } = await supabase.auth.signInWithIdToken({
+                provider: 'google',
+                token: response.credential,
+                nonce: googleNonceRef.current,
+              })
+              if (idTokenError) throw idTokenError
+              fetch('/api/auth/google_welcome', { method: 'POST' }).catch(() => {})
+              onAuth(data.user)
+            } catch (caught) {
+              setFeedback({ type: 'error', message: caught.message }); setGoogleBusy(false)
+            }
+          },
+        })
+        googleButtonRef.current.innerHTML = ''
+        window.google.accounts.id.renderButton(googleButtonRef.current, {
+          type: 'standard', theme: 'outline', size: 'large', shape: 'pill',
+          text: 'continue_with', logo_alignment: 'left',
+          width: Math.min(400, Math.round(googleButtonRef.current.offsetWidth || 320)),
+        })
+      } catch (caught) {
+        // Setup failing silently is exactly what made this look like it needed a second attempt —
+        // the button would sit there dead with no explanation. Surface it instead.
+        if (!cancelled) setFeedback({ type: 'error', message: `Google sign-in couldn't load (${caught.message}). Try refreshing, or sign in with email instead.` })
+      }
+    })()
+    return () => { cancelled = true }
+  }, [googleScriptReady, mode])
 
   const goToAuth = (nextMode) => { setFeedback(null); setMode(nextMode) }
 
@@ -303,7 +357,14 @@ export function AuthScreen({ onAuth, initialError, initialMode = 'landing', init
         <div className="pointer-events-none absolute inset-0 z-10 opacity-[0.035] mix-blend-overlay" style={{ backgroundImage: GRAIN_URL }} />
 
         {mode === 'landing' ? (
-          <div onMouseMove={onHeroMouseMove} className="relative flex h-full flex-col overflow-hidden px-6 py-5 sm:px-10 sm:py-6 lg:px-14 lg:py-7">
+          /* Below `lg:` the stacked headline + CTAs + card mockup + module marquee + trust line
+             don't fit one mobile viewport the way they do in the desktop row layout — with
+             `overflow-hidden` that overflow used to clip silently, letting the card mockup and
+             marquee land on top of each other instead of just running off-screen. Scrolling
+             internally on mobile (matching the app's own mobile-first requirement) keeps every
+             element in normal document flow; `lg:overflow-hidden` restores the desktop's
+             intentional single-screen, no-scroll composition once content actually fits. */
+          <div onMouseMove={onHeroMouseMove} className="relative flex h-full flex-col overflow-y-auto px-6 py-5 sm:px-10 sm:py-6 lg:overflow-hidden lg:px-14 lg:py-7">
             <motion.div
               className="pointer-events-none absolute -left-40 -top-20 h-[32rem] w-[32rem] rounded-full bg-accent-400/[.12] blur-3xl"
               style={{ x: glowX, y: glowY }}
@@ -321,7 +382,15 @@ export function AuthScreen({ onAuth, initialError, initialMode = 'landing', init
               </button>
             </div>
 
-            <div className="relative mx-auto flex w-full max-w-[1100px] min-h-0 flex-1 flex-col items-center justify-center gap-10 lg:flex-row lg:justify-between lg:gap-12">
+            {/* `min-h-0 flex-1` and `justify-center` are desktop-only (`lg:`) now. Both assume this
+                row's content fits in the space left after the header and trust line — true on
+                desktop's wide row layout, false once the headline, CTAs, card mockup, and module
+                marquee stack into one mobile column. Forcing that stack into a `flex-1` box let it
+                overflow the box's own bottom edge without pushing the trust-line sibling below it
+                down, so the marquee visually landed on top of the trust line. Letting this row size
+                to its natural content height on mobile (plain block flow) fixes that structurally;
+                the hero's own `overflow-y-auto` (see above) scrolls the rest into view. */}
+            <div className="relative mx-auto flex w-full max-w-[1100px] flex-col items-center justify-start gap-10 lg:min-h-0 lg:flex-1 lg:flex-row lg:justify-between lg:gap-12">
               <div className="max-w-xl text-center lg:text-left">
                 <h1 className="text-[clamp(2.5rem,7vw,3.5rem)] font-semibold leading-[1.0] tracking-[-.04em] text-white lg:text-[clamp(3.5rem,5vw,5.25rem)]">
                   {HEADLINE.map((line, li) => (
@@ -401,9 +470,11 @@ export function AuthScreen({ onAuth, initialError, initialMode = 'landing', init
                 </button>
               </form>
               <div className="my-8 flex items-center gap-3 text-xs text-slate-600"><div className="h-px flex-1 bg-white/10" />OR<div className="h-px flex-1 bg-white/10" /></div>
-              <button type="button" onClick={signInWithGoogle} disabled={googleBusy} className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[.04] px-4 py-3.5 text-sm font-medium text-white transition hover:bg-white/[.08] disabled:opacity-60">
-                <GoogleIcon />{googleBusy ? 'Redirecting…' : 'Continue with Google'}
-              </button>
+              <div ref={googleButtonRef} aria-busy={googleBusy} className="flex min-h-[52px] w-full justify-center [&>div]:!w-full" />
+              {!process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID && (
+                <p className="mt-2 text-center text-xs text-rose-300">Google sign-in isn't configured yet.</p>
+              )}
+              <Script src="https://accounts.google.com/gsi/client" strategy="afterInteractive" onReady={() => setGoogleScriptReady(true)} />
               <button onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setFeedback(null) }} className="mt-3 w-full rounded-xl border border-white/10 px-4 py-3.5 text-sm font-medium text-slate-300 transition hover:bg-white/5">
                 {mode === 'login' ? 'Create a new account' : 'I already have an account'}
               </button>
