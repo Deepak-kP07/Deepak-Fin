@@ -186,6 +186,15 @@
         ],
         "createdAt": "2026-08-26T14:12:38.207Z",
         "reason": "miniature phone-mockup status-bar label in a settings preview illustration, not real reading content — intentionally below the type ramp"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "rgba(0,0,0,.6)",
+        "files": [
+          "components/shared/SpotlightTour.jsx"
+        ],
+        "createdAt": "2026-08-26T17:14:51.991Z",
+        "reason": "box-shadow spread can't reference a Tailwind class, so this is the same bg-black/60 overlay convention already used in BottomSheet.jsx, just expressed as a literal rgba for the CSS box-shadow property"
       }
     ]
   }

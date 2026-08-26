@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import {
   BarChart3, Bell, Briefcase, ChevronDown, CreditCard, Heart, KeyRound, Landmark,
-  LayoutDashboard, Link2, LineChart, Mountain, Palette, Repeat, ShieldAlert, ShieldCheck,
+  LayoutDashboard, Link2, LineChart, Mountain, Palette, Play, Repeat, ShieldAlert, ShieldCheck,
   Smartphone, Star, Tag, Target, TrendingUp, Users,
 } from 'lucide-react'
 
@@ -234,13 +234,23 @@ function GuideItem({ item, isOpen, onToggle }) {
   )
 }
 
-export function SettingsUserGuide() {
+export function SettingsUserGuide({ onReplayTour }) {
   const [openKey, setOpenKey] = useState(null)
 
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] p-5">
-        <div className="text-sm font-semibold text-white light:text-slate-900">User guide</div>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="text-sm font-semibold text-white light:text-slate-900">User guide</div>
+          {onReplayTour && (
+            <button
+              onClick={onReplayTour}
+              className="flex shrink-0 items-center gap-1.5 rounded-xl border border-white/10 light:border-black/10 px-3 py-1.5 text-xs text-slate-400 light:text-slate-500 hover:bg-white/5"
+            >
+              <Play size={13} />Replay tour
+            </button>
+          )}
+        </div>
         <div className="mt-1 text-[11px] text-slate-500">What each part of the app does, and how to use it. Tap a section to expand it.</div>
         <div className="mt-3 space-y-2">
           {GUIDE.map((item) => (

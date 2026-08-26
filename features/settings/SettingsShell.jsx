@@ -72,7 +72,7 @@ export function SettingsShell({ activeSection, onSectionChange, onLogout, ...res
           ))}
         </div>
 
-        <div className="min-w-0 flex-1 lg:max-w-3xl">
+        <div className="min-w-0 flex-1 lg:max-w-3xl" data-tour={`settings-${active.key}`}>
           <active.Component {...rest} />
         </div>
       </div>

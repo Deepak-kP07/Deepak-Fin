@@ -383,6 +383,11 @@ export const profiles = pgTable('profiles', {
   // could stamp it early and suppress a real send.
   lastWeeklyReportSentAt: timestamp('last_weekly_report_sent_at', { withTimezone: true }),
   lastMonthlyReportSentAt: timestamp('last_monthly_report_sent_at', { withTimezone: true }),
+  // Null until the user finishes or skips the first-login spotlight tour (see
+  // components/shared/SpotlightTour.jsx, features/onboarding/tourSteps.js) — that's what gates
+  // it from auto-starting again. Unlike the report timestamps above, this one IS client-settable
+  // (see safeFields.js): the user finishes/skips it themselves, there's no dedup risk to guard.
+  tourCompletedAt: timestamp('tour_completed_at', { withTimezone: true }),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 

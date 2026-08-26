@@ -29,6 +29,8 @@ import { LoadingScreen } from '@/components/shared/LoadingScreen'
 import { Avatar } from '@/components/shared/Avatar'
 import { CreditCardBillAlert } from '@/components/shared/CreditCardBillAlert'
 import { InstallPrompt } from '@/components/shared/InstallPrompt'
+import { SpotlightTour } from '@/components/shared/SpotlightTour'
+import { TOUR_STEPS } from '@/features/onboarding/tourSteps'
 import { BottomSheet } from '@/components/shared/BottomSheet'
 import { ToggleSwitch } from '@/components/shared/ToggleSwitch'
 import { AuthScreen } from '@/features/auth/AuthScreen'
@@ -686,6 +688,43 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
     id: `cc-${c.id}`, name: c.name, sub: 'Credit card', amount: Number(c.current_outstanding || 0),
     icon: CreditCard, color: c.color || '#64748b', debt: true,
   }))
+
+  // Drilldown state for the Income/Expense/Savings stat cards (StatDrilldown) — declared here,
+  // above every early return in this component, same as every other hook below: React requires
+  // every hook to run in the same order on every render, so none of these can sit after a
+  // conditional `return` (that's exactly what broke when showNetWorthDetail's early return was
+  // first added below the balances-overflow hooks — "fewer hooks than expected" at runtime).
+  const [drilldown, setDrilldown] = useState(null)
+
+  // Consolidated balances: bank accounts, credit cards (as debt), investment portfolios.
+  // Debit cards are excluded — they share their linked account's balance, already listed here.
+  // Credit card/portfolio line items only appear here while their module is switched on — a
+  // module toggle is UI-hide only, so the underlying balances stay real, just not surfaced here.
+  const balanceItems = [
+    ...accounts.filter((a) => a.type !== 'debit_card').map((a) => ({
+      id: `acc-${a.id}`, name: a.name, sub: a.type.replace('_', ' '), amount: Number(a.current_balance || 0),
+      icon: a.type === 'cash' ? Wallet : Landmark, color: a.color || '#64748b', debt: false,
+    })),
+    ...(moduleSettings.credit_cards.enabled ? credit_cards.map((c) => ({
+      id: `cc-${c.id}`, name: c.name, sub: 'Credit card', amount: Number(c.current_outstanding || 0),
+      icon: CreditCard, color: c.color || '#64748b', debt: true,
+    })) : []),
+    ...(moduleSettings.investments.enabled ? portfolios.map((p) => {
+      const value = holdings.filter((h) => h.portfolio_id === p.id).reduce((s, h) => s + Number(h.qty) * Number(h.current_price || h.avg_buy_price), 0) + Number(p.cash_balance || 0)
+      return { id: `port-${p.id}`, name: p.name, sub: 'Investment', amount: value, icon: TrendingUp, color: p.color || '#64748b', debt: false }
+    }) : []),
+  ]
+
+  // Detects real overflow (rather than always masking) so the fade only appears when there's
+  // actually more content below — a short balance list's last row should stay fully opaque.
+  const balancesRef = useRef(null)
+  const [balancesOverflow, setBalancesOverflow] = useState(false)
+  useLayoutEffect(() => {
+    const el = balancesRef.current
+    if (!el) return setBalancesOverflow(false)
+    setBalancesOverflow(el.scrollHeight > el.clientHeight + 2)
+  }, [balanceItems.length])
+
   if (showNetWorthDetail) {
     return (
       <NetWorthDetailView
@@ -725,7 +764,6 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
   // those three cards default to the current month same as everywhere else in this app; tapping
   // one opens a StatDrilldown showing the same figures with no period cutoff (or, for Savings,
   // this year's investment/cash split specifically, per how the user actually wants that one read).
-  const [drilldown, setDrilldown] = useState(null)
   const thisYear = now.getFullYear()
   const allTime = { income: 0, expense: 0, invested: 0 }
   const yearTotals = { income: 0, expense: 0, invested: 0 }
@@ -761,7 +799,10 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
   const hasNetWorthDetail = totalAssets > 0 || totalLiabilities > 0
   // Both are ratios, not rupee amounts, so they stay visible under the privacy toggle — same
   // treatment savingsRate/creditUtilizationPct/budgetUsedPct already get on this screen.
-  const debtLoadPct = totalAssets > 0 ? Math.round((totalLiabilities / totalAssets) * 100) : null
+  // null only when there's truly no debt to measure (0 liabilities) — real debt against
+  // zero-or-negative assets is the most over-leveraged state possible, not an unknown one, so
+  // that case renders as a capped 999 ("100%+") below rather than falling back to null/"—".
+  const debtLoadPct = totalLiabilities <= 0 ? 0 : totalAssets > 0 ? Math.round((totalLiabilities / totalAssets) * 100) : 999
   const runwayMonths = avgMonthlySpend > 0 ? totalBalance / avgMonthlySpend : null
   const spendByCategory = {}
   allThisMonth.filter((t) => t.type === 'expense').forEach((t) => {
@@ -793,35 +834,6 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
     { key: 'credit_utilization', available: moduleSettings.credit_cards.enabled && credit_cards.length > 0, node: <StatCard label="Credit utilization" value={`${creditUtilizationPct}%`} sub={creditUtilizationPct >= 70 ? 'Getting high' : 'Under control'} icon={PieChartIcon} accent="bg-rose-400/15 text-rose-200 light:text-rose-700" tone={creditUtilizationPct >= 70 ? 'text-rose-300 light:text-rose-700' : 'text-emerald-300 light:text-emerald-700'} /> },
     { key: 'budget_used_pct', available: moduleSettings.budgets.enabled && budgetTotal > 0, node: <StatCard label="Budget used" value={`${budgetUsedPct}%`} sub={budgetUsedPct > 100 ? 'Over budget' : 'On track'} icon={Zap} accent="bg-accent-400/15 text-accent-200 light:text-accent-700" tone={budgetUsedPct > 100 ? 'text-rose-300 light:text-rose-700' : 'text-emerald-300 light:text-emerald-700'} /> },
   ].filter((s) => widgets[s.key]?.enabled && s.available)
-
-  // Consolidated balances: bank accounts, credit cards (as debt), investment portfolios.
-  // Debit cards are excluded — they share their linked account's balance, already listed here.
-  // Credit card/portfolio line items only appear here while their module is switched on — a
-  // module toggle is UI-hide only, so the underlying balances stay real, just not surfaced here.
-  const balanceItems = [
-    ...accounts.filter((a) => a.type !== 'debit_card').map((a) => ({
-      id: `acc-${a.id}`, name: a.name, sub: a.type.replace('_', ' '), amount: Number(a.current_balance || 0),
-      icon: a.type === 'cash' ? Wallet : Landmark, color: a.color || '#64748b', debt: false,
-    })),
-    ...(moduleSettings.credit_cards.enabled ? credit_cards.map((c) => ({
-      id: `cc-${c.id}`, name: c.name, sub: 'Credit card', amount: Number(c.current_outstanding || 0),
-      icon: CreditCard, color: c.color || '#64748b', debt: true,
-    })) : []),
-    ...(moduleSettings.investments.enabled ? portfolios.map((p) => {
-      const value = holdings.filter((h) => h.portfolio_id === p.id).reduce((s, h) => s + Number(h.qty) * Number(h.current_price || h.avg_buy_price), 0) + Number(p.cash_balance || 0)
-      return { id: `port-${p.id}`, name: p.name, sub: 'Investment', amount: value, icon: TrendingUp, color: p.color || '#64748b', debt: false }
-    }) : []),
-  ]
-
-  // Detects real overflow (rather than always masking) so the fade only appears when there's
-  // actually more content below — a short balance list's last row should stay fully opaque.
-  const balancesRef = useRef(null)
-  const [balancesOverflow, setBalancesOverflow] = useState(false)
-  useLayoutEffect(() => {
-    const el = balancesRef.current
-    if (!el) return setBalancesOverflow(false)
-    setBalancesOverflow(el.scrollHeight > el.clientHeight + 2)
-  }, [balanceItems.length])
 
   const showPortfolioTile = moduleSettings.investments.enabled && holdings.length > 0
   const showLoansTile = moduleSettings.loans.enabled && loans.length > 0
@@ -1001,8 +1013,8 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
             </div>
             <div>
               <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-400 light:text-slate-500">Debt load</div>
-              <div className={`mt-0.5 text-xl font-semibold leading-tight ${debtLoadPct === null ? 'text-slate-400 light:text-slate-500' : debtLoadPct >= 100 ? 'text-rose-300 light:text-rose-700' : debtLoadPct >= 60 ? 'text-amber-300 light:text-amber-700' : 'text-emerald-300 light:text-emerald-700'}`}>
-                {debtLoadPct === null ? '—' : <>{debtLoadPct}<span className="ml-1 text-sm font-medium text-slate-400 light:text-slate-500">% of assets owed</span></>}
+              <div className={`mt-0.5 text-xl font-semibold leading-tight ${debtLoadPct >= 100 ? 'text-rose-300 light:text-rose-700' : debtLoadPct >= 60 ? 'text-amber-300 light:text-amber-700' : 'text-emerald-300 light:text-emerald-700'}`}>
+                {debtLoadPct >= 999 ? '100+' : debtLoadPct}<span className="ml-1 text-sm font-medium text-slate-400 light:text-slate-500">% of assets owed</span>
               </div>
             </div>
           </div>
@@ -1802,6 +1814,9 @@ function Shell({ user, onLogout }) {
   const [manageAccessProfile, setManageAccessProfile] = useState(null)
   const [settingsSection, setSettingsSection] = useState('profile')
   const [moreOpen, setMoreOpen] = useState(false)
+  // Forces the spotlight tour back open even though tour_completed_at is already set — flipped on
+  // by "Replay tour" in Settings > User guide, flipped back off once the tour closes so it doesn't loop.
+  const [forceTour, setForceTour] = useState(false)
 
   const refresh = async ({ silent = false } = {}) => {
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
@@ -2344,11 +2359,18 @@ function Shell({ user, onLogout }) {
   const morePanelItems = [...mobileDestinations.filter((d) => !mobileNavSlots.includes(d.key)), { key: 'profile', label: 'Settings', icon: Settings }]
   const isMoreActive = morePanelItems.some((n) => n.key === view)
 
+  // First-login spotlight tour (or a replay from Settings > User guide) — see
+  // components/shared/SpotlightTour.jsx and features/onboarding/tourSteps.js.
+  const tourOpen = !!data.profile && !loading && (!data.profile.tour_completed_at || forceTour)
+  const tourContext = { setView, openSettings, setMoreOpen, primaryMobileNavKeys: mobileNavSlots }
+  const closeTour = () => { setForceTour(false); onSaveProfile({ tour_completed_at: new Date().toISOString() }) }
+
   return (
     <div className="min-h-screen bg-[#080b12] light:bg-[#eef1f6] text-slate-100 light:text-slate-900">
       {toast.view}
       {confirm.view}
       {prompt.view}
+      <SpotlightTour steps={TOUR_STEPS} open={tourOpen} context={tourContext} onSkip={closeTour} onFinish={closeTour} />
       <div className="mx-auto flex min-h-screen max-w-[1480px]">
         {/* Sidebar */}
         <aside className="hidden w-64 shrink-0 flex-col border-r border-white/5 light:border-black/5 px-5 py-6 lg:flex lg:sticky lg:top-0 lg:h-screen lg:self-start lg:overflow-y-auto">
@@ -2357,13 +2379,13 @@ function Shell({ user, onLogout }) {
           </div>
           <nav className="mt-10 space-y-1">
             {nav.map((n) => (
-              <button key={n.key} onClick={() => setView(n.key)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition ${view === n.key ? 'bg-white/[.06] light:bg-black/[.04] text-white light:text-slate-900' : 'text-slate-400 light:text-slate-500 hover:bg-white/[.04] hover:light:bg-black/[.03] hover:text-white hover:light:text-slate-900'}`}>
+              <button key={n.key} data-tour={`nav-${n.key}`} onClick={() => setView(n.key)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition ${view === n.key ? 'bg-white/[.06] light:bg-black/[.04] text-white light:text-slate-900' : 'text-slate-400 light:text-slate-500 hover:bg-white/[.04] hover:light:bg-black/[.03] hover:text-white hover:light:text-slate-900'}`}>
                 <n.icon size={17} />{n.label}
               </button>
             ))}
           </nav>
           <div className="mt-auto flex w-full items-center gap-1 rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] p-2.5">
-            <button onClick={() => setView('profile')} className={`flex min-w-0 flex-1 items-center gap-3 rounded-xl px-1.5 py-1 text-left transition hover:bg-white/[.06] hover:light:bg-black/[.04] ${view === 'profile' ? 'bg-white/[.06] light:bg-black/[.04]' : ''}`}>
+            <button data-tour="nav-profile" onClick={() => setView('profile')} className={`flex min-w-0 flex-1 items-center gap-3 rounded-xl px-1.5 py-1 text-left transition hover:bg-white/[.06] hover:light:bg-black/[.04] ${view === 'profile' ? 'bg-white/[.06] light:bg-black/[.04]' : ''}`}>
               <div className="relative shrink-0">
                 <Avatar src={avatarUrl} name={firstName} email={user?.email} size={36} />
                 {pendingCount > 0 && <span className="absolute -right-0.5 -top-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full border-2 border-[#080b12] bg-amber-300" title={`${pendingCount} change${pendingCount === 1 ? '' : 's'} pending sync`} />}
@@ -2428,6 +2450,7 @@ function Shell({ user, onLogout }) {
                   onAddVaultItem={(type) => openVaultForm(null, type)} onEditVaultItem={openVaultForm} onDeleteVaultItem={deleteVaultItem}
                   onAddRule={addRule} onToggleRule={toggleRule} onDeleteRule={deleteRule}
                   onLogout={onLogout}
+                  onReplayTour={() => setForceTour(true)}
                 />
               )}
             </div>
@@ -2446,7 +2469,7 @@ function Shell({ user, onLogout }) {
       <nav className="fixed bottom-0 left-0 right-0 z-20 border-t border-white/10 light:border-black/10 bg-[#0b0f18]/95 light:bg-white/90 backdrop-blur-xl lg:hidden" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         <div className="mx-auto grid max-w-md grid-cols-4">
           {primaryMobileNav.map((n) => (
-            <button key={n.key} onClick={() => setView(n.key)} className={`flex flex-col items-center gap-1 py-3 text-[11px] ${view === n.key ? 'text-accent-300 light:text-accent-700' : 'text-slate-500'}`}>
+            <button key={n.key} data-tour={`nav-${n.key}`} onClick={() => setView(n.key)} className={`flex flex-col items-center gap-1 py-3 text-[11px] ${view === n.key ? 'text-accent-300 light:text-accent-700' : 'text-slate-500'}`}>
               <n.icon size={18} /><span className="max-w-full truncate px-1">{n.label}</span>
             </button>
           ))}
@@ -2461,6 +2484,7 @@ function Shell({ user, onLogout }) {
           {morePanelItems.map((n) => (
             <button
               key={n.key}
+              data-tour={`nav-${n.key}`}
               onClick={() => { setView(n.key); setMoreOpen(false) }}
               className={`flex flex-col items-center gap-2 rounded-xl border p-4 text-center text-xs transition ${view === n.key ? 'border-accent-300/30 bg-accent-400/10 text-accent-200 light:text-accent-700' : 'border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] text-slate-300 light:text-slate-700 hover:bg-white/[.06] hover:light:bg-black/[.04]'}`}
             >
