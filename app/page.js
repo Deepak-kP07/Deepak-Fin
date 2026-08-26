@@ -11,6 +11,7 @@ import {
 } from '@/lib/format'
 import { PALETTE } from '@/lib/palette'
 import { applyAccentColor } from '@/lib/color'
+import { useTheme } from 'next-themes'
 import { clearSnapshot, loadSnapshot, saveSnapshot } from '@/lib/offline/db'
 import { createMutate, flushOutbox, getPendingCount, registerAutoFlush } from '@/lib/offline/mutate'
 import { useToast } from '@/components/shared/Toast'
@@ -33,7 +34,8 @@ import { AuthScreen } from '@/features/auth/AuthScreen'
 import { CategoryForm } from '@/features/categories/CategoryForm'
 import { MoneyRulesWidget } from '@/features/money-rules/MoneyRulesWidget'
 import { SettingsShell } from '@/features/settings/SettingsShell'
-import { resolveModuleSettings, resolveDashboardWidgets, orderedEnabledKeys } from '@/lib/moduleSettings'
+import { resolveModuleSettings, resolveDashboardWidgets, orderedEnabledKeys, resolveMobileNavSlots, resolveQuickActionSlots } from '@/lib/moduleSettings'
+import { NAV_META, VIEW_TO_MODULE, MOBILE_MANDATORY_META, ADD_ACTION_META } from '@/lib/navMeta'
 import { AccountForm } from '@/features/accounts/AccountForm'
 import { AccountsView } from '@/features/accounts/AccountsView'
 import { BudgetForm } from '@/features/budgets/BudgetForm'
@@ -85,7 +87,7 @@ import {
 } from 'lucide-react'
 
 /* ---------------- Transaction Form ---------------- */
-function TransactionForm({ open, onClose, onSaved, editing, accounts, categories, creditCards = [], lendBorrow = [], loans = [], onAddAccount, onAddCategory, toast, profile, defaultAccountId = '', defaultRepayment = null, mutate }) {
+function TransactionForm({ open, onClose, onSaved, editing, accounts, categories, creditCards = [], lendBorrow = [], loans = [], transactions = [], onAddAccount, onAddCategory, toast, profile, defaultAccountId = '', defaultRepayment = null, mutate }) {
   const now = todayISO()
   const nowTime = new Date().toTimeString().slice(0, 5)
   const initial = useMemo(() => {
@@ -110,10 +112,38 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
   const [attachmentRemoved, setAttachmentRemoved] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [history, setHistory] = useState(null)
+  const [descOpen, setDescOpen] = useState(false)
+  const descRef = useRef(null)
   const confirm = useConfirm()
-  useEffect(() => { setForm(initial); setPurposeMode(initial.repay_value ? 'repayment' : 'category'); setAttachmentFile(null); setAttachmentRemoved(false); setHistoryOpen(false); setHistory(null) }, [initial])
+  useEffect(() => { setForm(initial); setPurposeMode(initial.repay_value ? 'repayment' : 'category'); setAttachmentFile(null); setAttachmentRemoved(false); setHistoryOpen(false); setHistory(null); setDescOpen(false) }, [initial])
+  useEffect(() => {
+    const onDocClick = (e) => { if (descRef.current && !descRef.current.contains(e.target)) setDescOpen(false) }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [])
+  // Recurring descriptions ("Groceries at BigBazaar", "Salary") repeat often enough that
+  // resurfacing them beats retyping — scoped to the current type so an expense doesn't
+  // surface old income descriptions like "Salary".
+  const descriptionSuggestions = useMemo(() => {
+    const byKey = new Map()
+    for (const t of transactions) {
+      if (t.type !== form.type) continue
+      const raw = (t.description || '').trim()
+      if (!raw) continue
+      const key = raw.toLowerCase()
+      const entry = byKey.get(key)
+      if (entry) { entry.count += 1; if ((t.date || '') > entry.lastDate) { entry.lastDate = t.date || ''; entry.original = raw } }
+      else byKey.set(key, { original: raw, count: 1, lastDate: t.date || '' })
+    }
+    return [...byKey.values()].sort((a, b) => b.count - a.count || (a.lastDate < b.lastDate ? 1 : -1))
+  }, [transactions, form.type])
 
   if (!open) return null
+
+  const descQuery = form.description.trim().toLowerCase()
+  const filteredDescriptionSuggestions = descQuery
+    ? descriptionSuggestions.filter((s) => s.original.toLowerCase().includes(descQuery) && s.original.toLowerCase() !== descQuery).slice(0, 6)
+    : []
 
   const toggleHistory = async () => {
     if (historyOpen) { setHistoryOpen(false); return }
@@ -295,92 +325,102 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
 
   return (
     <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center sm:p-4" onClick={onClose}>
-      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="max-h-[92vh] w-full overflow-y-auto rounded-t-3xl border-t border-white/10 bg-[#141a28] p-6 shadow-2xl sm:max-w-xl sm:rounded-3xl sm:border" style={{ paddingBottom: 'max(1.5rem, calc(env(safe-area-inset-bottom) + 1.5rem))' }}>
+      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="max-h-[92vh] w-full overflow-y-auto rounded-t-3xl border-t border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-6 shadow-2xl sm:max-w-xl sm:rounded-3xl sm:border" style={{ paddingBottom: 'max(1.5rem, calc(env(safe-area-inset-bottom) + 1.5rem))' }}>
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-white">{editing ? 'Edit transaction' : 'Add transaction'}</h2>
+            <h2 className="text-lg font-semibold text-white light:text-slate-900">{editing ? 'Edit transaction' : 'Add transaction'}</h2>
             <p className="mt-1 text-xs text-slate-500">Keep the context, not just the number</p>
           </div>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-white/5"><X size={18} /></button>
+          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 light:text-slate-500 hover:bg-white/5"><X size={18} /></button>
         </div>
 
         <div className="mt-5 grid grid-cols-3 gap-2">
-          {[{ v: 'expense', l: 'Expense', c: 'bg-rose-400/15 text-rose-200 border-rose-400/30' }, { v: 'income', l: 'Income', c: 'bg-emerald-400/15 text-emerald-200 border-emerald-400/30' }, { v: 'transfer', l: 'Transfer', c: 'bg-accent-400/15 text-accent-200 border-accent-400/30' }].map((t) => (
-            <button key={t.v} type="button" onClick={() => { setPurposeMode('category'); setForm({ ...form, type: t.v, category_id: t.v === 'transfer' ? '' : (categories.find((c) => c.type === (t.v === 'income' ? 'income' : 'expense'))?.id || ''), linked_module: '', linked_module_id: '', repay_value: '' }) }} className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${form.type === t.v ? t.c : 'border-white/10 text-slate-400 hover:bg-white/5'}`}>{t.l}</button>
+          {[{ v: 'expense', l: 'Expense', c: 'bg-rose-400/15 text-rose-200 light:text-rose-700 border-rose-400/30' }, { v: 'income', l: 'Income', c: 'bg-emerald-400/15 text-emerald-200 light:text-emerald-700 border-emerald-400/30' }, { v: 'transfer', l: 'Transfer', c: 'bg-accent-400/15 text-accent-200 light:text-accent-700 border-accent-400/30' }].map((t) => (
+            <button key={t.v} type="button" onClick={() => { setPurposeMode('category'); setForm({ ...form, type: t.v, category_id: t.v === 'transfer' ? '' : (categories.find((c) => c.type === (t.v === 'income' ? 'income' : 'expense'))?.id || ''), linked_module: '', linked_module_id: '', repay_value: '' }) }} className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${form.type === t.v ? t.c : 'border-white/10 light:border-black/10 text-slate-400 light:text-slate-500 hover:bg-white/5'}`}>{t.l}</button>
           ))}
         </div>
 
         {!hasAnySource && (
-          <div className="mt-5 rounded-xl border border-amber-300/25 bg-amber-300/5 px-4 py-3 text-sm text-amber-200">
+          <div className="mt-5 rounded-xl border border-amber-300/25 bg-amber-300/5 px-4 py-3 text-sm text-amber-200 light:text-amber-700">
             <div className="flex items-center gap-2"><Landmark size={14} /> You don&apos;t have any accounts yet.</div>
-            <button type="button" onClick={onAddAccount} className="mt-2 rounded-lg bg-amber-300/20 px-3 py-1.5 text-xs font-semibold text-amber-100 hover:bg-amber-300/30">+ Add your first account</button>
+            <button type="button" onClick={onAddAccount} className="mt-2 rounded-lg bg-amber-300/20 px-3 py-1.5 text-xs font-semibold text-amber-100 light:text-amber-800 hover:bg-amber-300/30">+ Add your first account</button>
           </div>
         )}
 
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
-          <label className="text-sm text-slate-300">Amount
-            <input required min="0.01" step="0.01" type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-accent-300/50" placeholder="0.00" />
+          <label className="text-sm text-slate-300 light:text-slate-700">Amount
+            <input required min="0.01" step="0.01" type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" placeholder="0.00" />
           </label>
-          <label className="text-sm text-slate-300">Date
-            <DateInput value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value, time: new Date().toTimeString().slice(0, 5) })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-accent-300/50" />
+          <label className="text-sm text-slate-300 light:text-slate-700">Date
+            <DateInput value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value, time: new Date().toTimeString().slice(0, 5) })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
           </label>
 
-          <label className="text-sm text-slate-300">{form.type === 'transfer' ? 'From account' : 'Account'}
-            <Select required={hasAnySource} value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none focus:border-accent-300/50">
+          <label className="text-sm text-slate-300 light:text-slate-700">{form.type === 'transfer' ? 'From account' : 'Account'}
+            <Select required={hasAnySource} value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-[#101621] light:bg-white px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50">
               <option value="">Choose account…</option>
               {sourceOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </Select>
           </label>
 
           {form.type === 'transfer' ? (
-            <label className="text-sm text-slate-300">To account
-              <Select required value={form.to_account_id} onChange={(e) => setForm({ ...form, to_account_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none focus:border-accent-300/50">
+            <label className="text-sm text-slate-300 light:text-slate-700">To account
+              <Select required value={form.to_account_id} onChange={(e) => setForm({ ...form, to_account_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-[#101621] light:bg-white px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50">
                 <option value="">Choose destination…</option>
                 {realAccounts.filter((a) => a.id !== form.account_id).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
                 {creditCards.filter((c) => Number(c.current_outstanding) > 0).map((c) => <option key={c.id} value={`cc:${c.id}`}>{c.name} · pay bill</option>)}
               </Select>
             </label>
           ) : (
-            <div className="text-sm text-slate-300 sm:col-span-2">
+            <div className="text-sm text-slate-300 light:text-slate-700 sm:col-span-2">
               <div className="flex items-center justify-between">
                 <span>{purposeMode === 'repayment' ? (form.type === 'income' ? 'Repayment from' : 'Repaying') : 'Category'}</span>
                 {canRepay && (
                   <div className="flex gap-1">
-                    <button type="button" onClick={() => resetPurpose('category')} className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition ${purposeMode === 'category' ? 'bg-accent-400/15 text-accent-200' : 'text-slate-500 hover:bg-white/5'}`}>Category</button>
-                    <button type="button" onClick={() => resetPurpose('repayment')} className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition ${purposeMode === 'repayment' ? 'bg-accent-400/15 text-accent-200' : 'text-slate-500 hover:bg-white/5'}`}>Repayment</button>
+                    <button type="button" onClick={() => resetPurpose('category')} className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition ${purposeMode === 'category' ? 'bg-accent-400/15 text-accent-200 light:text-accent-700' : 'text-slate-500 hover:bg-white/5'}`}>Category</button>
+                    <button type="button" onClick={() => resetPurpose('repayment')} className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition ${purposeMode === 'repayment' ? 'bg-accent-400/15 text-accent-200 light:text-accent-700' : 'text-slate-500 hover:bg-white/5'}`}>{form.type === 'income' ? 'Repayment' : 'Prepayment'}</button>
                   </div>
                 )}
               </div>
               {purposeMode === 'repayment' && canRepay ? (
                 <>
-                  <Select required value={form.repay_value || ''} onChange={(e) => setForm({ ...form, repay_value: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none focus:border-accent-300/50">
+                  <Select required value={form.repay_value || ''} onChange={(e) => setForm({ ...form, repay_value: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-[#101621] light:bg-white px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50">
                     <option value="">Choose…</option>
                     {repayOptions.map((o) => <option key={`${o.kind}:${o.id}`} value={`${o.kind}:${o.id}`}>{o.label}</option>)}
                   </Select>
                   <div className="mt-1 text-[11px] text-slate-500">Auto-marks the debt as partially/fully repaid.</div>
                 </>
               ) : (
-                <CategorySelect value={form.category_id || ''} onChange={(e) => setForm({ ...form, category_id: e.target.value })} categories={catsForType} onAddCategory={onAddCategory} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none focus:border-accent-300/50" />
+                <CategorySelect value={form.category_id || ''} onChange={(e) => setForm({ ...form, category_id: e.target.value })} categories={catsForType} onAddCategory={onAddCategory} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-[#101621] light:bg-white px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
               )}
             </div>
           )}
 
-          <label className="text-sm text-slate-300 sm:col-span-2">Description
-            <input required value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-accent-300/50" placeholder={form.type === 'income' ? 'e.g. Salary, stipend, refund' : form.type === 'transfer' ? 'e.g. Moved to savings' : 'e.g. Groceries at BigBazaar'} />
+          <label ref={descRef} className="relative text-sm text-slate-300 light:text-slate-700 sm:col-span-2">Description
+            <input required value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} onFocus={() => setDescOpen(true)} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" placeholder={form.type === 'income' ? 'e.g. Salary, stipend, refund' : form.type === 'transfer' ? 'e.g. Moved to savings' : 'e.g. Groceries at BigBazaar'} />
+            {descOpen && filteredDescriptionSuggestions.length > 0 && (
+              <div className="absolute left-0 right-0 z-30 mt-1 max-h-56 overflow-y-auto rounded-xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-1.5 shadow-2xl">
+                {filteredDescriptionSuggestions.map((s) => (
+                  <button key={s.original} type="button" onClick={() => { setForm({ ...form, description: s.original }); setDescOpen(false) }} className="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm text-slate-300 light:text-slate-700 hover:bg-white/5">
+                    <span className="truncate">{s.original}</span>
+                    {s.count > 1 && <span className="shrink-0 text-[11px] text-slate-500">×{s.count}</span>}
+                  </button>
+                ))}
+              </div>
+            )}
           </label>
-          <label className="text-sm text-slate-300 sm:col-span-2">Notes
-            <input value={form.notes || ''} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-accent-300/50" placeholder="Optional context" />
+          <label className="text-sm text-slate-300 light:text-slate-700 sm:col-span-2">Notes
+            <input value={form.notes || ''} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" placeholder="Optional context" />
           </label>
 
-          <div className="text-sm text-slate-300 sm:col-span-2">
+          <div className="text-sm text-slate-300 light:text-slate-700 sm:col-span-2">
             Receipt / attachment
             {editing?.attachment_path && !attachmentRemoved ? (
-              <div className="mt-2 flex items-center justify-between rounded-xl border border-white/10 bg-white/[.04] px-3 py-3">
-                <button type="button" onClick={() => viewAttachment(`/api/finance/transactions/${editing.id}/attachment`)} className="flex min-w-0 items-center gap-2 truncate text-sm text-accent-200 hover:underline"><Paperclip size={14} className="shrink-0 text-slate-500" />{editing.attachment_name || 'Attachment'}</button>
-                <button type="button" onClick={() => setAttachmentRemoved(true)} className="shrink-0 rounded-lg p-1.5 text-rose-300/70 hover:bg-rose-300/10"><Trash2 size={14} /></button>
+              <div className="mt-2 flex items-center justify-between rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3">
+                <button type="button" onClick={() => viewAttachment(`/api/finance/transactions/${editing.id}/attachment`)} className="flex min-w-0 items-center gap-2 truncate text-sm text-accent-200 light:text-accent-700 hover:underline"><Paperclip size={14} className="shrink-0 text-slate-500" />{editing.attachment_name || 'Attachment'}</button>
+                <button type="button" onClick={() => setAttachmentRemoved(true)} className="shrink-0 rounded-lg p-1.5 text-rose-300/70 light:text-rose-700 hover:bg-rose-300/10"><Trash2 size={14} /></button>
               </div>
             ) : (
-              <label className="mt-2 flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-white/15 bg-white/[.02] px-3 py-3 text-sm text-slate-400 hover:bg-white/[.04]">
+              <label className="mt-2 flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-white/15 light:border-black/10 bg-white/[.02] light:bg-black/[.02] px-3 py-3 text-sm text-slate-400 light:text-slate-500 hover:bg-white/[.04] hover:light:bg-black/[.03]">
                 <Paperclip size={14} />
                 {attachmentFile ? attachmentFile.name : 'Attach a photo of the receipt (optional)'}
                 <input type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => setAttachmentFile(e.target.files?.[0] || null)} />
@@ -390,15 +430,15 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
 
           {editing && (
             <div className="sm:col-span-2">
-              <button type="button" onClick={toggleHistory} className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300"><History size={13} />{historyOpen ? 'Hide edit history' : 'View edit history'}</button>
+              <button type="button" onClick={toggleHistory} className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300 hover:light:text-slate-700"><History size={13} />{historyOpen ? 'Hide edit history' : 'View edit history'}</button>
               {historyOpen && (
-                <div className="mt-2 space-y-1.5 rounded-xl border border-white/10 bg-white/[.02] p-3">
+                <div className="mt-2 space-y-1.5 rounded-xl border border-white/10 light:border-black/10 bg-white/[.02] light:bg-black/[.02] p-3">
                   {history === null ? (
                     <div className="text-xs text-slate-500">Loading…</div>
                   ) : history.length === 0 ? (
                     <div className="text-xs text-slate-500">No edits recorded yet.</div>
                   ) : history.map((h) => (
-                    <div key={h.id} className="text-xs text-slate-400">
+                    <div key={h.id} className="text-xs text-slate-400 light:text-slate-500">
                       <span className="text-slate-500">{formatDateTime(h.changed_at?.slice(0, 10), h.changed_at?.slice(11, 16))}</span>{' — '}
                       {Object.entries(h.previous_values).map(([field, prev]) => `${field} was "${prev}"`).join(', ')}
                     </div>
@@ -409,7 +449,7 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
           )}
         </div>
 
-        <button disabled={busy || !hasAnySource} className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-accent-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">
+        <button disabled={busy || !hasAnySource} className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">
           {busy ? 'Saving…' : editing ? 'Update transaction' : 'Save transaction'} <ChevronRight size={16} />
         </button>
       </form>
@@ -481,8 +521,8 @@ function CsvImport({ open, onClose, onImported, accounts, categories, transactio
       readyToImport={!!defaultAccount}
       notReadyMessage="Choose a default account"
       extraFields={
-        <label className="text-sm text-slate-300 sm:col-span-2">Default account
-          <Select value={defaultAccount} onChange={(e) => setDefaultAccount(e.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-2.5 text-white outline-none">
+        <label className="text-sm text-slate-300 light:text-slate-700 sm:col-span-2">Default account
+          <Select value={defaultAccount} onChange={(e) => setDefaultAccount(e.target.value)} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-[#101621] light:bg-white px-3 py-2.5 text-white light:text-slate-900 outline-none">
             {accounts.filter((a) => a.type !== 'debit_card').map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
           </Select>
         </label>
@@ -498,15 +538,15 @@ function CsvImport({ open, onClose, onImported, accounts, categories, transactio
       )}
       renderTableRow={(p) => (
         <>
-          <td className="px-3 py-2 text-slate-400">{p.valid ? formatDate(p.date) : '—'}</td>
-          <td className="px-3 py-2 text-slate-300">
+          <td className="px-3 py-2 text-slate-400 light:text-slate-500">{p.valid ? formatDate(p.date) : '—'}</td>
+          <td className="px-3 py-2 text-slate-300 light:text-slate-700">
             {p.description}
-            {p.duplicate && <span className="ml-2 rounded-full bg-amber-300/15 px-1.5 py-0.5 text-[10px] text-amber-200">possible duplicate</span>}
-            {!p.valid && <span className="ml-2 rounded-full bg-rose-300/15 px-1.5 py-0.5 text-[10px] text-rose-200">unreadable amount</span>}
+            {p.duplicate && <span className="ml-2 rounded-full bg-amber-300/15 px-1.5 py-0.5 text-[10px] text-amber-200 light:text-amber-700">possible duplicate</span>}
+            {!p.valid && <span className="ml-2 rounded-full bg-rose-300/15 px-1.5 py-0.5 text-[10px] text-rose-200 light:text-rose-700">unreadable amount</span>}
           </td>
-          <td className="px-3 py-2 capitalize text-slate-400">{p.type}</td>
-          <td className="px-3 py-2 text-slate-400">{p.categoryLabel}</td>
-          <td className="px-3 py-2 text-right text-slate-300">{p.valid ? money(p.amount) : '—'}</td>
+          <td className="px-3 py-2 capitalize text-slate-400 light:text-slate-500">{p.type}</td>
+          <td className="px-3 py-2 text-slate-400 light:text-slate-500">{p.categoryLabel}</td>
+          <td className="px-3 py-2 text-right text-slate-300 light:text-slate-700">{p.valid ? money(p.amount) : '—'}</td>
         </>
       )}
       onImportRow={async (p) => {
@@ -518,6 +558,28 @@ function CsvImport({ open, onClose, onImported, accounts, categories, transactio
   )
 }
 
+
+function TransactionRow({ t, categories, accounts, creditCards = [], showMoney }) {
+  const cat = categories.find((c) => c.id === t.category_id)
+  const acc = accounts.find((a) => a.id === t.account_id) || (t.linked_module === 'credit_card' ? creditCards.find((c) => c.id === t.linked_module_id) : null)
+  const sign = t.type === 'income' || (t.type === 'transfer' && t.transfer_direction === 'in') ? '+' : '-'
+  const color = t.type === 'income' || (t.type === 'transfer' && t.transfer_direction === 'in') ? 'text-emerald-300 light:text-emerald-700' : t.type === 'transfer' ? 'text-accent-300 light:text-accent-700' : 'text-rose-300 light:text-rose-700'
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-white/5 light:border-black/5 px-3.5 py-2">
+      <div className="flex min-w-0 items-center gap-2.5">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/[.05] light:bg-black/[.035]" style={{ color: cat?.color || '#94a3b8' }}>
+          {t.type === 'transfer' ? <ArrowLeftRight size={14} aria-hidden="true" /> : t.type === 'income' ? <ArrowUpRight size={14} aria-hidden="true" /> : <ArrowDownRight size={14} aria-hidden="true" />}
+          <span className="sr-only">{t.type === 'transfer' ? 'Transfer' : t.type === 'income' ? 'Income' : 'Expense'}</span>
+        </div>
+        <div className="min-w-0">
+          <div className="truncate text-sm font-medium text-white light:text-slate-900">{t.description}</div>
+          <div className="truncate text-[11px] text-slate-400 light:text-slate-500">{cat?.name || (t.type === 'transfer' ? 'Transfer' : 'Uncategorised')}{acc ? ` · ${acc.name}` : ''} · {formatDateTime(t.date, t.time)}</div>
+        </div>
+      </div>
+      <div className={`shrink-0 text-right text-sm font-semibold ${color}`}>{showMoney ? `${sign}${money(t.amount).replace('-', '')}` : '••••'}</div>
+    </div>
+  )
+}
 
 function TransactionTicker({ items, categories, accounts, creditCards = [], showMoney }) {
   const boxRef = useRef(null)
@@ -536,35 +598,34 @@ function TransactionTicker({ items, categories, accounts, creditCards = [], show
   const duration = Math.max(8, items.length * 3)
 
   return (
-    <div ref={boxRef} className="min-h-0 flex-1 overflow-hidden border-t border-white/10">
+    // `max-h`, not a fixed `h` — a hard height reserved the full ~6 rows even for an account with
+    // only 1-2 real transactions, leaving a large dead black gap below the last real row instead
+    // of just showing a short, snug box. `max-h` caps at ~6 rows and auto-scrolls past that (same
+    // as before) while shrinking to fit shorter lists exactly. The parent card is still `flex-1`
+    // and reaches the Balances card's baseline on its own — that no longer depends on this box
+    // itself being any particular height.
+    // `scroll-fade` + the mask give this a visible scrollbar and a soft bottom fade instead of a
+    // hard mid-row cut whenever the last row lands right at the box edge — normally invisible
+    // under the ticker's own continuous motion, but the only cue at all once `prefers-reduced-
+    // motion` (globals.css) turns this into a plain manually-scrollable box with no animation.
+    <div
+      ref={boxRef}
+      className={`ticker-box scroll-fade max-h-[352px] overflow-hidden border-t border-white/10 light:border-black/10${scroll ? ' [mask-image:linear-gradient(to_bottom,black_calc(100%-24px),transparent)]' : ''}`}
+      {...(scroll ? { tabIndex: 0, role: 'group', 'aria-label': 'Recent transactions, auto-scrolling — focus to pause' } : {})}
+    >
       <div ref={trackRef} className={scroll ? 'ticker-track' : ''} style={scroll ? { animationDuration: `${duration}s` } : undefined}>
-        {list.map((t, i) => {
-          const cat = categories.find((c) => c.id === t.category_id)
-          const acc = accounts.find((a) => a.id === t.account_id) || (t.linked_module === 'credit_card' ? creditCards.find((c) => c.id === t.linked_module_id) : null)
-          const sign = t.type === 'income' || (t.type === 'transfer' && t.transfer_direction === 'in') ? '+' : '-'
-          const color = t.type === 'income' || (t.type === 'transfer' && t.transfer_direction === 'in') ? 'text-emerald-300' : t.type === 'transfer' ? 'text-accent-300' : 'text-rose-300'
-          return (
-            <div key={`${t.id}-${i}`} className="flex items-center justify-between gap-3 border-b border-white/5 px-3.5 py-2">
-              <div className="flex min-w-0 items-center gap-2.5">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/[.05]" style={{ color: cat?.color || '#94a3b8' }}>
-                  {t.type === 'transfer' ? <ArrowLeftRight size={14} /> : t.type === 'income' ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
-                </div>
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-medium text-white">{t.description}</div>
-                  <div className="truncate text-[11px] text-slate-500">{cat?.name || (t.type === 'transfer' ? 'Transfer' : 'Uncategorised')}{acc ? ` · ${acc.name}` : ''} · {formatDateTime(t.date, t.time)}</div>
-                </div>
-              </div>
-              <div className={`shrink-0 text-right text-sm font-semibold ${color}`}>{showMoney ? `${sign}${money(t.amount).replace('-', '')}` : '••••'}</div>
-            </div>
-          )
-        })}
+        {list.map((t, i) => (
+          <div key={`${t.id}-${i}`} className={i >= items.length ? 'ticker-clone' : undefined} aria-hidden={i >= items.length || undefined}>
+            <TransactionRow t={t} categories={categories} accounts={accounts} creditCards={creditCards} showMoney={showMoney} />
+          </div>
+        ))}
       </div>
     </div>
   )
 }
 
 /* ---------------- Views ---------------- */
-function DashboardView({ data, showMoney, onOpenTxForm, setView, onManageMoneyRules, onPayCardBill }) {
+function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, onManageMoneyRules, onPayCardBill }) {
   const { profile, accounts, transactions, categories, holdings = [], loans = [], loan_payments = [], bucket_list = [], money_rules = [], credit_cards = [], portfolios = [], budget_months = [] } = data
   const moduleSettings = resolveModuleSettings(profile)
   const widgets = resolveDashboardWidgets(profile)
@@ -580,7 +641,14 @@ function DashboardView({ data, showMoney, onOpenTxForm, setView, onManageMoneyRu
   // using the stale, as-of-last-payment `outstanding` here would make this number silently drift
   // from what the Loans page displays for the same loan.
   const totalOutstanding = loans.filter((l) => l.status !== 'closed').reduce((s, l) => s + liveOutstanding(l, loan_payments.filter((p) => p.loan_id === l.id)), 0)
-  const netWorth = totalBalance + currentInv - totalOutstanding
+  // Credit card outstanding is a real liability nothing else nets out — a card spend raises
+  // current_outstanding without touching any account balance, so omitting it overstated net
+  // worth by exactly the unpaid card balance. Ungated by the credit_cards module toggle, matching
+  // how loans/investments are treated elsewhere on this screen (a module switch is UI-hide only).
+  const creditCardDebt = credit_cards.reduce((s, c) => s + Number(c.current_outstanding || 0), 0)
+  const totalAssets = totalBalance + currentInv
+  const totalLiabilities = totalOutstanding + creditCardDebt
+  const netWorth = totalAssets - totalLiabilities
   // Monthly aggregation for last 6 months
   const now = new Date()
   const months = []
@@ -603,9 +671,18 @@ function DashboardView({ data, showMoney, onOpenTxForm, setView, onManageMoneyRu
   // Extra stat-card figures — each gated behind its own Settings > Dashboard toggle, off by
   // default except the original four, so turning them on is opt-in rather than new clutter.
   const netCashflow = (thisMonth?.income || 0) - (thisMonth?.expense || 0)
-  const creditCardDebt = credit_cards.reduce((s, c) => s + Number(c.current_outstanding || 0), 0)
   const totalDebt = (moduleSettings.loans.enabled ? totalOutstanding : 0) + (moduleSettings.credit_cards.enabled ? creditCardDebt : 0)
   const avgMonthlySpend = months.length ? months.reduce((s, m) => s + m.expense, 0) / months.length : 0
+  // Assets and liabilities share one horizontal scale so the two bars are directly comparable —
+  // the length difference between them IS net worth, drawn to scale. A longer liabilities bar
+  // makes a negative net worth legible at a glance instead of requiring mental subtraction.
+  const nwScale = Math.max(totalAssets, totalLiabilities, 1)
+  const nwPct = (v) => `${Math.max(0, (Number(v) / nwScale) * 100)}%`
+  const hasNetWorthDetail = totalAssets > 0 || totalLiabilities > 0
+  // Both are ratios, not rupee amounts, so they stay visible under the privacy toggle — same
+  // treatment savingsRate/creditUtilizationPct/budgetUsedPct already get on this screen.
+  const debtLoadPct = totalAssets > 0 ? Math.round((totalLiabilities / totalAssets) * 100) : null
+  const runwayMonths = avgMonthlySpend > 0 ? totalBalance / avgMonthlySpend : null
   const spendByCategory = {}
   allThisMonth.filter((t) => t.type === 'expense').forEach((t) => {
     const key = t.category_id || 'none'
@@ -619,18 +696,22 @@ function DashboardView({ data, showMoney, onOpenTxForm, setView, onManageMoneyRu
   const budgetTotal = Number(currentBudgetPlan?.total_amount || 0)
   const budgetUsedPct = budgetTotal > 0 ? Math.round(((thisMonth?.expense || 0) / budgetTotal) * 100) : 0
 
+  // showMoney masking rule for this array: *currency* figures mask to '••••'; derived ratios and
+  // counts (savings rate, credit utilisation, budget used, transaction count) stay visible — they
+  // disclose no absolute amount, and the toggle's own label is "Hide amounts". Keep new cards
+  // consistent with this split.
   const STAT_CARDS = [
-    { key: 'income_month', available: true, node: <StatCard label={`Income · ${thisMonth?.label || ''}`} value={showMoney ? money(thisMonth?.income || 0) : '••••'} sub={<span className="flex items-center gap-1"><ArrowUpRight size={13} />This month</span>} icon={TrendingUp} accent="bg-emerald-400/15 text-emerald-200" /> },
-    { key: 'expense_month', available: true, node: <StatCard label={`Expense · ${thisMonth?.label || ''}`} value={showMoney ? money(thisMonth?.expense || 0) : '••••'} sub={<span className="flex items-center gap-1 text-rose-300"><ArrowDownRight size={13} />This month</span>} icon={TrendingDown} accent="bg-rose-400/15 text-rose-200" tone="text-rose-300" /> },
-    { key: 'savings_rate', available: true, node: <StatCard label="Savings rate" value={`${savingsRate}%`} sub={<span className={savingsRate >= 20 ? 'text-emerald-300' : 'text-amber-300'}>{savingsRate >= 20 ? 'Great pace' : 'Aim for 20%+'}</span>} icon={Target} accent="bg-violet-400/15 text-violet-200" tone={savingsRate >= 20 ? 'text-emerald-300' : 'text-amber-300'} /> },
-    { key: 'net_cashflow', available: true, node: <StatCard label="Net cash flow" value={showMoney ? money(netCashflow) : '••••'} sub={<span className={netCashflow >= 0 ? 'text-emerald-300' : 'text-rose-300'}>{netCashflow >= 0 ? 'Positive' : 'Negative'} this month</span>} icon={ArrowLeftRight} accent="bg-accent-400/15 text-accent-200" tone={netCashflow >= 0 ? 'text-emerald-300' : 'text-rose-300'} /> },
-    { key: 'total_debt', available: moduleSettings.loans.enabled || moduleSettings.credit_cards.enabled, node: <StatCard label="Total debt" value={showMoney ? money(totalDebt) : '••••'} sub="Loans + credit cards" icon={CreditCard} accent="bg-rose-400/15 text-rose-200" /> },
-    { key: 'total_invested', available: moduleSettings.investments.enabled, node: <StatCard label="Total invested" value={showMoney ? money(currentInv) : '••••'} sub={<span className={pnl >= 0 ? 'text-emerald-300' : 'text-rose-300'}>{pnl >= 0 ? '+' : '−'}{money(pnl).replace('-', '')} P&amp;L</span>} icon={TrendingUp} accent="bg-violet-400/15 text-violet-200" /> },
-    { key: 'avg_monthly_spend', available: true, node: <StatCard label="Avg. monthly spend" value={showMoney ? money(avgMonthlySpend) : '••••'} sub="Last 6 months" icon={BarChart3} accent="bg-amber-400/15 text-amber-200" /> },
-    { key: 'transactions_count', available: true, node: <StatCard label="Transactions" value={String(allThisMonth.length)} sub="This month" icon={ListChecks} accent="bg-accent-400/15 text-accent-200" /> },
-    { key: 'top_category', available: !!topCategory, node: topCategory && <StatCard label="Top category" value={topCategory.name} sub={showMoney ? money(topCategory.amount) : '••••'} icon={Tag} accent="bg-pink-400/15 text-pink-200" /> },
-    { key: 'credit_utilization', available: moduleSettings.credit_cards.enabled && credit_cards.length > 0, node: <StatCard label="Credit utilization" value={`${creditUtilizationPct}%`} sub={creditUtilizationPct >= 70 ? 'Getting high' : 'Under control'} icon={PieChartIcon} accent="bg-rose-400/15 text-rose-200" tone={creditUtilizationPct >= 70 ? 'text-rose-300' : 'text-emerald-300'} /> },
-    { key: 'budget_used_pct', available: moduleSettings.budgets.enabled && budgetTotal > 0, node: <StatCard label="Budget used" value={`${budgetUsedPct}%`} sub={budgetUsedPct > 100 ? 'Over budget' : 'On track'} icon={Zap} accent="bg-violet-400/15 text-violet-200" tone={budgetUsedPct > 100 ? 'text-rose-300' : 'text-emerald-300'} /> },
+    { key: 'income_month', available: true, node: <StatCard label={`Income · ${thisMonth?.label || ''}`} value={showMoney ? money(thisMonth?.income || 0) : '••••'} sub={<span className="flex items-center gap-1"><ArrowUpRight size={13} aria-hidden="true" /><span className="sr-only">Money in · </span>This month</span>} icon={TrendingUp} accent="bg-emerald-400/15 text-emerald-200 light:text-emerald-700" /> },
+    { key: 'expense_month', available: true, node: <StatCard label={`Expense · ${thisMonth?.label || ''}`} value={showMoney ? money(thisMonth?.expense || 0) : '••••'} sub={<span className="flex items-center gap-1 text-rose-300 light:text-rose-700"><ArrowDownRight size={13} aria-hidden="true" /><span className="sr-only">Money out · </span>This month</span>} icon={TrendingDown} accent="bg-rose-400/15 text-rose-200 light:text-rose-700" tone="text-rose-300 light:text-rose-700" /> },
+    { key: 'savings_rate', available: true, node: <StatCard label="Savings rate" value={`${savingsRate}%`} sub={<span className={savingsRate >= 20 ? 'text-emerald-300 light:text-emerald-700' : 'text-amber-300 light:text-amber-700'}>{savingsRate >= 20 ? 'Great pace' : 'Aim for 20%+'}</span>} icon={Target} accent="bg-accent-400/15 text-accent-200 light:text-accent-700" tone={savingsRate >= 20 ? 'text-emerald-300 light:text-emerald-700' : 'text-amber-300 light:text-amber-700'} /> },
+    { key: 'net_cashflow', available: true, node: <StatCard label="Net cash flow" value={showMoney ? money(netCashflow) : '••••'} sub={<span className={netCashflow >= 0 ? 'text-emerald-300 light:text-emerald-700' : 'text-rose-300 light:text-rose-700'}>{netCashflow >= 0 ? 'Positive' : 'Negative'} this month</span>} icon={ArrowLeftRight} accent="bg-accent-400/15 text-accent-200 light:text-accent-700" tone={netCashflow >= 0 ? 'text-emerald-300 light:text-emerald-700' : 'text-rose-300 light:text-rose-700'} /> },
+    { key: 'total_debt', available: moduleSettings.loans.enabled || moduleSettings.credit_cards.enabled, node: <StatCard label="Total debt" value={showMoney ? money(totalDebt) : '••••'} sub="Loans + credit cards" icon={CreditCard} accent="bg-rose-400/15 text-rose-200 light:text-rose-700" /> },
+    { key: 'total_invested', available: moduleSettings.investments.enabled, node: <StatCard label="Total invested" value={showMoney ? money(currentInv) : '••••'} sub={<span className={pnl >= 0 ? 'text-emerald-300 light:text-emerald-700' : 'text-rose-300 light:text-rose-700'}><span className="sr-only">{pnl >= 0 ? 'Profit ' : 'Loss '}</span>{pnl >= 0 ? '+' : '−'}{showMoney ? money(pnl).replace('-', '') : '••••'} P&amp;L</span>} icon={TrendingUp} accent="bg-accent-400/15 text-accent-200 light:text-accent-700" /> },
+    { key: 'avg_monthly_spend', available: true, node: <StatCard label="Avg. monthly spend" value={showMoney ? money(avgMonthlySpend) : '••••'} sub="Last 6 months" icon={BarChart3} accent="bg-amber-400/15 text-amber-200 light:text-amber-700" /> },
+    { key: 'transactions_count', available: true, node: <StatCard label="Transactions" value={String(allThisMonth.length)} sub="This month" icon={ListChecks} accent="bg-accent-400/15 text-accent-200 light:text-accent-700" /> },
+    { key: 'top_category', available: !!topCategory, node: topCategory && <StatCard label="Top category" value={topCategory.name} sub={showMoney ? money(topCategory.amount) : '••••'} icon={Tag} accent="bg-accent-400/15 text-accent-200 light:text-accent-700" /> },
+    { key: 'credit_utilization', available: moduleSettings.credit_cards.enabled && credit_cards.length > 0, node: <StatCard label="Credit utilization" value={`${creditUtilizationPct}%`} sub={creditUtilizationPct >= 70 ? 'Getting high' : 'Under control'} icon={PieChartIcon} accent="bg-rose-400/15 text-rose-200 light:text-rose-700" tone={creditUtilizationPct >= 70 ? 'text-rose-300 light:text-rose-700' : 'text-emerald-300 light:text-emerald-700'} /> },
+    { key: 'budget_used_pct', available: moduleSettings.budgets.enabled && budgetTotal > 0, node: <StatCard label="Budget used" value={`${budgetUsedPct}%`} sub={budgetUsedPct > 100 ? 'Over budget' : 'On track'} icon={Zap} accent="bg-accent-400/15 text-accent-200 light:text-accent-700" tone={budgetUsedPct > 100 ? 'text-rose-300 light:text-rose-700' : 'text-emerald-300 light:text-emerald-700'} /> },
   ].filter((s) => widgets[s.key]?.enabled && s.available)
 
   // Consolidated balances: bank accounts, credit cards (as debt), investment portfolios.
@@ -640,115 +721,245 @@ function DashboardView({ data, showMoney, onOpenTxForm, setView, onManageMoneyRu
   const balanceItems = [
     ...accounts.filter((a) => a.type !== 'debit_card').map((a) => ({
       id: `acc-${a.id}`, name: a.name, sub: a.type.replace('_', ' '), amount: Number(a.current_balance || 0),
-      icon: a.type === 'cash' ? Wallet : Landmark, color: a.color || '#22d3ee', debt: false,
+      icon: a.type === 'cash' ? Wallet : Landmark, color: a.color || '#64748b', debt: false,
     })),
     ...(moduleSettings.credit_cards.enabled ? credit_cards.map((c) => ({
       id: `cc-${c.id}`, name: c.name, sub: 'Credit card', amount: Number(c.current_outstanding || 0),
-      icon: CreditCard, color: c.color || '#f472b6', debt: true,
+      icon: CreditCard, color: c.color || '#64748b', debt: true,
     })) : []),
     ...(moduleSettings.investments.enabled ? portfolios.map((p) => {
       const value = holdings.filter((h) => h.portfolio_id === p.id).reduce((s, h) => s + Number(h.qty) * Number(h.current_price || h.avg_buy_price), 0) + Number(p.cash_balance || 0)
-      return { id: `port-${p.id}`, name: p.name, sub: 'Investment', amount: value, icon: TrendingUp, color: p.color || '#a78bfa', debt: false }
+      return { id: `port-${p.id}`, name: p.name, sub: 'Investment', amount: value, icon: TrendingUp, color: p.color || '#64748b', debt: false }
     }) : []),
   ]
+
+  // Detects real overflow (rather than always masking) so the fade only appears when there's
+  // actually more content below — a short balance list's last row should stay fully opaque.
+  const balancesRef = useRef(null)
+  const [balancesOverflow, setBalancesOverflow] = useState(false)
+  useLayoutEffect(() => {
+    const el = balancesRef.current
+    if (!el) return setBalancesOverflow(false)
+    setBalancesOverflow(el.scrollHeight > el.clientHeight + 2)
+  }, [balanceItems.length])
 
   const showPortfolioTile = moduleSettings.investments.enabled && holdings.length > 0
   const showLoansTile = moduleSettings.loans.enabled && loans.length > 0
   const showBucketTile = moduleSettings.bucket_list.enabled && bucket_list.length > 0
-  const showQuickTiles = showPortfolioTile || showLoansTile || showBucketTile
+
+  // Same {key, node} shape as STAT_CARDS so both groups can flow through one shared grid below —
+  // stats and quick tiles used to render as two separate rows, which meant an odd stat-card count
+  // left its own row half-empty even after the auto-fit fix, independent of how much room the
+  // tiles row had free right below it. One combined row lets every enabled card (stat or tile)
+  // share the same width budget.
+  const QUICK_TILE_CARDS = [
+    {
+      key: 'portfolio_tile', available: widgets.quick_tiles.enabled && showPortfolioTile, node: (
+        <StatCard
+          onClick={() => setView('investments')}
+          label="Portfolio"
+          value={showMoney ? money(currentInv) : '••••'}
+          sub={<span><span className="sr-only">{pnl >= 0 ? 'Profit ' : 'Loss '}</span>{pnl >= 0 ? '+' : '−'}{showMoney ? money(pnl).replace('-', '') : '••••'} P&amp;L</span>}
+          icon={TrendingUp}
+          accent="bg-accent-400/15 text-accent-200 light:text-accent-700"
+          tone={pnl >= 0 ? 'text-emerald-300 light:text-emerald-700' : 'text-rose-300 light:text-rose-700'}
+        />
+      ),
+    },
+    {
+      key: 'loans_tile', available: widgets.quick_tiles.enabled && showLoansTile, node: (
+        <StatCard
+          onClick={() => setView('loans')}
+          label="Loans outstanding"
+          value={showMoney ? money(totalOutstanding) : '••••'}
+          sub={`${loans.filter((l) => l.status !== 'closed').length} active loan${loans.filter((l) => l.status !== 'closed').length === 1 ? '' : 's'}`}
+          icon={Briefcase}
+          accent="bg-amber-400/15 text-amber-200 light:text-amber-700"
+          tone="text-slate-400 light:text-slate-500"
+        />
+      ),
+    },
+    {
+      key: 'bucket_tile', available: widgets.quick_tiles.enabled && showBucketTile, node: (
+        <StatCard
+          onClick={() => setView('bucket')}
+          label="Bucket list"
+          value={`${bucket_list.length} item${bucket_list.length === 1 ? '' : 's'}`}
+          sub={`${bucket_list.filter((b) => (Date.now() - new Date(b.created_at).getTime()) / 86400000 >= 30).length} past 30 days`}
+          icon={Mountain}
+          accent="bg-accent-400/15 text-accent-200 light:text-accent-700"
+          tone="text-slate-400 light:text-slate-500"
+        />
+      ),
+    },
+  ].filter((t) => t.available)
+
+  // Combined so stats and quick tiles share one row instead of two — see QUICK_TILE_CARDS above.
+  // Savings rate is desktop-only (see the render below): mobile drops it and shows the remaining
+  // cards 2-per-row instead.
+  const ALL_CARDS = [...STAT_CARDS, ...QUICK_TILE_CARDS]
+
+  // Which 3 actions sit in the net-worth card's mobile quick-action row is user-configurable
+  // (Settings > Mobile nav) — same mechanism as the bottom nav's primary slots. 'add' is a
+  // special action (opens the transaction form) rather than a real destination; everything else
+  // just navigates. Unmodified profiles keep today's default (Add/Ledger/Accounts).
+  const quickActionDestinations = [
+    ADD_ACTION_META, MOBILE_MANDATORY_META.transactions, MOBILE_MANDATORY_META.accounts,
+    ...orderedEnabledKeys(moduleSettings).filter((k) => NAV_META[k]).map((k) => NAV_META[k]),
+  ]
+  const quickActionSlots = resolveQuickActionSlots(profile, quickActionDestinations.map((d) => d.key))
+  const quickActionItems = quickActionSlots.map((key) => quickActionDestinations.find((d) => d.key === key)).filter(Boolean)
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3">
+    <div className="flex min-h-full flex-col gap-3">
       {widgets.credit_card_alert.enabled && moduleSettings.credit_cards.enabled && (
         <CreditCardBillAlert creditCards={credit_cards} transactions={transactions} onPay={onPayCardBill} showMoney={showMoney} />
       )}
 
       {widgets.net_worth?.enabled && (
-        <div className="shrink-0 rounded-3xl border border-white/10 bg-white/[.035] p-6">
-          <div className="text-xs uppercase tracking-widest text-slate-500">Net worth</div>
-          <div className="mt-1 text-[clamp(2rem,6vw,3rem)] font-semibold leading-[1.1] tracking-[-0.01em] text-white">
-            {showMoney ? money(netWorth) : '••••••••'}
+        <div className="shrink-0 rounded-3xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] p-6 lg:grid lg:grid-cols-[minmax(300px,1.05fr)_minmax(0,1.5fr)] lg:items-center lg:gap-8 xl:grid-cols-[minmax(300px,1fr)_minmax(0,1.5fr)_minmax(0,0.75fr)]">
+          <div>
+            <h2 className="text-xs uppercase tracking-widest text-slate-400 light:text-slate-500">Net worth</h2>
+            <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <div className={`text-[clamp(2rem,6vw,3rem)] font-semibold leading-[1.1] tracking-[-0.01em] ${netWorth < 0 ? 'text-rose-200 light:text-rose-700' : 'text-white light:text-slate-900'}`}>
+                {showMoney ? `${netWorth < 0 ? '−' : ''}${money(netWorth).replace('-', '')}` : '••••••••'}
+              </div>
+              {netWorth < 0 && (
+                <span className="rounded-full border border-rose-300/30 bg-rose-300/5 px-2 py-0.5 text-[11px] font-semibold text-rose-200 light:text-rose-700">
+                  Net negative
+                </span>
+              )}
+            </div>
+            <div className="mt-2 flex flex-wrap items-baseline gap-x-2 text-sm">
+              <span className="text-slate-400 light:text-slate-500">Net cash flow · {thisMonth?.label || 'this month'}</span>
+              <span className={`font-semibold ${netCashflow >= 0 ? 'text-emerald-300 light:text-emerald-700' : 'text-rose-300 light:text-rose-700'}`}>
+                <span className="sr-only">{netCashflow >= 0 ? 'Up ' : 'Down '}</span>
+                {netCashflow >= 0 ? '+' : '−'}{showMoney ? money(Math.abs(netCashflow)).replace('-', '') : '••••'}
+              </span>
+            </div>
+            <div className="mt-5 grid grid-cols-3 gap-2 lg:hidden">
+              {quickActionItems.map((item) => (
+                <button
+                  key={item.key}
+                  onClick={() => (item.key === 'add' ? onOpenTxForm() : setView(item.key))}
+                  className="flex flex-col items-center gap-1.5 rounded-2xl bg-white/[.04] light:bg-black/[.03] py-3 text-xs text-slate-300 light:text-slate-700 transition hover:bg-white/[.08] hover:light:bg-black/[.05] active:scale-[.97]"
+                >
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-full ${item.key === 'add' ? 'bg-accent-400/15 text-accent-200 light:text-accent-700' : 'bg-white/[.06] light:bg-black/[.04] text-slate-200 light:text-slate-600'}`}><item.icon size={18} /></div>
+                  {item.label}
+                </button>
+              ))}
+            </div>
           </div>
-          <div className={`mt-2 flex items-center gap-1.5 text-sm ${netCashflow >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
-            {netCashflow >= 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
-            {showMoney ? money(Math.abs(netCashflow)) : '••••'} this month
+
+          <div className="hidden min-w-0 border-white/[.07] light:border-black/[.07] lg:flex lg:flex-col lg:justify-center lg:gap-2.5 lg:border-l lg:pl-8">
+            {!hasNetWorthDetail ? (
+              <div className="text-sm text-slate-400 light:text-slate-500">
+                Nothing tracked yet.{' '}
+                <button onClick={() => setView('accounts')} className="text-accent-300 light:text-accent-700 hover:underline">Add an account</button>{' '}
+                to see what your net worth is made of.
+              </div>
+            ) : (
+              <>
+                <div>
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="text-[11px] font-semibold uppercase tracking-widest text-slate-400 light:text-slate-500">Assets</span>
+                    <span className="text-sm font-semibold text-white light:text-slate-900">{showMoney ? money(totalAssets) : '••••'}</span>
+                  </div>
+                  <div
+                    role="img"
+                    aria-label={showMoney ? `Assets ${money(totalAssets)}: cash and bank ${money(totalBalance)}, investments ${money(currentInv)}` : 'Assets breakdown, amounts hidden'}
+                    className="mt-1.5 flex h-2 gap-px overflow-hidden rounded-full bg-white/[.07] light:bg-black/[.07]"
+                  >
+                    <div className="bg-emerald-400" style={{ width: nwPct(totalBalance) }} />
+                    <div className="bg-emerald-400/50" style={{ width: nwPct(currentInv) }} />
+                  </div>
+                  <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-[11px] text-slate-400 light:text-slate-500">
+                    <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />Cash &amp; bank {showMoney ? money(totalBalance) : '••••'}</span>
+                    <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400/50" />Investments {showMoney ? money(currentInv) : '••••'}</span>
+                  </div>
+                </div>
+                <div>
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="text-[11px] font-semibold uppercase tracking-widest text-slate-400 light:text-slate-500">Liabilities</span>
+                    <span className="text-sm font-semibold text-white light:text-slate-900">{showMoney ? money(totalLiabilities) : '••••'}</span>
+                  </div>
+                  <div
+                    role="img"
+                    aria-label={showMoney ? `Liabilities ${money(totalLiabilities)}: loans ${money(totalOutstanding)}, credit cards ${money(creditCardDebt)}` : 'Liabilities breakdown, amounts hidden'}
+                    className="mt-1.5 flex h-2 gap-px overflow-hidden rounded-full bg-white/[.07] light:bg-black/[.07]"
+                  >
+                    <div className="bg-rose-400" style={{ width: nwPct(totalOutstanding) }} />
+                    <div className="bg-rose-400/50" style={{ width: nwPct(creditCardDebt) }} />
+                  </div>
+                  <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-[11px] text-slate-400 light:text-slate-500">
+                    <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 shrink-0 rounded-full bg-rose-400" />Loans {showMoney ? money(totalOutstanding) : '••••'}</span>
+                    <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 shrink-0 rounded-full bg-rose-400/50" />Cards {showMoney ? money(creditCardDebt) : '••••'}</span>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
-          <div className="mt-5 grid grid-cols-3 gap-2">
-            <button onClick={onOpenTxForm} className="flex flex-col items-center gap-1.5 rounded-2xl bg-white/[.04] py-3 text-xs text-slate-300 transition hover:bg-white/[.08]">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-accent-400/15 text-accent-200"><Plus size={18} /></div>
-              Add
-            </button>
-            <button onClick={() => setView('transactions')} className="flex flex-col items-center gap-1.5 rounded-2xl bg-white/[.04] py-3 text-xs text-slate-300 transition hover:bg-white/[.08]">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/[.06] text-slate-200"><BarChart3 size={18} /></div>
-              Ledger
-            </button>
-            <button onClick={() => setView('accounts')} className="flex flex-col items-center gap-1.5 rounded-2xl bg-white/[.04] py-3 text-xs text-slate-300 transition hover:bg-white/[.08]">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/[.06] text-slate-200"><Landmark size={18} /></div>
-              Accounts
-            </button>
+
+          <div className="hidden border-white/[.07] light:border-black/[.07] xl:flex xl:flex-col xl:justify-center xl:gap-3 xl:border-l xl:pl-8">
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-400 light:text-slate-500">Cash runway</div>
+              <div className="mt-0.5 text-xl font-semibold leading-tight text-white light:text-slate-900">
+                {runwayMonths === null ? '—' : <>{runwayMonths > 99 ? '99+' : runwayMonths.toFixed(1)}<span className="ml-1 text-sm font-medium text-slate-400 light:text-slate-500">mo of avg. spend</span></>}
+              </div>
+            </div>
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-400 light:text-slate-500">Debt load</div>
+              <div className={`mt-0.5 text-xl font-semibold leading-tight ${debtLoadPct === null ? 'text-slate-400 light:text-slate-500' : debtLoadPct >= 100 ? 'text-rose-300 light:text-rose-700' : debtLoadPct >= 60 ? 'text-amber-300 light:text-amber-700' : 'text-emerald-300 light:text-emerald-700'}`}>
+                {debtLoadPct === null ? '—' : <>{debtLoadPct}<span className="ml-1 text-sm font-medium text-slate-400 light:text-slate-500">% of assets owed</span></>}
+              </div>
+            </div>
           </div>
         </div>
       )}
 
-      {STAT_CARDS.length > 0 && (
-        <div className="grid shrink-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {STAT_CARDS.map((s) => <div key={s.key}>{s.node}</div>)}
+      {ALL_CARDS.length > 0 && (
+        // auto-fit (not auto-fill) collapses empty tracks and lets 1fr redistribute their space
+        // to the real cards instead — so cards that could fit more columns than exist stretch to
+        // fill the row evenly, rather than leaving a permanently empty trailing cell. The 150px
+        // minimum is the width these cards already render comfortably at on a phone (2-per-row).
+        <div className="grid shrink-0 grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-3">
+          {ALL_CARDS.map((s) => (
+            // Savings rate is desktop-only — mobile shows the other cards 2-per-row instead.
+            <div key={s.key} className={`min-w-0${s.key === 'savings_rate' ? ' hidden lg:block' : ''}`}>{s.node}</div>
+          ))}
         </div>
       )}
 
-      {widgets.quick_tiles.enabled && showQuickTiles && (
-        <div className="grid shrink-0 gap-3 sm:grid-cols-3">
-          {showPortfolioTile && (
-            <button onClick={() => setView('investments')} className="rounded-xl border border-white/10 bg-white/[.035] p-3 text-left transition hover:bg-white/[.06]">
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-slate-400">Portfolio</span>
-                <TrendingUp size={14} className="text-violet-300" />
-              </div>
-              <div className="mt-1.5 text-lg font-semibold text-white">{showMoney ? money(currentInv) : '••••'}</div>
-              <div className={`mt-0.5 text-[11px] ${pnl >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>{pnl >= 0 ? '+' : '−'}{money(pnl).replace('-', '')} P&amp;L</div>
-            </button>
-          )}
-          {showLoansTile && (
-            <button onClick={() => setView('loans')} className="rounded-xl border border-white/10 bg-white/[.035] p-3 text-left transition hover:bg-white/[.06]">
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-slate-400">Loans outstanding</span>
-                <Briefcase size={14} className="text-amber-300" />
-              </div>
-              <div className="mt-1.5 text-lg font-semibold text-white">{showMoney ? money(totalOutstanding) : '••••'}</div>
-              <div className="mt-0.5 text-[11px] text-slate-500">{loans.filter((l) => l.status !== 'closed').length} active loan{loans.filter((l) => l.status !== 'closed').length === 1 ? '' : 's'}</div>
-            </button>
-          )}
-          {showBucketTile && (
-            <button onClick={() => setView('bucket')} className="rounded-xl border border-white/10 bg-white/[.035] p-3 text-left transition hover:bg-white/[.06]">
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-slate-400">Bucket list</span>
-                <Mountain size={14} className="text-accent-300" />
-              </div>
-              <div className="mt-1.5 text-lg font-semibold text-white">{bucket_list.length} item{bucket_list.length === 1 ? '' : 's'}</div>
-              <div className="mt-0.5 text-[11px] text-slate-500">{bucket_list.filter((b) => (Date.now() - new Date(b.created_at).getTime()) / 86400000 >= 30).length} past 30 days</div>
-            </button>
-          )}
-        </div>
-      )}
-
+      {/*
+        Two independent flex columns for desktop (each sizes its own height from its own content —
+        a shared CSS Grid row here would force the shorter column's row to stretch to match the
+        taller one, leaving a dead gap). Mobile collapses to one column via plain stacking; within
+        the right column, Balances is placed before Money rules in the DOM so mobile shows Balances
+        first, then `lg:order-first` on Money rules pulls it back to the top for desktop only.
+      */}
       <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[1.4fr_1fr]">
         <div className="flex min-h-0 flex-col gap-3">
           {widgets.cashflow_chart.enabled && (
-            <div className="shrink-0 rounded-2xl border border-white/10 bg-white/[.035] p-3.5">
+            <div className="shrink-0 rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] p-3.5">
               <div className="mb-1 flex items-center justify-between">
                 <div>
-                  <div className="text-sm font-semibold text-white">Cash flow · last 6 months</div>
-                  <div className="text-xs text-slate-500">Income vs expense</div>
+                  <h2 className="text-sm font-semibold text-white light:text-slate-900">Cash flow · last 6 months</h2>
+                  <div className="text-xs text-slate-400 light:text-slate-500">{showMoney ? 'Income vs expense' : 'Income vs expense · amounts hidden'}</div>
                 </div>
-                <BarChart3 size={16} className="text-slate-500" />
+                <BarChart3 size={16} className="text-slate-500" aria-hidden="true" />
               </div>
               <div className="h-40">
                 <ResponsiveContainer width="100%" height="100%">
+                  {/* With showMoney off the axis ticks and tooltip mask to '••••', but the bars keep
+                      their real relative heights — the shape of the month-over-month trend is a
+                      known, accepted residual leak. Masking it would mean either faking the user's
+                      own data or hiding the chart outright, neither of which matches how every
+                      other masked figure on this dashboard behaves. */}
                   <BarChart data={months}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#ffffff11" />
                     <XAxis dataKey="label" tick={{ fill: '#94a3b8', fontSize: 12 }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fill: '#94a3b8', fontSize: 12 }} axisLine={false} tickLine={false} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
-                    <Tooltip cursor={{ fill: '#ffffff08' }} contentStyle={{ background: '#0f1420', border: '1px solid #ffffff22', borderRadius: 12, color: '#fff' }} formatter={(v) => money(v)} />
+                    <YAxis tick={{ fill: '#94a3b8', fontSize: 12 }} axisLine={false} tickLine={false} tickFormatter={(v) => (showMoney ? `₹${(v / 1000).toFixed(0)}k` : '••••')} />
+                    <Tooltip cursor={{ fill: '#ffffff08' }} contentStyle={{ background: '#0f1420', border: '1px solid #ffffff22', borderRadius: 12, color: '#fff' }} formatter={(v) => (showMoney ? money(v) : '••••')} />
                     <Legend iconType="circle" wrapperStyle={{ color: '#94a3b8', fontSize: 12 }} />
                     <Bar dataKey="income" fill="#34d399" radius={[8, 8, 0, 0]} />
                     <Bar dataKey="expense" fill="#fb7185" radius={[8, 8, 0, 0]} />
@@ -758,14 +969,23 @@ function DashboardView({ data, showMoney, onOpenTxForm, setView, onManageMoneyRu
             </div>
           )}
 
+          {/* Desktop-only — mobile has its own bottom-nav "Ledger" tab for browsing transactions,
+              so this doesn't need to also live on the dashboard there. */}
           {widgets.recent_transactions.enabled && (
-            <div className="flex min-h-0 flex-1 flex-col rounded-2xl border border-white/10 bg-white/[.035]">
+            // Natural height — NOT `flex-1`. `flex-1` made this card stretch to match whatever the
+            // Balances column happened to need, which left dead black space below the ticker
+            // (itself capped at ~6 rows via `max-h-[352px]`, see TransactionTicker) on any account
+            // that didn't have enough transactions to fill that stretched height. This card is now
+            // the row's real reference height instead: it sizes to its own header + ticker only,
+            // and Balances (`lg:flex-1`, in the right column) fills the grid's stretched height to
+            // match THIS card's bottom edge — see the Balances card below for the other half.
+            <div className="hidden rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] lg:flex lg:flex-col">
               <div className="flex shrink-0 items-center justify-between px-3.5 py-2.5">
                 <div>
-                  <div className="text-sm font-semibold text-white">Recent transactions</div>
-                  <div className="text-xs text-slate-500">{thisMonth?.label || 'This month'}'s activity</div>
+                  <h2 className="text-sm font-semibold text-white light:text-slate-900">Recent transactions</h2>
+                  <div className="text-xs text-slate-400 light:text-slate-500">{thisMonth?.label || 'This month'}'s activity</div>
                 </div>
-                <button onClick={() => setView('transactions')} className="text-xs text-accent-300 hover:underline">See all</button>
+                <button onClick={() => setView('transactions')} className="text-xs text-accent-300 light:text-accent-700 hover:underline">See all</button>
               </div>
               {recent.length === 0 ? (
                 <EmptyState compact icon={Wallet} title="No transactions yet" message="Log your first income or expense to see it here." cta="Add transaction" onCta={onOpenTxForm} />
@@ -777,40 +997,52 @@ function DashboardView({ data, showMoney, onOpenTxForm, setView, onManageMoneyRu
         </div>
 
         <div className="flex min-h-0 flex-col gap-3">
-          {widgets.money_rules_widget.enabled && (
-            <div className="shrink-0">
-              <MoneyRulesWidget rules={money_rules} onOpen={onManageMoneyRules} />
-            </div>
-          )}
           {widgets.balances_panel.enabled && (
-            <div className="flex min-h-0 flex-1 flex-col rounded-2xl border border-white/10 bg-white/[.035] p-3.5">
+            // Mobile: no height cap — it grows to show every account (no other bottom-nav view
+            // shows balances there). Desktop: `lg:flex-1` — Recent Transactions (left column,
+            // above) is now a natural-height card, not flex-1, so its own height (header + up to
+            // ~6 rows) is what the grid stretches this (right) column to match. This card fills
+            // whatever's left in that stretched height after Money rules, so it shrinks as Money
+            // rules grows and grows (up to Recent Transactions' height) as Money rules shrinks —
+            // always landing on the same bottom edge, with its own list already scrollable
+            // (min-h-[160px] floor + overflow-y-auto below) for whatever doesn't fit.
+            <div className="flex min-h-[160px] min-w-0 flex-col rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] p-3.5 lg:flex-1">
               <div className="mb-2 flex shrink-0 items-center justify-between">
                 <div>
-                  <div className="text-sm font-semibold text-white">Balances</div>
-                  <div className="text-xs text-slate-500">Accounts, cards &amp; investments</div>
+                  <h2 className="text-sm font-semibold text-white light:text-slate-900">Balances</h2>
+                  <div className="text-xs text-slate-400 light:text-slate-500">Accounts, cards &amp; investments</div>
                 </div>
-                <button onClick={() => setView('accounts')} className="text-xs text-accent-300 hover:underline">Manage</button>
+                <button onClick={() => setView('accounts')} className="text-xs text-accent-300 light:text-accent-700 hover:underline">Manage</button>
               </div>
               {balanceItems.length === 0 ? (
                 <EmptyState compact icon={Landmark} title="Nothing tracked yet" message="Add an account, card, or portfolio to see balances here." cta="Add account" onCta={() => setView('accounts')} />
               ) : (
-                <div className="min-h-0 flex-1 space-y-2 overflow-y-auto">
+                <div
+                  ref={balancesRef}
+                  className={`scroll-fade min-h-0 flex-1 space-y-2 overflow-y-auto${balancesOverflow ? ' [mask-image:linear-gradient(to_bottom,black_calc(100%-28px),transparent)]' : ''}`}
+                >
                   {balanceItems.map((it) => (
-                    <div key={it.id} className="flex items-center justify-between rounded-xl border border-white/5 bg-black/20 px-3 py-2">
+                    <div key={it.id} className="flex items-center justify-between rounded-xl border border-white/5 light:border-black/5 bg-white/[.07] light:bg-black/[.07] px-3 py-2">
                       <div className="flex min-w-0 items-center gap-2.5">
                         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style={{ background: `${it.color}22`, color: it.color }}>
                           <it.icon size={14} />
                         </div>
                         <div className="min-w-0">
-                          <div className="truncate text-sm font-medium text-white">{it.name}</div>
-                          <div className="truncate text-[11px] capitalize text-slate-500">{it.sub}</div>
+                          <div className="truncate text-sm font-medium text-white light:text-slate-900">{it.name}</div>
+                          <div className="truncate text-[11px] capitalize text-slate-400 light:text-slate-500">{it.sub}</div>
                         </div>
                       </div>
-                      <div className={`shrink-0 text-sm font-semibold ${it.debt ? 'text-rose-300' : 'text-white'}`}>{showMoney ? `${it.debt ? '−' : ''}${money(it.amount).replace('-', '')}` : '••••'}</div>
+                      <div className={`shrink-0 text-sm font-semibold ${it.debt ? 'text-rose-300 light:text-rose-700' : 'text-white light:text-slate-900'}`}>{showMoney ? `${it.debt ? '−' : ''}${money(it.amount).replace('-', '')}` : '••••'}</div>
                     </div>
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {widgets.money_rules_widget.enabled && (
+            <div className="shrink-0 lg:order-first">
+              <MoneyRulesWidget rules={money_rules} onOpen={onManageMoneyRules} />
             </div>
           )}
         </div>
@@ -860,15 +1092,15 @@ function AttachmentViewer({ open, onClose, transaction }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-white/10 bg-[#141a28]">
-        <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
-          <div className="flex min-w-0 items-center gap-2 text-sm font-medium text-white"><Paperclip size={15} className="shrink-0 text-slate-500" /><span className="truncate">{name || 'Attachment'}</span></div>
+      <div onClick={(e) => e.stopPropagation()} className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white">
+        <div className="flex items-center justify-between border-b border-white/10 light:border-black/10 px-5 py-4">
+          <div className="flex min-w-0 items-center gap-2 text-sm font-medium text-white light:text-slate-900"><Paperclip size={15} className="shrink-0 text-slate-500" /><span className="truncate">{name || 'Attachment'}</span></div>
           <div className="flex items-center gap-1">
-            {url && <button type="button" onClick={download} disabled={downloading} className="rounded-lg p-2 text-slate-400 hover:bg-white/5 hover:text-white disabled:opacity-50" title="Download"><Download size={16} /></button>}
-            <button onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-white/5"><X size={18} /></button>
+            {url && <button type="button" onClick={download} disabled={downloading} className="rounded-lg p-2 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900 disabled:opacity-50" title="Download"><Download size={16} /></button>}
+            <button onClick={onClose} className="rounded-lg p-2 text-slate-400 light:text-slate-500 hover:bg-white/5"><X size={18} /></button>
           </div>
         </div>
-        <div className="flex-1 overflow-auto bg-black/30 p-4">
+        <div className="flex-1 overflow-auto bg-black/30 light:bg-black/[.08] p-4">
           {loading ? (
             <div className="flex h-64 items-center justify-center text-sm text-slate-500">Loading…</div>
           ) : !url ? (
@@ -878,9 +1110,9 @@ function AttachmentViewer({ open, onClose, transaction }) {
           ) : isPdf ? (
             <iframe src={url} title={name} className="h-[70vh] w-full rounded-xl bg-white" />
           ) : (
-            <div className="flex h-64 flex-col items-center justify-center gap-3 text-sm text-slate-400">
+            <div className="flex h-64 flex-col items-center justify-center gap-3 text-sm text-slate-400 light:text-slate-500">
               <FileText size={28} />
-              <button type="button" onClick={download} disabled={downloading} className="rounded-xl bg-gradient-to-r from-accent-300 to-blue-500 px-4 py-2 text-sm font-semibold text-[#07101c] disabled:opacity-60">{downloading ? 'Downloading…' : 'Download file'}</button>
+              <button type="button" onClick={download} disabled={downloading} className="rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-4 py-2 text-sm font-semibold text-[#07101c] disabled:opacity-60">{downloading ? 'Downloading…' : 'Download file'}</button>
             </div>
           )}
         </div>
@@ -889,9 +1121,34 @@ function AttachmentViewer({ open, onClose, transaction }) {
   )
 }
 
-function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onImport, showMoney, onToggleMoney, onOpenRecurring, onPayCardBill }) {
+function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTxBulk, onImport, showMoney, onToggleMoney, onOpenRecurring, onPayCardBill }) {
   const { transactions, accounts, categories, credit_cards: creditCards = [] } = data
   const [query, setQuery] = useState('')
+  // Mobile has no per-row delete icon (removed — see the row markup below); instead, a long press
+  // enters selection mode, a plain tap after that toggles a row, and a bulk-delete action appears
+  // in the toolbar. Desktop keeps its always-visible edit/delete icons unchanged.
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState(() => new Set())
+  const longPressTimer = useRef(null)
+  const longPressFired = useRef(false)
+  const LONG_PRESS_MS = 500
+  const cancelLongPress = () => { if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null } }
+  const toggleSelect = (id) => setSelectedIds((prev) => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next })
+  const startLongPress = (id) => {
+    longPressFired.current = false
+    cancelLongPress()
+    longPressTimer.current = setTimeout(() => { longPressFired.current = true; setSelectMode(true); toggleSelect(id) }, LONG_PRESS_MS)
+  }
+  const exitSelectMode = () => { setSelectMode(false); setSelectedIds(new Set()) }
+  const handleRowTap = (t) => {
+    if (longPressFired.current) { longPressFired.current = false; return } // suppress the tap the long-press itself just triggered
+    if (selectMode) toggleSelect(t.id)
+    else onEditTx(t)
+  }
+  const handleBulkDelete = async () => {
+    const didDelete = await onDeleteTxBulk([...selectedIds])
+    if (didDelete) exitSelectMode()
+  }
   const [type, setType] = useState('all')
   const [accountId, setAccountId] = useState('all')
   const [categoryId, setCategoryId] = useState('all')
@@ -977,8 +1234,8 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onImport, 
     })
   }
   const sortIcon = (field) => {
-    if (sortBy === `${field}_asc`) return <ChevronUp size={12} className="text-accent-300" />
-    if (sortBy === `${field}_desc`) return <ChevronDown size={12} className="text-accent-300" />
+    if (sortBy === `${field}_asc`) return <ChevronUp size={12} className="text-accent-300 light:text-accent-700" />
+    if (sortBy === `${field}_desc`) return <ChevronDown size={12} className="text-accent-300 light:text-accent-700" />
     return <ArrowUpDown size={11} className="text-slate-600" />
   }
 
@@ -1047,43 +1304,43 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onImport, 
       <CreditCardBillAlert creditCards={creditCards} transactions={transactions} onPay={onPayCardBill} showMoney={showMoney} />
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
-          <div className="mb-2 text-xs uppercase tracking-widest text-accent-200/70">Money movement</div>
-          <h1 className="text-3xl font-semibold tracking-tight text-white">Every rupee, accounted for</h1>
+          <div className="mb-2 text-xs uppercase tracking-widest text-accent-200/70 light:text-accent-700">Money movement</div>
+          <h1 className="text-3xl font-semibold tracking-tight text-white light:text-slate-900">Every rupee, accounted for</h1>
         </div>
         <div className="flex gap-2">
-          <div className={`flex items-center rounded-xl border ${customRange ? 'border-white/5 opacity-40' : 'border-white/10'}`}>
-            <button type="button" disabled={!!customRange} onClick={() => shiftMonth(-1)} className="rounded-l-xl p-2.5 text-slate-400 hover:bg-white/5 hover:text-white disabled:pointer-events-none" title="Previous month"><ChevronLeft size={15} /></button>
-            <span className="w-9 text-center text-xs font-semibold uppercase tracking-wider text-slate-300" title={`${MONTH_NAMES[monthCursor.month]} ${monthCursor.year}`}>{MONTH_NAMES[monthCursor.month].slice(0, 3)}</span>
-            <button type="button" disabled={!!customRange} onClick={() => shiftMonth(1)} className="rounded-r-xl p-2.5 text-slate-400 hover:bg-white/5 hover:text-white disabled:pointer-events-none" title="Next month"><ChevronRight size={15} /></button>
+          <div className={`flex items-center rounded-xl border ${customRange ? 'border-white/5 light:border-black/5 opacity-40' : 'border-white/10 light:border-black/10'}`}>
+            <button type="button" disabled={!!customRange} onClick={() => shiftMonth(-1)} className="rounded-l-xl p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900 disabled:pointer-events-none" title="Previous month"><ChevronLeft size={15} /></button>
+            <span className="w-9 text-center text-xs font-semibold uppercase tracking-wider text-slate-300 light:text-slate-700" title={`${MONTH_NAMES[monthCursor.month]} ${monthCursor.year}`}>{MONTH_NAMES[monthCursor.month].slice(0, 3)}</span>
+            <button type="button" disabled={!!customRange} onClick={() => shiftMonth(1)} className="rounded-r-xl p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900 disabled:pointer-events-none" title="Next month"><ChevronRight size={15} /></button>
           </div>
           <div ref={rangeRef} className="relative">
-            <button type="button" onClick={() => { setRangeDraft(customRange || { start: '', end: '' }); setRangeOpen((o) => !o) }} className={`rounded-xl border p-2.5 transition ${customRange ? 'border-accent-300/40 bg-accent-400/10 text-accent-200' : 'border-white/10 text-slate-400 hover:bg-white/5 hover:text-white'}`} title="Custom date range">
+            <button type="button" onClick={() => { setRangeDraft(customRange || { start: '', end: '' }); setRangeOpen((o) => !o) }} className={`rounded-xl border p-2.5 transition ${customRange ? 'border-accent-300/40 bg-accent-400/10 text-accent-200 light:text-accent-700' : 'border-white/10 light:border-black/10 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900'}`} title="Custom date range">
               <Calendar size={16} />
             </button>
             {rangeOpen && (
-              <div className="absolute right-0 z-30 mt-2 w-72 rounded-2xl border border-white/10 bg-[#141a28] p-4 shadow-2xl">
+              <div className="absolute right-0 z-30 mt-2 w-72 rounded-2xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-4 shadow-2xl">
                 <div className="mb-3 text-xs uppercase tracking-widest text-slate-500">Custom range</div>
-                <label className="mb-3 block text-sm text-slate-300">Start date
-                  <DateInput value={rangeDraft.start} onChange={(e) => setRangeDraft((d) => ({ ...d, start: e.target.value }))} className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-2.5 text-white outline-none focus:border-accent-300/50" />
+                <label className="mb-3 block text-sm text-slate-300 light:text-slate-700">Start date
+                  <DateInput value={rangeDraft.start} onChange={(e) => setRangeDraft((d) => ({ ...d, start: e.target.value }))} className="mt-1.5 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-2.5 text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
                 </label>
-                <label className="mb-4 block text-sm text-slate-300">End date
-                  <DateInput value={rangeDraft.end} onChange={(e) => setRangeDraft((d) => ({ ...d, end: e.target.value }))} className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-2.5 text-white outline-none focus:border-accent-300/50" />
+                <label className="mb-4 block text-sm text-slate-300 light:text-slate-700">End date
+                  <DateInput value={rangeDraft.end} onChange={(e) => setRangeDraft((d) => ({ ...d, end: e.target.value }))} className="mt-1.5 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-2.5 text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
                 </label>
                 <div className="flex gap-2">
                   {customRange && (
-                    <button type="button" onClick={() => { setCustomRange(null); setRangeDraft({ start: '', end: '' }); setRangeOpen(false) }} className="flex-1 rounded-xl border border-white/10 px-3 py-2.5 text-sm text-slate-300 hover:bg-white/5">Clear</button>
+                    <button type="button" onClick={() => { setCustomRange(null); setRangeDraft({ start: '', end: '' }); setRangeOpen(false) }} className="flex-1 rounded-xl border border-white/10 light:border-black/10 px-3 py-2.5 text-sm text-slate-300 light:text-slate-700 hover:bg-white/5">Clear</button>
                   )}
-                  <button type="button" disabled={!rangeDraft.start || !rangeDraft.end || rangeDraft.start > rangeDraft.end} onClick={() => { setCustomRange({ start: rangeDraft.start, end: rangeDraft.end }); setRangeOpen(false) }} className="flex-1 rounded-xl bg-gradient-to-r from-accent-300 to-blue-500 px-3 py-2.5 text-sm font-semibold text-[#07101c] disabled:opacity-50">Apply</button>
+                  <button type="button" disabled={!rangeDraft.start || !rangeDraft.end || rangeDraft.start > rangeDraft.end} onClick={() => { setCustomRange({ start: rangeDraft.start, end: rangeDraft.end }); setRangeOpen(false) }} className="flex-1 rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-3 py-2.5 text-sm font-semibold text-[#07101c] disabled:opacity-50">Apply</button>
                 </div>
               </div>
             )}
           </div>
-          <div className="flex items-center overflow-hidden rounded-xl border border-white/10">
-            <button type="button" onClick={() => setChartView(false)} title="Table view" className={`flex items-center px-3 py-2.5 transition ${!chartView ? 'bg-accent-400/15 text-accent-200' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}><ListChecks size={16} /></button>
+          <div className="flex items-center overflow-hidden rounded-xl border border-white/10 light:border-black/10">
+            <button type="button" onClick={() => setChartView(false)} title="Table view" className={`flex items-center px-3 py-2.5 transition ${!chartView ? 'bg-accent-400/15 text-accent-200 light:text-accent-700' : 'text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900'}`}><ListChecks size={16} /></button>
             <div className="h-5 w-px shrink-0 bg-white/10" />
-            <button type="button" onClick={() => setChartView(true)} title="Chart view" className={`flex items-center px-3 py-2.5 transition ${chartView ? 'bg-accent-400/15 text-accent-200' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}><PieChartIcon size={16} /></button>
+            <button type="button" onClick={() => setChartView(true)} title="Chart view" className={`flex items-center px-3 py-2.5 transition ${chartView ? 'bg-accent-400/15 text-accent-200 light:text-accent-700' : 'text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900'}`}><PieChartIcon size={16} /></button>
           </div>
-          <button onClick={onToggleMoney} className="rounded-xl border border-white/10 p-2.5 text-slate-400 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
+          <button onClick={onToggleMoney} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
             {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
           </button>
         </div>
@@ -1091,46 +1348,55 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onImport, 
 
       {/* Mobile: search plus one "Filters" trigger — the type/account/category selects and the
           import/export/recurring menu all move into a sheet instead of four controls competing
-          for a 375px-wide row. Desktop keeps the full inline bar below unchanged. */}
-      <div className="flex gap-2 lg:hidden">
-        <div className="relative flex-1">
-          <Search size={16} className="absolute left-3 top-3 text-slate-600" />
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search transactions" className="w-full rounded-xl border border-white/10 bg-white/[.04] py-2.5 pl-10 pr-4 text-sm text-white outline-none focus:border-accent-300/50" />
+          for a 375px-wide row. Desktop keeps the full inline bar below unchanged. Long-pressing a
+          row below swaps this for a selection toolbar instead. */}
+      {selectMode ? (
+        <div className="flex items-center gap-2 lg:hidden">
+          <button type="button" onClick={exitSelectMode} className="shrink-0 rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900" title="Cancel selection"><X size={16} /></button>
+          <div className="flex-1 text-sm font-medium text-white light:text-slate-900">{selectedIds.size} selected</div>
+          <button type="button" disabled={selectedIds.size === 0} onClick={handleBulkDelete} className="shrink-0 rounded-xl border border-rose-300/30 bg-rose-300/10 p-2.5 text-rose-300 light:text-rose-700 hover:bg-rose-300/20 disabled:opacity-40 disabled:pointer-events-none" title="Delete selected"><Trash2 size={16} /></button>
         </div>
-        <button type="button" onClick={() => setMobileFiltersOpen(true)} className={`relative shrink-0 rounded-xl border p-2.5 transition ${activeFilterCount > 0 ? 'border-accent-300/40 bg-accent-400/10 text-accent-200' : 'border-white/10 text-slate-400 hover:bg-white/5 hover:text-white'}`} title="Filters">
-          <ListChecks size={16} />
-          {activeFilterCount > 0 && <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-accent-400 text-[9px] font-bold text-[#07101c]">{activeFilterCount}</span>}
-        </button>
-      </div>
+      ) : (
+        <div className="flex gap-2 lg:hidden">
+          <div className="relative flex-1">
+            <Search size={16} className="absolute left-3 top-3 text-slate-600" />
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search transactions" className="w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] py-2.5 pl-10 pr-4 text-sm text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
+          </div>
+          <button type="button" onClick={() => setMobileFiltersOpen(true)} className={`relative shrink-0 rounded-xl border p-2.5 transition ${activeFilterCount > 0 ? 'border-accent-300/40 bg-accent-400/10 text-accent-200 light:text-accent-700' : 'border-white/10 light:border-black/10 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900'}`} title="Filters">
+            <ListChecks size={16} />
+            {activeFilterCount > 0 && <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-accent-400 text-[9px] font-bold text-[#07101c]">{activeFilterCount}</span>}
+          </button>
+        </div>
+      )}
 
       <div className="hidden gap-3 lg:flex">
         <div className="relative flex-1">
           <Search size={16} className="absolute left-3 top-3 text-slate-600" />
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search transactions" className="w-full rounded-xl border border-white/10 bg-white/[.04] py-2.5 pl-10 pr-4 text-sm text-white outline-none focus:border-accent-300/50" />
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search transactions" className="w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] py-2.5 pl-10 pr-4 text-sm text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
         </div>
-        <Select value={type} onChange={(e) => setType(e.target.value)} className="rounded-xl border border-white/10 bg-[#101621] px-4 py-2.5 text-sm text-slate-300 outline-none">
+        <Select value={type} onChange={(e) => setType(e.target.value)} className="rounded-xl border border-white/10 light:border-black/10 bg-[#101621] light:bg-white px-4 py-2.5 text-sm text-slate-300 light:text-slate-700 outline-none">
           <option value="all">All types</option><option value="income">Income</option><option value="expense">Expense</option><option value="transfer">Transfer</option>
         </Select>
-        <Select value={accountId} onChange={(e) => setAccountId(e.target.value)} className="rounded-xl border border-white/10 bg-[#101621] px-4 py-2.5 text-sm text-slate-300 outline-none">
+        <Select value={accountId} onChange={(e) => setAccountId(e.target.value)} className="rounded-xl border border-white/10 light:border-black/10 bg-[#101621] light:bg-white px-4 py-2.5 text-sm text-slate-300 light:text-slate-700 outline-none">
           <option value="all">All accounts</option>
           {accounts.filter((a) => a.type !== 'debit_card').map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
           {creditCards.map((c) => <option key={c.id} value={`cc:${c.id}`}>{c.name} (card)</option>)}
         </Select>
-        <Select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="rounded-xl border border-white/10 bg-[#101621] px-4 py-2.5 text-sm text-slate-300 outline-none">
+        <Select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="rounded-xl border border-white/10 light:border-black/10 bg-[#101621] light:bg-white px-4 py-2.5 text-sm text-slate-300 light:text-slate-700 outline-none">
           <option value="all">All categories</option>
           {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </Select>
         <div ref={settingsRef} className="relative">
-          <button type="button" onClick={() => setSettingsOpen((o) => !o)} className={`rounded-xl border p-2.5 transition ${settingsOpen ? 'border-accent-300/40 bg-accent-400/10 text-accent-200' : 'border-white/10 text-slate-400 hover:bg-white/5 hover:text-white'}`} title="More options">
+          <button type="button" onClick={() => setSettingsOpen((o) => !o)} className={`rounded-xl border p-2.5 transition ${settingsOpen ? 'border-accent-300/40 bg-accent-400/10 text-accent-200 light:text-accent-700' : 'border-white/10 light:border-black/10 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900'}`} title="More options">
             <MoreVertical size={16} />
           </button>
           {settingsOpen && (
-            <div className="absolute right-0 z-30 mt-2 w-52 rounded-xl border border-white/10 bg-[#141a28] p-1 shadow-2xl">
-              <button type="button" onClick={() => { setSettingsOpen(false); onImport() }} className="block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-300 hover:bg-white/5">Import CSV</button>
-              <button type="button" disabled={exportBusy} onClick={() => handleExport('csv')} className="block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-300 hover:bg-white/5 disabled:opacity-50">Export as CSV</button>
-              <button type="button" disabled={exportBusy} onClick={() => handleExport('pdf')} className="block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-300 hover:bg-white/5 disabled:opacity-50">Export as PDF</button>
-              <div className="my-1 border-t border-white/10" />
-              <button type="button" onClick={() => { setSettingsOpen(false); onOpenRecurring() }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-slate-300 hover:bg-white/5"><Repeat size={14} />Recurring transactions</button>
+            <div className="absolute right-0 z-30 mt-2 w-52 rounded-xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-1 shadow-2xl">
+              <button type="button" onClick={() => { setSettingsOpen(false); onImport() }} className="block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-300 light:text-slate-700 hover:bg-white/5">Import CSV</button>
+              <button type="button" disabled={exportBusy} onClick={() => handleExport('csv')} className="block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-300 light:text-slate-700 hover:bg-white/5 disabled:opacity-50">Export as CSV</button>
+              <button type="button" disabled={exportBusy} onClick={() => handleExport('pdf')} className="block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-300 light:text-slate-700 hover:bg-white/5 disabled:opacity-50">Export as PDF</button>
+              <div className="my-1 border-t border-white/10 light:border-black/10" />
+              <button type="button" onClick={() => { setSettingsOpen(false); onOpenRecurring() }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-slate-300 light:text-slate-700 hover:bg-white/5"><Repeat size={14} />Recurring transactions</button>
             </div>
           )}
         </div>
@@ -1138,50 +1404,50 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onImport, 
 
       <BottomSheet open={mobileFiltersOpen} onOpenChange={setMobileFiltersOpen} title="Filters">
         <div className="space-y-4 pb-4">
-          <label className="block text-sm text-slate-300">Type
-            <Select value={type} onChange={(e) => setType(e.target.value)} className="mt-1.5 w-full rounded-xl border border-white/10 bg-[#101621] px-4 py-2.5 text-sm text-slate-300 outline-none">
+          <label className="block text-sm text-slate-300 light:text-slate-700">Type
+            <Select value={type} onChange={(e) => setType(e.target.value)} className="mt-1.5 w-full rounded-xl border border-white/10 light:border-black/10 bg-[#101621] light:bg-white px-4 py-2.5 text-sm text-slate-300 light:text-slate-700 outline-none">
               <option value="all">All types</option><option value="income">Income</option><option value="expense">Expense</option><option value="transfer">Transfer</option>
             </Select>
           </label>
-          <label className="block text-sm text-slate-300">Account
-            <Select value={accountId} onChange={(e) => setAccountId(e.target.value)} className="mt-1.5 w-full rounded-xl border border-white/10 bg-[#101621] px-4 py-2.5 text-sm text-slate-300 outline-none">
+          <label className="block text-sm text-slate-300 light:text-slate-700">Account
+            <Select value={accountId} onChange={(e) => setAccountId(e.target.value)} className="mt-1.5 w-full rounded-xl border border-white/10 light:border-black/10 bg-[#101621] light:bg-white px-4 py-2.5 text-sm text-slate-300 light:text-slate-700 outline-none">
               <option value="all">All accounts</option>
               {accounts.filter((a) => a.type !== 'debit_card').map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
               {creditCards.map((c) => <option key={c.id} value={`cc:${c.id}`}>{c.name} (card)</option>)}
             </Select>
           </label>
-          <label className="block text-sm text-slate-300">Category
-            <Select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="mt-1.5 w-full rounded-xl border border-white/10 bg-[#101621] px-4 py-2.5 text-sm text-slate-300 outline-none">
+          <label className="block text-sm text-slate-300 light:text-slate-700">Category
+            <Select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="mt-1.5 w-full rounded-xl border border-white/10 light:border-black/10 bg-[#101621] light:bg-white px-4 py-2.5 text-sm text-slate-300 light:text-slate-700 outline-none">
               <option value="all">All categories</option>
               {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </Select>
           </label>
-          <div onClick={() => setChartView((v) => !v)} className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-white/[.04] px-4 py-3 text-sm text-slate-300">
+          <div onClick={() => setChartView((v) => !v)} className="flex w-full items-center justify-between rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-4 py-3 text-sm text-slate-300 light:text-slate-700">
             <span className="flex items-center gap-2"><PieChartIcon size={15} />Chart view</span>
             <ToggleSwitch checked={chartView} onChange={() => setChartView((v) => !v)} />
           </div>
-          <div className="border-t border-white/10 pt-2">
-            <button type="button" onClick={() => { setMobileFiltersOpen(false); onImport() }} className="block w-full rounded-lg px-1 py-2.5 text-left text-sm text-slate-300 hover:bg-white/5">Import CSV</button>
-            <button type="button" disabled={exportBusy} onClick={() => handleExport('csv')} className="block w-full rounded-lg px-1 py-2.5 text-left text-sm text-slate-300 hover:bg-white/5 disabled:opacity-50">Export as CSV</button>
-            <button type="button" disabled={exportBusy} onClick={() => handleExport('pdf')} className="block w-full rounded-lg px-1 py-2.5 text-left text-sm text-slate-300 hover:bg-white/5 disabled:opacity-50">Export as PDF</button>
-            <button type="button" onClick={() => { setMobileFiltersOpen(false); onOpenRecurring() }} className="flex w-full items-center gap-2 rounded-lg px-1 py-2.5 text-left text-sm text-slate-300 hover:bg-white/5"><Repeat size={14} />Recurring transactions</button>
+          <div className="border-t border-white/10 light:border-black/10 pt-2">
+            <button type="button" onClick={() => { setMobileFiltersOpen(false); onImport() }} className="block w-full rounded-lg px-1 py-2.5 text-left text-sm text-slate-300 light:text-slate-700 hover:bg-white/5">Import CSV</button>
+            <button type="button" disabled={exportBusy} onClick={() => handleExport('csv')} className="block w-full rounded-lg px-1 py-2.5 text-left text-sm text-slate-300 light:text-slate-700 hover:bg-white/5 disabled:opacity-50">Export as CSV</button>
+            <button type="button" disabled={exportBusy} onClick={() => handleExport('pdf')} className="block w-full rounded-lg px-1 py-2.5 text-left text-sm text-slate-300 light:text-slate-700 hover:bg-white/5 disabled:opacity-50">Export as PDF</button>
+            <button type="button" onClick={() => { setMobileFiltersOpen(false); onOpenRecurring() }} className="flex w-full items-center gap-2 rounded-lg px-1 py-2.5 text-left text-sm text-slate-300 light:text-slate-700 hover:bg-white/5"><Repeat size={14} />Recurring transactions</button>
           </div>
         </div>
       </BottomSheet>
 
       {chartView ? (
         categoryBreakdown.length === 0 ? (
-          <div className="rounded-2xl border border-white/10 bg-white/[.035]">
+          <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025]">
             <EmptyState icon={Tag} title="No category data" message="Nothing categorised in the current filters yet." />
           </div>
         ) : (
-          <div className="rounded-2xl border border-white/10 bg-white/[.035] p-6">
-            <div className="mb-5 text-sm font-semibold text-white">By category · {customRange ? `${formatDate(customRange.start)} – ${formatDate(customRange.end)}` : `${MONTH_NAMES[monthCursor.month]} ${monthCursor.year}`}</div>
-            <div className="grid gap-8 lg:grid-cols-[1.3fr_1fr]">
-              <div className="h-[28rem]">
+          <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] p-4 sm:p-6">
+            <div className="mb-5 text-sm font-semibold text-white light:text-slate-900">By category · {customRange ? `${formatDate(customRange.start)} – ${formatDate(customRange.end)}` : `${MONTH_NAMES[monthCursor.month]} ${monthCursor.year}`}</div>
+            <div className="grid gap-6 lg:grid-cols-[1.3fr_1fr] lg:gap-8">
+              <div className="h-72 lg:h-[28rem]">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={categoryBreakdown} dataKey="value" nameKey="name" innerRadius={90} outerRadius={170} stroke="none">
+                    <Pie data={categoryBreakdown} dataKey="value" nameKey="name" innerRadius="40%" outerRadius="76%" stroke="none">
                       {categoryBreakdown.map((c, i) => <Cell key={i} fill={c.color} />)}
                     </Pie>
                     <Tooltip contentStyle={{ background: '#0f1420', border: '1px solid #ffffff22', borderRadius: 12, color: '#fff' }} itemStyle={{ color: '#fff' }} labelStyle={{ color: '#fff' }} formatter={(v) => (showMoney ? money(v) : '••••')} />
@@ -1193,52 +1459,70 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onImport, 
                   <div key={i} className="flex items-center justify-between gap-3 text-sm">
                     <div className="flex min-w-0 items-center gap-2.5">
                       <div className="h-3 w-3 shrink-0 rounded-full" style={{ background: c.color }} />
-                      <div className="truncate text-slate-300">{c.name}</div>
+                      <div className="truncate text-slate-300 light:text-slate-700">{c.name}</div>
                     </div>
-                    <div className="shrink-0 font-medium text-white">{showMoney ? money(c.value) : '••••'}</div>
+                    <div className="shrink-0 font-medium text-white light:text-slate-900">{showMoney ? money(c.value) : '••••'}</div>
                   </div>
                 ))}
-                <div className="mt-1 border-t border-white/20" />
+                <div className="mt-1 border-t border-white/20 light:border-black/15" />
                 <div className="flex items-center justify-between gap-3 text-sm">
-                  <div className="font-semibold text-white">Total</div>
-                  <div className="font-semibold text-white">{showMoney ? money(categoryBreakdown.reduce((s, c) => s + c.value, 0)) : '••••'}</div>
+                  <div className="font-semibold text-white light:text-slate-900">Total</div>
+                  <div className="font-semibold text-white light:text-slate-900">{showMoney ? money(categoryBreakdown.reduce((s, c) => s + c.value, 0)) : '••••'}</div>
                 </div>
-                <div className="border-t border-white/20" />
+                <div className="border-t border-white/20 light:border-black/15" />
               </div>
             </div>
           </div>
         )
       ) : (
-      <section className="overflow-hidden rounded-2xl border border-white/10 bg-white/[.035]">
-        <div className="hidden grid-cols-[1.4fr_.9fr_.6fr_.6fr_auto] gap-4 border-b border-white/10 px-5 py-3 text-[10px] uppercase tracking-widest text-slate-600 sm:grid">
-          <button type="button" onClick={() => toggleSort('description')} className="flex items-center gap-1 text-left hover:text-slate-300">Description{sortIcon('description')}</button>
+      <section className="overflow-hidden rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025]">
+        <div className="hidden grid-cols-[1.4fr_.9fr_.6fr_.6fr_auto] gap-4 border-b border-white/10 light:border-black/10 px-5 py-3 text-[10px] uppercase tracking-widest text-slate-600 sm:grid">
+          <button type="button" onClick={() => toggleSort('description')} className="flex items-center gap-1 text-left hover:text-slate-300 hover:light:text-slate-700">Description{sortIcon('description')}</button>
           <span>Category / Account</span>
-          <button type="button" onClick={() => toggleSort('date')} className="flex items-center gap-1 text-left hover:text-slate-300">Date{sortIcon('date')}</button>
-          <button type="button" onClick={() => toggleSort('amount')} className="flex items-center justify-end gap-1 text-right hover:text-slate-300">Amount{sortIcon('amount')}</button>
+          <button type="button" onClick={() => toggleSort('date')} className="flex items-center gap-1 text-left hover:text-slate-300 hover:light:text-slate-700">Date{sortIcon('date')}</button>
+          <button type="button" onClick={() => toggleSort('amount')} className="flex items-center justify-end gap-1 text-right hover:text-slate-300 hover:light:text-slate-700">Amount{sortIcon('amount')}</button>
           <span />
         </div>
         {sorted.length === 0 ? (
           <EmptyState icon={Wallet} title="No transactions match" message="Try adjusting filters, or add your first entry." cta="Add transaction" onCta={onOpenTxForm} />
         ) : (
-          <div className="divide-y divide-white/5">
+          <div className="divide-y divide-white/5 light:divide-black/5">
             {pageRows.map((t) => {
               const cat = categories.find((c) => c.id === t.category_id)
               const acc = resolveSource(t)
               const isIn = t.type === 'income' || (t.type === 'transfer' && t.transfer_direction === 'in')
               const isTransfer = t.type === 'transfer'
               const sign = isIn ? '+' : '-'
-              const color = isIn ? 'text-emerald-300' : isTransfer ? 'text-accent-300' : 'text-rose-300'
+              const color = isIn ? 'text-emerald-300 light:text-emerald-700' : isTransfer ? 'text-accent-300 light:text-accent-700' : 'text-rose-300 light:text-rose-700'
               return (
                 <div key={t.id} className="px-5 py-3 sm:py-4">
                   {/* Mobile: icon-bubble + name/subtitle + trailing amount, one row — tap opens
-                      edit, a small trailing delete stays reachable without crowding the row. */}
+                      edit. No per-row delete icon here; long-press enters selection mode (tap
+                      toggles rows, the toolbar above handles bulk delete) instead. */}
                   <div className="flex items-center gap-3 sm:hidden">
-                    <button type="button" onClick={() => onEditTx(t)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/[.05]" style={{ color: cat?.color || (isTransfer ? '#22d3ee' : '#94a3b8') }}>
-                        {isTransfer ? <ArrowLeftRight size={16} /> : isIn ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}
-                      </div>
+                    <button
+                      type="button"
+                      onClick={() => handleRowTap(t)}
+                      onTouchStart={() => startLongPress(t.id)}
+                      onTouchEnd={cancelLongPress}
+                      onTouchMove={cancelLongPress}
+                      onTouchCancel={cancelLongPress}
+                      onContextMenu={(e) => e.preventDefault()}
+                      className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                    >
+                      {selectMode ? (
+                        selectedIds.has(t.id) ? (
+                          <CheckCircle2 size={22} className="shrink-0 text-accent-400" />
+                        ) : (
+                          <div className="h-[22px] w-[22px] shrink-0 rounded-full border-2 border-white/20 light:border-black/20" />
+                        )
+                      ) : (
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/[.05] light:bg-black/[.035]" style={{ color: cat?.color || (isTransfer ? 'hsl(var(--accent-h) var(--accent-s) 69%)' : '#94a3b8') }}>
+                          {isTransfer ? <ArrowLeftRight size={16} /> : isIn ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}
+                        </div>
+                      )}
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5 truncate text-sm font-medium text-white">
+                        <div className="flex items-center gap-1.5 truncate text-sm font-medium text-white light:text-slate-900">
                           <span className="truncate">{t.description}</span>
                           {t.attachment_path && <Paperclip size={11} className="shrink-0 text-slate-500" />}
                           {t.recurring_source_id && <Repeat size={11} className="shrink-0 text-slate-500" />}
@@ -1247,35 +1531,34 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onImport, 
                       </div>
                     </button>
                     <div className={`shrink-0 text-sm font-semibold ${color}`}>{showMoney ? `${sign}${money(t.amount).replace('-', '')}` : '••••'}</div>
-                    <button type="button" onClick={() => onDeleteTx(t)} className="shrink-0 rounded-lg p-1.5 text-slate-500 hover:bg-white/5"><Trash2 size={14} /></button>
                   </div>
 
                   {/* Desktop: unchanged full table row */}
                   <div className="hidden sm:grid sm:grid-cols-[1.4fr_.9fr_.6fr_.6fr_auto] sm:items-center sm:gap-4">
                     <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/[.05]" style={{ color: cat?.color || (isTransfer ? '#22d3ee' : '#94a3b8') }}>
+                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/[.05] light:bg-black/[.035]" style={{ color: cat?.color || (isTransfer ? 'hsl(var(--accent-h) var(--accent-s) 69%)' : '#94a3b8') }}>
                         {isTransfer ? <ArrowLeftRight size={16} /> : isIn ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}
                       </div>
                       <div>
-                        <div className="flex items-center gap-1.5 text-sm font-medium text-white">
+                        <div className="flex items-center gap-1.5 text-sm font-medium text-white light:text-slate-900">
                           {t.description}
                           {t.attachment_path && (
-                            <button type="button" onClick={(e) => { e.stopPropagation(); setViewingAttachment(t) }} className="shrink-0 text-slate-500 hover:text-accent-300" title="View attachment"><Paperclip size={12} /></button>
+                            <button type="button" onClick={(e) => { e.stopPropagation(); setViewingAttachment(t) }} className="shrink-0 text-slate-500 hover:text-accent-300 hover:light:text-accent-700" title="View attachment"><Paperclip size={12} /></button>
                           )}
                           {t.recurring_source_id && <Repeat size={12} className="shrink-0 text-slate-500" title="Auto-generated from a recurring rule" />}
                         </div>
                         {t.notes && <div className="text-[11px] text-slate-500">{t.notes}</div>}
                       </div>
                     </div>
-                    <div className="text-xs text-slate-400">
-                      <span className="inline-block rounded-md bg-white/[.05] px-2 py-0.5" style={{ color: cat?.color || '#94a3b8' }}>{cat?.name || (isTransfer ? (t.transfer_direction === 'in' ? 'Transfer in' : 'Transfer out') : 'Uncategorised')}</span>
+                    <div className="text-xs text-slate-400 light:text-slate-500">
+                      <span className="inline-block rounded-md bg-white/[.05] light:bg-black/[.035] px-2 py-0.5" style={{ color: cat?.color || '#94a3b8' }}>{cat?.name || (isTransfer ? (t.transfer_direction === 'in' ? 'Transfer in' : 'Transfer out') : 'Uncategorised')}</span>
                       {acc && <span className="ml-2">{acc.name}</span>}
                     </div>
                     <div className="text-xs text-slate-500">{formatDateTime(t.date, t.time)}</div>
                     <div className={`text-sm font-semibold sm:text-right ${color}`}>{showMoney ? `${sign}${money(t.amount).replace('-', '')}` : '••••'}</div>
                     <div className="flex gap-1 sm:justify-end">
-                      <button onClick={() => onEditTx(t)} className="rounded-lg p-1.5 text-slate-500 hover:bg-white/5 hover:text-white"><Pencil size={14} /></button>
-                      <button onClick={() => onDeleteTx(t)} className="rounded-lg p-1.5 text-rose-300/70 hover:bg-rose-300/10"><Trash2 size={14} /></button>
+                      <button onClick={() => onEditTx(t)} className="rounded-lg p-1.5 text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900"><Pencil size={14} /></button>
+                      <button onClick={() => onDeleteTx(t)} className="rounded-lg p-1.5 text-rose-300/70 light:text-rose-700 hover:bg-rose-300/10"><Trash2 size={14} /></button>
                     </div>
                   </div>
                 </div>
@@ -1284,11 +1567,11 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onImport, 
           </div>
         )}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between border-t border-white/10 px-5 py-3 text-xs text-slate-400">
+          <div className="flex items-center justify-between border-t border-white/10 light:border-black/10 px-5 py-3 text-xs text-slate-400 light:text-slate-500">
             <span>Page {page + 1} of {totalPages} · {sorted.length} transactions</span>
             <div className="flex gap-2">
-              <button type="button" disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))} className="rounded-lg border border-white/10 px-3 py-1.5 hover:bg-white/5 disabled:opacity-40 disabled:pointer-events-none">Previous</button>
-              <button type="button" disabled={page >= totalPages - 1} onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} className="rounded-lg border border-white/10 px-3 py-1.5 hover:bg-white/5 disabled:opacity-40 disabled:pointer-events-none">Next</button>
+              <button type="button" disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))} className="rounded-lg border border-white/10 light:border-black/10 px-3 py-1.5 hover:bg-white/5 disabled:opacity-40 disabled:pointer-events-none">Previous</button>
+              <button type="button" disabled={page >= totalPages - 1} onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} className="rounded-lg border border-white/10 light:border-black/10 px-3 py-1.5 hover:bg-white/5 disabled:opacity-40 disabled:pointer-events-none">Next</button>
             </div>
           </div>
         )}
@@ -1299,20 +1582,6 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onImport, 
   )
 }
 
-// Maps a module_settings key to its sidebar nav entry — money_rules is intentionally absent
-// here since it now lives entirely inside Settings, not as a top-level view.
-const NAV_META = {
-  credit_cards: { key: 'cards', label: 'Credit cards', icon: CreditCard },
-  investments: { key: 'investments', label: 'Investments', icon: TrendingUp },
-  loans: { key: 'loans', label: 'Loans', icon: Briefcase },
-  family_company: { key: 'family_company', label: 'Family / Company', icon: Users },
-  lend_borrow: { key: 'lend', label: 'Lend / Borrow', icon: Heart },
-  scholarships: { key: 'scholarships', label: 'Scholarships', icon: ShieldCheck },
-  budgets: { key: 'budgets', label: 'Budgets', icon: Target },
-  bucket_list: { key: 'bucket', label: 'Bucket list', icon: Mountain },
-  insights: { key: 'insights', label: 'Insights', icon: LineChart },
-}
-const VIEW_TO_MODULE = Object.fromEntries(Object.entries(NAV_META).map(([moduleKey, meta]) => [meta.key, moduleKey]))
 
 /* ---------------- Shell (nav + main) ---------------- */
 function Shell({ user, onLogout }) {
@@ -1367,7 +1636,10 @@ function Shell({ user, onLogout }) {
   const [withdrawPortfolio, setWithdrawPortfolio] = useState(null)
   const [sipFormOpen, setSipFormOpen] = useState(false)
   const [sipEditing, setSipEditing] = useState(null)
-  const [theme, setTheme] = useState('dark')
+  // `theme` here is next-themes' real state (drives the `dark`/`light` class on <html>, see
+  // components/ThemeProvider.jsx) — kept in sync with the persisted profile.theme below rather
+  // than owning its own separate source of truth.
+  const { theme, setTheme } = useTheme()
   const [cardFormOpen, setCardFormOpen] = useState(false)
   const [cardEditing, setCardEditing] = useState(null)
   const [cardSpendOpen, setCardSpendOpen] = useState(false)
@@ -1691,7 +1963,15 @@ function Shell({ user, onLogout }) {
     const moduleKey = VIEW_TO_MODULE[view]
     if (moduleKey && data.profile && !resolveModuleSettings(data.profile)[moduleKey]?.enabled) setView('dashboard')
   }, [view, data.profile])
-  const onThemeChange = async (t) => { setTheme(t); await fetch('/api/finance/profile', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ theme: t }) }); toast.push(`Theme: ${t}`, 'info') }
+  const onThemeChange = async (t) => {
+    setTheme(t)
+    // Also update data.profile.theme locally (not just next-themes' own state) — the effect above
+    // re-syncs setTheme(data.profile.theme) whenever data.profile changes reference (e.g. on an
+    // unrelated accent-color update), and without this it would re-apply the stale pre-toggle value.
+    setData((d) => ({ ...d, profile: { ...d.profile, theme: t } }))
+    await fetch('/api/finance/profile', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ theme: t }) })
+    toast.push(`Switched to ${t} theme`, 'info')
+  }
   const onAccentChange = async (hex) => {
     applyAccentColor(hex)
     setData((d) => ({ ...d, profile: { ...d.profile, accent_color: hex } }))
@@ -1844,6 +2124,18 @@ function Shell({ user, onLogout }) {
     const { queued } = await mutate({ table: 'transactions', method: 'DELETE', id: t.id })
     toast.push(queued ? 'Transaction deleted — will sync when back online' : 'Transaction deleted')
   }
+  // Mobile's long-press-to-select flow (TransactionsView) deletes in bulk rather than one confirm
+  // dialog per row. Returns whether it actually went through, so the caller only clears the
+  // selection on a real delete — not when the user backs out of the confirm.
+  const deleteTxBulk = async (ids) => {
+    if (ids.length === 0) return false
+    const n = ids.length
+    if (!(await confirm.ask(`Delete ${n} transaction${n === 1 ? '' : 's'}? Balances will be recomputed.`))) return false
+    const results = await Promise.all(ids.map((id) => mutate({ table: 'transactions', method: 'DELETE', id })))
+    const queuedCount = results.filter((r) => r.queued).length
+    toast.push(queuedCount > 0 ? `${n} transaction${n === 1 ? '' : 's'} deleted — ${queuedCount} will sync when back online` : `${n} transaction${n === 1 ? '' : 's'} deleted`)
+    return true
+  }
   const deleteAccount = async (a) => {
     if (!(await confirm.ask(`Delete "${a.name}"? Its transactions stay but lose the account link.`))) return
     const { queued } = await mutate({ table: 'accounts', method: 'DELETE', id: a.id })
@@ -1899,69 +2191,75 @@ function Shell({ user, onLogout }) {
     ...orderedEnabledKeys(moduleSettings).filter((k) => NAV_META[k]).map((k) => NAV_META[k]),
   ]
   const avatarUrl = data.profile?.avatar_url || user?.user_metadata?.avatar_url || user?.user_metadata?.picture || ''
-  const fitScreen = view === 'dashboard' || view === 'profile'
-  // The 3 mandatory modules keep permanent bottom-tab slots, same rule as the desktop sidebar —
-  // every optional module the user has enabled, plus Settings, lives one tap away in the "More"
-  // sheet instead of each claiming its own slot. This is what makes mobile show curated primary
-  // destinations rather than the web version's full list.
-  const primaryMobileNav = [
-    { key: 'dashboard', label: 'Home', icon: LayoutDashboard },
-    { key: 'transactions', label: 'Ledger', icon: BarChart3 },
-    { key: 'accounts', label: 'Accounts', icon: Landmark },
+  // Dashboard used to be pinned to `lg:h-screen` with its own internal `overflow-y-auto` region
+  // (a separate scrollbar floating mid-page) so its content never had to compete for space with
+  // the rest of the page. That's no longer needed now that its cards size themselves rather than
+  // fighting for a fixed viewport height — plain document scroll reads as one continuous page
+  // instead of a scrollbar-within-a-scrollbar. Profile still opts in; it has its own reasons to
+  // want a fixed-height, internally-scrolling shell.
+  const fitScreen = view === 'profile'
+  // Which 3 destinations sit in the bottom nav's primary slots is user-configurable (Settings >
+  // Mobile nav) — everything else the user has enabled, plus Settings, lives one tap away in the
+  // "More" sheet instead of each claiming its own slot. Unmodified profiles keep today's default
+  // (Home/Ledger/Accounts), since resolveMobileNavSlots falls back to that shape.
+  const mobileDestinations = [
+    MOBILE_MANDATORY_META.dashboard, MOBILE_MANDATORY_META.transactions, MOBILE_MANDATORY_META.accounts,
+    ...orderedEnabledKeys(moduleSettings).filter((k) => NAV_META[k]).map((k) => NAV_META[k]),
   ]
-  const morePanelItems = [...nav.filter((n) => !['dashboard', 'transactions', 'accounts'].includes(n.key)), { key: 'profile', label: 'Settings', icon: Settings }]
+  const mobileNavSlots = resolveMobileNavSlots(data.profile, mobileDestinations.map((d) => d.key))
+  const primaryMobileNav = mobileNavSlots.map((key) => mobileDestinations.find((d) => d.key === key)).filter(Boolean)
+  const morePanelItems = [...mobileDestinations.filter((d) => !mobileNavSlots.includes(d.key)), { key: 'profile', label: 'Settings', icon: Settings }]
   const isMoreActive = morePanelItems.some((n) => n.key === view)
 
   return (
-    <div className="min-h-screen bg-[#080b12] text-slate-100">
+    <div className="min-h-screen bg-[#080b12] light:bg-[#eef1f6] text-slate-100 light:text-slate-900">
       {toast.view}
       {confirm.view}
       {prompt.view}
       <div className="mx-auto flex min-h-screen max-w-[1480px]">
         {/* Sidebar */}
-        <aside className="hidden w-64 shrink-0 flex-col border-r border-white/5 px-5 py-6 lg:flex lg:sticky lg:top-0 lg:h-screen lg:self-start lg:overflow-y-auto">
-          <div className="flex items-center gap-3 text-sm font-semibold text-white">
+        <aside className="hidden w-64 shrink-0 flex-col border-r border-white/5 light:border-black/5 px-5 py-6 lg:flex lg:sticky lg:top-0 lg:h-screen lg:self-start lg:overflow-y-auto">
+          <div className="flex items-center gap-3 text-sm font-semibold text-white light:text-slate-900">
             <img src="/logo.png" alt="" className="h-10 w-10 rounded-2xl object-cover" />Personal Finance
           </div>
           <nav className="mt-10 space-y-1">
             {nav.map((n) => (
-              <button key={n.key} onClick={() => setView(n.key)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition ${view === n.key ? 'bg-white/[.06] text-white' : 'text-slate-400 hover:bg-white/[.04] hover:text-white'}`}>
+              <button key={n.key} onClick={() => setView(n.key)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition ${view === n.key ? 'bg-white/[.06] light:bg-black/[.04] text-white light:text-slate-900' : 'text-slate-400 light:text-slate-500 hover:bg-white/[.04] hover:light:bg-black/[.03] hover:text-white hover:light:text-slate-900'}`}>
                 <n.icon size={17} />{n.label}
               </button>
             ))}
           </nav>
-          <div className="mt-auto flex w-full items-center gap-1 rounded-2xl border border-white/10 bg-white/[.035] p-2.5">
-            <button onClick={() => setView('profile')} className={`flex min-w-0 flex-1 items-center gap-3 rounded-xl px-1.5 py-1 text-left transition hover:bg-white/[.06] ${view === 'profile' ? 'bg-white/[.06]' : ''}`}>
+          <div className="mt-auto flex w-full items-center gap-1 rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] p-2.5">
+            <button onClick={() => setView('profile')} className={`flex min-w-0 flex-1 items-center gap-3 rounded-xl px-1.5 py-1 text-left transition hover:bg-white/[.06] hover:light:bg-black/[.04] ${view === 'profile' ? 'bg-white/[.06] light:bg-black/[.04]' : ''}`}>
               <div className="relative shrink-0">
                 <Avatar src={avatarUrl} name={firstName} email={user?.email} size={36} />
                 {pendingCount > 0 && <span className="absolute -right-0.5 -top-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full border-2 border-[#080b12] bg-amber-300" title={`${pendingCount} change${pendingCount === 1 ? '' : 's'} pending sync`} />}
               </div>
               <div className="min-w-0">
-                <div className="truncate text-sm font-medium text-white">{firstName}</div>
+                <div className="truncate text-sm font-medium text-white light:text-slate-900">{firstName}</div>
                 <div className="truncate text-[11px] text-slate-500">{pendingCount > 0 ? `${pendingCount} pending sync` : user?.email}</div>
               </div>
             </button>
-            <button onClick={onLogout} title="Sign out" className="shrink-0 rounded-lg border border-transparent p-2 text-slate-500 transition hover:border-white/10 hover:bg-white/5 hover:text-white"><LogOut size={15} /></button>
+            <button onClick={onLogout} title="Sign out" className="shrink-0 rounded-lg border border-transparent p-2 text-slate-500 transition hover:border-white/10 hover:light:border-black/10 hover:bg-white/5 hover:text-white hover:light:text-slate-900"><LogOut size={15} /></button>
           </div>
         </aside>
 
         {/* Main */}
         <main className={`min-w-0 flex-1 px-5 pb-24 pt-6 lg:px-10 lg:pb-10 ${fitScreen ? 'flex flex-col lg:h-screen' : ''}`}>
           {view === 'dashboard' && (
-            <header className={`flex shrink-0 items-center justify-between ${fitScreen ? 'mb-3' : 'mb-8'}`}>
-              <div>
-                <div className="text-xs uppercase tracking-widest text-slate-500">Welcome back</div>
-                <div className="mt-1 text-xl font-semibold text-white">Hi, {firstName} 👋</div>
-              </div>
+            <header className={`flex shrink-0 items-center justify-between ${fitScreen ? 'mb-3' : 'mb-6'}`}>
+              <h1 className="text-lg font-semibold text-white light:text-slate-900">
+                <span className="font-normal text-slate-400 light:text-slate-500">Welcome back,</span> {firstName} 👋
+              </h1>
               <div className="flex shrink-0 items-center gap-2">
                 {pendingCount > 0 && (
-                  <button onClick={() => setView('profile')} className="flex items-center gap-1.5 rounded-full border border-amber-300/30 bg-amber-300/10 px-2.5 py-1.5 text-[11px] font-medium text-amber-200 lg:hidden">
+                  <button onClick={() => setView('profile')} className="flex items-center gap-1.5 rounded-full border border-amber-300/30 bg-amber-300/10 px-2.5 py-1.5 text-[11px] font-medium text-amber-200 light:text-amber-700 lg:hidden">
                     <span className="h-1.5 w-1.5 rounded-full bg-amber-300" />{pendingCount} pending
                   </button>
                 )}
-              <button onClick={() => setShowMoney((v) => !v)} className="rounded-xl border border-white/10 p-2.5 text-slate-400 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
-                {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
-              </button>
+                <button type="button" onClick={() => setShowMoney((v) => !v)} aria-label="Hide amounts" aria-pressed={!showMoney} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
+                  {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
+                </button>
               </div>
             </header>
           )}
@@ -1973,8 +2271,8 @@ function Shell({ user, onLogout }) {
             </div>
           ) : (
             <div className={fitScreen ? 'min-h-0 flex-1 lg:overflow-y-auto' : ''}>
-              {view === 'dashboard' && <DashboardView data={data} showMoney={showMoney} onOpenTxForm={() => openTxForm()} setView={setView} onManageMoneyRules={() => openSettings('money_rules')} onPayCardBill={openCardPay} />}
-              {view === 'transactions' && <TransactionsView data={data} onOpenTxForm={() => openTxForm()} onEditTx={openTxForm} onDeleteTx={deleteTx} onImport={() => setCsvOpen(true)} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onOpenRecurring={openRecurringManager} onPayCardBill={openCardPay} />}
+              {view === 'dashboard' && <DashboardView data={data} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onOpenTxForm={() => openTxForm()} setView={setView} onManageMoneyRules={() => openSettings('money_rules')} onPayCardBill={openCardPay} />}
+              {view === 'transactions' && <TransactionsView data={data} onOpenTxForm={() => openTxForm()} onEditTx={openTxForm} onDeleteTx={deleteTx} onDeleteTxBulk={deleteTxBulk} onImport={() => setCsvOpen(true)} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onOpenRecurring={openRecurringManager} onPayCardBill={openCardPay} />}
               {view === 'accounts' && <AccountsView data={data} onAdd={() => openAccForm()} onEdit={openAccForm} onDelete={deleteAccount} onDeleteTx={deleteTx} onAddTransaction={(accountId) => openTxForm(null, accountId)} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'budgets' && <BudgetsView data={data} onSetMonth={openBudgetMonthForm} onCloseMonth={closeBudgetMonth} onReopenMonth={reopenBudgetMonth} onDeleteMonth={deleteBudgetMonth} onAddYearly={() => openBudgetForm()} onEditYearly={openBudgetForm} onDeleteYearly={deleteBudget} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'investments' && <InvestmentsView data={data} onAddPortfolio={() => openPortfolioForm()} onEditPortfolio={openPortfolioForm} onDeletePortfolio={deletePortfolio} onAddHolding={openHoldingForm} onBulkImport={openBulkImport} onEditHolding={openHoldingEdit} onDeleteHolding={deleteHolding} onRefreshRowPrice={onRefreshRowPrice} onManualPriceEntry={onManualPriceEntry} onRefreshAll={refreshAllPrices} pricesLoading={pricesLoading} onAddFunds={openFundsForm} onWithdrawFunds={openWithdrawForm} onConnectKite={connectKite} onLinkKite={linkPortfolioKite} onUnlinkKite={unlinkPortfolioKite} onSyncKite={syncPortfolioKite} kiteSyncBusy={kiteSyncBusy} onAddSip={openSipForm} onEditSip={openSipForm} onDeleteSip={deleteSip} onSyncSipsKite={syncSipsKite} onAddOtherInvestment={openOtherInvestmentForm} onEditOtherInvestment={openOtherInvestmentEdit} onDeleteOtherInvestment={deleteOtherInvestment} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
@@ -2005,21 +2303,21 @@ function Shell({ user, onLogout }) {
       </div>
 
       {/* Floating quick add */}
-      <button onClick={() => openTxForm()} className="fixed bottom-24 right-5 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-accent-300 to-blue-500 text-[#07101c] shadow-2xl shadow-accent-500/30 transition hover:scale-105 lg:bottom-8 lg:right-8" title="Quick add transaction">
+      <button onClick={() => openTxForm()} className="fixed bottom-24 right-5 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-accent-300 to-accent-600 text-[#07101c] shadow-2xl shadow-accent-500/30 transition hover:scale-105 lg:bottom-8 lg:right-8" title="Quick add transaction">
         <Plus size={24} />
       </button>
 
       <InstallPrompt />
 
       {/* Mobile bottom nav */}
-      <nav className="fixed bottom-0 left-0 right-0 z-20 border-t border-white/10 bg-[#0b0f18]/95 backdrop-blur-xl lg:hidden" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+      <nav className="fixed bottom-0 left-0 right-0 z-20 border-t border-white/10 light:border-black/10 bg-[#0b0f18]/95 light:bg-white/90 backdrop-blur-xl lg:hidden" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         <div className="mx-auto grid max-w-md grid-cols-4">
           {primaryMobileNav.map((n) => (
-            <button key={n.key} onClick={() => setView(n.key)} className={`flex flex-col items-center gap-1 py-3 text-[11px] ${view === n.key ? 'text-accent-300' : 'text-slate-500'}`}>
-              <n.icon size={18} />{n.label}
+            <button key={n.key} onClick={() => setView(n.key)} className={`flex flex-col items-center gap-1 py-3 text-[11px] ${view === n.key ? 'text-accent-300 light:text-accent-700' : 'text-slate-500'}`}>
+              <n.icon size={18} /><span className="max-w-full truncate px-1">{n.label}</span>
             </button>
           ))}
-          <button onClick={() => setMoreOpen(true)} className={`flex flex-col items-center gap-1 py-3 text-[11px] ${isMoreActive ? 'text-accent-300' : 'text-slate-500'}`}>
+          <button onClick={() => setMoreOpen(true)} className={`flex flex-col items-center gap-1 py-3 text-[11px] ${isMoreActive ? 'text-accent-300 light:text-accent-700' : 'text-slate-500'}`}>
             <MoreHorizontal size={18} />More
           </button>
         </div>
@@ -2031,7 +2329,7 @@ function Shell({ user, onLogout }) {
             <button
               key={n.key}
               onClick={() => { setView(n.key); setMoreOpen(false) }}
-              className={`flex flex-col items-center gap-2 rounded-xl border p-4 text-center text-xs transition ${view === n.key ? 'border-accent-300/30 bg-accent-400/10 text-accent-200' : 'border-white/10 bg-white/[.04] text-slate-300 hover:bg-white/[.06]'}`}
+              className={`flex flex-col items-center gap-2 rounded-xl border p-4 text-center text-xs transition ${view === n.key ? 'border-accent-300/30 bg-accent-400/10 text-accent-200 light:text-accent-700' : 'border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] text-slate-300 light:text-slate-700 hover:bg-white/[.06] hover:light:bg-black/[.04]'}`}
             >
               <n.icon size={20} />
               <span>{n.label}</span>
@@ -2041,7 +2339,7 @@ function Shell({ user, onLogout }) {
       </BottomSheet>
 
       {/* Modals */}
-      <TransactionForm open={txFormOpen} onClose={closeTxForm} onSaved={onTxSaved} editing={txEditing} accounts={data.accounts} categories={data.categories} creditCards={data.credit_cards} lendBorrow={data.lend_borrow} loans={data.loans} onAddAccount={() => { closeTxForm(); openAccForm() }} onAddCategory={() => openCatForm()} toast={toast} profile={data.profile} defaultAccountId={txDefaultAccountId} defaultRepayment={txDefaultRepayment} mutate={mutate} />
+      <TransactionForm open={txFormOpen} onClose={closeTxForm} onSaved={onTxSaved} editing={txEditing} accounts={data.accounts} categories={data.categories} creditCards={data.credit_cards} lendBorrow={data.lend_borrow} loans={data.loans} transactions={data.transactions} onAddAccount={() => { closeTxForm(); openAccForm() }} onAddCategory={() => openCatForm()} toast={toast} profile={data.profile} defaultAccountId={txDefaultAccountId} defaultRepayment={txDefaultRepayment} mutate={mutate} />
       <AccountForm open={accFormOpen} onClose={closeAccForm} onSaved={onAccSaved} editing={accEditing} accounts={data.accounts} toast={toast} mutate={mutate} />
       <CategoryForm open={catFormOpen} onClose={closeCatForm} onSaved={onCatSaved} editing={catEditing} defaultType={catFormDefaultType} toast={toast} mutate={mutate} />
       <RecurringManager open={recurringManagerOpen} onClose={closeRecurringManager} rules={data.recurring_transactions} onAdd={() => openRecurringForm()} onEdit={openRecurringForm} onToggle={toggleRecurring} onDelete={deleteRecurring} showMoney={showMoney} />
@@ -2084,6 +2382,12 @@ function Shell({ user, onLogout }) {
 function AppInner() {
   const [user, setUser] = useState(undefined)
   const [authError, setAuthError] = useState('')
+  // next-themes persists the chosen theme to localStorage, which is per-browser, not per-account —
+  // reset to the one true default on sign-out so it can't leak into whichever account signs in
+  // next on this same browser (the pre-login AuthScreen itself is always dark regardless, but the
+  // authenticated shell would otherwise flash the previous account's theme before its own profile
+  // loads and corrects it).
+  const { setTheme } = useTheme()
   // React StrictMode (on by default in dev) intentionally double-invokes a fresh mount's effects
   // to surface cleanup bugs — harmless in itself, but this effect has no cleanup, so without this
   // guard it fires the real /api/auth/me network round trip twice on every single page load.
@@ -2115,7 +2419,7 @@ function AppInner() {
   }, [])
   if (user === undefined) return <LoadingScreen />
   if (!user) return <AuthScreen onAuth={setUser} initialError={authError} />
-  return <Shell user={user} onLogout={async () => { await fetch('/api/auth/logout', { method: 'POST' }); await clearSnapshot().catch(() => {}); setUser(null) }} />
+  return <Shell user={user} onLogout={async () => { await fetch('/api/auth/logout', { method: 'POST' }); await clearSnapshot().catch(() => {}); setTheme('dark'); setUser(null) }} />
 }
 
 // Respects prefers-reduced-motion for every Framer Motion animation in the app (pulse loading,

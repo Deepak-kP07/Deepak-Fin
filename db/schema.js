@@ -22,6 +22,11 @@ export const accounts = pgTable('accounts', {
   bankName: text('bank_name'),
   accountNumberLast4: text('account_number_last4'),
   openingBalance: numeric('opening_balance', { precision: 14, scale: 2 }).notNull().default('0'),
+  // The balance-sync trigger (sync_account_balance(), see drizzle/0036_account_opening_balance_date.sql)
+  // only sums transactions dated on/after this — lets someone backfill older transactions purely
+  // for their own records/reports without those double-counting against opening_balance, which
+  // already represents their real balance as of this date.
+  openingBalanceDate: date('opening_balance_date').notNull().defaultNow(),
   currentBalance: numeric('current_balance', { precision: 14, scale: 2 }).notNull().default('0'),
   currency: text('currency').notNull().default('INR'),
   color: text('color'),
@@ -357,6 +362,11 @@ export const profiles = pgTable('profiles', {
   // Which dashboard sections are shown, and in what order. Shape matches moduleSettings:
   // { [sectionKey]: { enabled: boolean, order: number } }. See lib/moduleSettings.js.
   dashboardWidgets: jsonb('dashboard_widgets').notNull().default(sql`'{}'::jsonb`),
+  // Which destination sits in each of the mobile bottom nav's 3 primary slots. Shape:
+  // { slots: [key, key, key] }, e.g. { slots: ['dashboard', 'lend', 'accounts'] }. Missing/invalid
+  // entries fall back to the default ['dashboard', 'transactions', 'accounts'] — see
+  // resolveMobileNavSlots() in lib/moduleSettings.js.
+  mobileNavSettings: jsonb('mobile_nav_settings').notNull().default(sql`'{}'::jsonb`),
   // The app's single global accent color, user-chosen in Settings > Appearance. Stored as a
   // hex string; the client derives hue/saturation from it and drives the whole `accent-*`
   // Tailwind scale (tailwind.config.js) via CSS custom properties — see DESIGN.md. Default is

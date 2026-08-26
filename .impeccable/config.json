@@ -166,6 +166,26 @@
         "value": "9px",
         "createdAt": "2026-08-24T14:31:09.404Z",
         "reason": "pre-existing app-wide micro-badge tier (Linked/entry-type pill labels), same as the already-documented 11px tier — flagged only because it's adjacent to lines this session edited, not introduced by this feature"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "rgba(0, 0, 0, .15)",
+        "createdAt": "2026-08-25T15:16:23.902Z"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#94a3b8",
+        "createdAt": "2026-08-25T18:47:24.750Z",
+        "reason": "pre-existing neutral fallback dot color for categories without an explicit color, unrelated to this edit"
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": "8px",
+        "files": [
+          "features/settings/SettingsMobileNav.jsx"
+        ],
+        "createdAt": "2026-08-26T14:12:38.207Z",
+        "reason": "miniature phone-mockup status-bar label in a settings preview illustration, not real reading content — intentionally below the type ramp"
       }
     ]
   }

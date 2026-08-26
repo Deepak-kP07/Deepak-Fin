@@ -27,7 +27,7 @@ export function DateInput({ value, onChange, className, placeholder }) {
   const pick = (d) => { onChange({ target: { value: isoOf(d) } }); setOpen(false) }
   const goToday = () => { onChange({ target: { value: todayISO() } }); setViewDate(new Date()); setOpen(false) }
   const clear = () => { onChange({ target: { value: '' } }); setOpen(false) }
-  const base = className || 'w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-accent-300/50'
+  const base = className || 'w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50'
 
   return (
     <div ref={ref} className="relative">
@@ -36,11 +36,11 @@ export function DateInput({ value, onChange, className, placeholder }) {
         <Calendar size={15} className="shrink-0 text-slate-500" />
       </button>
       {open && (
-        <div className="absolute left-0 z-30 mt-1 w-72 rounded-2xl border border-white/10 bg-[#141a28] p-3 shadow-2xl">
+        <div className="absolute left-0 z-30 mt-1 w-72 rounded-2xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-3 shadow-2xl">
           <div className="flex items-center justify-between">
-            <button type="button" onClick={() => setViewDate(new Date(year, month - 1, 1))} className="rounded-lg p-1.5 text-slate-400 hover:bg-white/5 hover:text-white"><ChevronLeft size={16} /></button>
-            <div className="text-sm font-semibold text-white">{MONTH_NAMES[month]} {year}</div>
-            <button type="button" onClick={() => setViewDate(new Date(year, month + 1, 1))} className="rounded-lg p-1.5 text-slate-400 hover:bg-white/5 hover:text-white"><ChevronRight size={16} /></button>
+            <button type="button" onClick={() => setViewDate(new Date(year, month - 1, 1))} className="rounded-lg p-1.5 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900"><ChevronLeft size={16} /></button>
+            <div className="text-sm font-semibold text-white light:text-slate-900">{MONTH_NAMES[month]} {year}</div>
+            <button type="button" onClick={() => setViewDate(new Date(year, month + 1, 1))} className="rounded-lg p-1.5 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900"><ChevronRight size={16} /></button>
           </div>
           <div className="mt-3 grid grid-cols-7 gap-1 text-center text-[10px] uppercase tracking-wide text-slate-500">
             {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => <div key={i}>{d}</div>)}
@@ -52,13 +52,13 @@ export function DateInput({ value, onChange, className, placeholder }) {
               const isSelected = iso === value
               const isToday = iso === todayISO()
               return (
-                <button key={i} type="button" onClick={() => pick(d)} className={`h-8 rounded-lg text-xs transition ${isSelected ? 'bg-accent-400 font-semibold text-[#07101c]' : isToday ? 'border border-accent-300/40 text-accent-200' : 'text-slate-300 hover:bg-white/10'}`}>{d}</button>
+                <button key={i} type="button" onClick={() => pick(d)} className={`h-8 rounded-lg text-xs transition ${isSelected ? 'bg-accent-400 font-semibold text-[#07101c]' : isToday ? 'border border-accent-300/40 text-accent-200 light:text-accent-700' : 'text-slate-300 light:text-slate-700 hover:bg-white/10'}`}>{d}</button>
               )
             })}
           </div>
-          <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-2 text-xs">
-            <button type="button" onClick={clear} className="font-medium text-slate-400 hover:text-white">Clear</button>
-            <button type="button" onClick={goToday} className="font-medium text-accent-300 hover:text-accent-200">Today</button>
+          <div className="mt-3 flex items-center justify-between border-t border-white/10 light:border-black/10 pt-2 text-xs">
+            <button type="button" onClick={clear} className="font-medium text-slate-400 light:text-slate-500 hover:text-white hover:light:text-slate-900">Clear</button>
+            <button type="button" onClick={goToday} className="font-medium text-accent-300 light:text-accent-700 hover:text-accent-200 hover:light:text-accent-700">Today</button>
           </div>
         </div>
       )}

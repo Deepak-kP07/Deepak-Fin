@@ -86,16 +86,16 @@ export function MoneyProfileBulkImport({ open, onClose, onImported, profile, cat
       )}
       renderTableRow={(r) => (
         <>
-          <td className="px-3 py-2 text-slate-400">{r.valid ? formatDate(r.date) : '—'}</td>
-          <td className="px-3 py-2 capitalize text-slate-400">{r.entry_type}</td>
-          <td className="px-3 py-2 text-slate-400">{r.categoryName || '—'}</td>
-          <td className="px-3 py-2 text-slate-300">{r.description || '—'}{!r.valid && <span className="ml-2 rounded-full bg-rose-300/15 px-1.5 py-0.5 text-[10px] text-rose-200">invalid</span>}</td>
-          <td className="px-3 py-2 text-right text-slate-300">{r.valid ? money(r.amount) : '—'}</td>
+          <td className="px-3 py-2 text-slate-400 light:text-slate-500">{r.valid ? formatDate(r.date) : '—'}</td>
+          <td className="px-3 py-2 capitalize text-slate-400 light:text-slate-500">{r.entry_type}</td>
+          <td className="px-3 py-2 text-slate-400 light:text-slate-500">{r.categoryName || '—'}</td>
+          <td className="px-3 py-2 text-slate-300 light:text-slate-700">{r.description || '—'}{!r.valid && <span className="ml-2 rounded-full bg-rose-300/15 px-1.5 py-0.5 text-[10px] text-rose-200 light:text-rose-700">invalid</span>}</td>
+          <td className="px-3 py-2 text-right text-slate-300 light:text-slate-700">{r.valid ? money(r.amount) : '—'}</td>
         </>
       )}
       belowTable={(toImport) => {
         const net = toImport.reduce((s, r) => s + (r.entry_type === 'expense' ? -r.amount : r.amount), 0)
-        return <div className="mt-3 text-xs text-slate-400">Net effect on balance: <span className="font-semibold text-white">{net >= 0 ? '+' : '−'}{money(Math.abs(net))}</span></div>
+        return <div className="mt-3 text-xs text-slate-400 light:text-slate-500">Net effect on balance: <span className="font-semibold text-white light:text-slate-900">{net >= 0 ? '+' : '−'}{money(Math.abs(net))}</span></div>
       }}
       onImportRow={async (r) => {
         const { valid, categoryName, ...payload } = r

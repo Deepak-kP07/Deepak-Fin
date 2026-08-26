@@ -20,20 +20,20 @@ export function VaultView({ data, onAdd, onEdit, onDelete }) {
     <div className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <div className="mb-2 text-xs uppercase tracking-widest text-accent-200/70">Encrypted at rest</div>
-          <h1 className="text-3xl font-semibold tracking-tight text-white">Vault</h1>
+          <div className="mb-2 text-xs uppercase tracking-widest text-accent-200/70 light:text-accent-700">Encrypted at rest</div>
+          <h1 className="text-3xl font-semibold tracking-tight text-white light:text-slate-900">Vault</h1>
         </div>
-        <button onClick={() => onAdd(tab)} className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-accent-300 to-blue-500 px-4 py-2.5 text-sm font-semibold text-[#07101c]"><Plus size={15} />Add</button>
+        <button onClick={() => onAdd(tab)} className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-4 py-2.5 text-sm font-semibold text-[#07101c]"><Plus size={15} />Add</button>
       </div>
 
-      <div className="flex gap-1.5 rounded-xl bg-black/20 p-1">
+      <div className="flex gap-1.5 rounded-xl bg-black/20 light:bg-black/[.06] p-1">
         {TABS.map((t) => (
-          <button key={t.key} onClick={() => setTab(t.key)} className={`flex-1 rounded-lg py-2 text-sm font-medium transition ${tab === t.key ? 'bg-accent-400/15 text-accent-200' : 'text-slate-400 hover:text-white'}`}>{t.label}</button>
+          <button key={t.key} onClick={() => setTab(t.key)} className={`flex-1 rounded-lg py-2 text-sm font-medium transition ${tab === t.key ? 'bg-accent-400/15 text-accent-200 light:text-accent-700' : 'text-slate-400 light:text-slate-500 hover:text-white hover:light:text-slate-900'}`}>{t.label}</button>
         ))}
       </div>
 
       {rows.length === 0 ? (
-        <div className="rounded-2xl border border-white/10 bg-white/[.035]">
+        <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025]">
           <EmptyState icon={KeyRound} title="Nothing here yet" message="Store this account or card's details securely — nothing is shown until you tap to reveal it." cta="Add to vault" onCta={() => onAdd(tab)} />
         </div>
       ) : (

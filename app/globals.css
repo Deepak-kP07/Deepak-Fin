@@ -9,6 +9,17 @@
     .card-flip-inner {
         transition-duration: 150ms !important;
     }
+    /* Ticker stops moving; the clipped overflow becomes manually scrollable instead, and the
+       duplicated second copy (only rendered so the loop can wrap seamlessly) is dropped. */
+    .ticker-track {
+        animation: none;
+    }
+    .ticker-box {
+        overflow-y: auto;
+    }
+    .ticker-clone {
+        display: none;
+    }
 }
 
 body {
@@ -109,6 +120,17 @@ body {
   body {
     @apply bg-background text-foreground;
     }
+  /* DESIGN.md: "focus ring in accent". Uses --accent-h/--accent-s (lib/color.js writes these on
+     <html> from the user's chosen accent) rather than a hex, so the ring repaints with the brand.
+     accent-300 (69% L) on the dark surface is high-contrast; light mode drops to accent-700
+     (31% L), matching the existing text-accent-300 light:text-accent-700 pairing used elsewhere. */
+  *:focus-visible {
+    outline: 2px solid hsl(var(--accent-h) var(--accent-s) 69%);
+    outline-offset: 2px;
+    }
+  .light *:focus-visible {
+    outline-color: hsl(var(--accent-h) var(--accent-s) 31%);
+    }
 }
 
 @keyframes ticker-up {
@@ -118,6 +140,28 @@ body {
 .ticker-track {
   animation: ticker-up linear infinite;
 }
-.ticker-track:hover {
+.ticker-track:hover,
+.ticker-box:focus-within .ticker-track {
   animation-play-state: paused;
+}
+
+.scroll-fade {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, .15) transparent;
+}
+.scroll-fade::-webkit-scrollbar {
+  width: 6px;
+}
+.scroll-fade::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, .15);
+  border-radius: 999px;
+}
+.scroll-fade::-webkit-scrollbar-track {
+  background: transparent;
+}
+.light .scroll-fade {
+  scrollbar-color: rgba(0, 0, 0, .15) transparent;
+}
+.light .scroll-fade::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, .15);
 }

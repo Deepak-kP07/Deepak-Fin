@@ -90,33 +90,33 @@ export function CsvBulkImport({
 
   return (
     <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center" onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} className="max-h-[85vh] w-full max-w-3xl overflow-y-auto rounded-3xl border border-white/10 bg-[#141a28] p-6">
+      <div onClick={(e) => e.stopPropagation()} className="max-h-[85vh] w-full max-w-3xl overflow-y-auto rounded-3xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-6">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-white">{title}</h2>
+            <h2 className="text-lg font-semibold text-white light:text-slate-900">{title}</h2>
             <p className="mt-1 text-xs text-slate-500">{subtitle}</p>
           </div>
-          <button onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-white/5"><X size={18} /></button>
+          <button onClick={onClose} className="rounded-lg p-2 text-slate-400 light:text-slate-500 hover:bg-white/5"><X size={18} /></button>
         </div>
 
         {rows.length === 0 ? (
           <div className="mt-6">
-            <label className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-white/10 bg-white/[.02] px-6 py-14 text-center hover:border-accent-300/40 hover:bg-accent-300/5">
-              <ListChecks size={24} className="text-accent-300" />
-              <div className="mt-3 text-sm font-medium text-white">Choose a CSV or Excel file</div>
+            <label className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-white/10 light:border-black/10 bg-white/[.02] light:bg-black/[.02] px-6 py-14 text-center hover:border-accent-300/40 hover:bg-accent-300/5">
+              <ListChecks size={24} className="text-accent-300 light:text-accent-700" />
+              <div className="mt-3 text-sm font-medium text-white light:text-slate-900">Choose a CSV or Excel file</div>
               <div className="mt-1 text-xs text-slate-500">{uploadHint}</div>
               <input type="file" accept=".csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={onFile} className="hidden" />
             </label>
             {onDownloadTemplate && (
-              <button onClick={onDownloadTemplate} className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl border border-white/10 px-3 py-2 text-xs text-slate-400 hover:bg-white/5"><Download size={13} />Download template CSV</button>
+              <button onClick={onDownloadTemplate} className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl border border-white/10 light:border-black/10 px-3 py-2 text-xs text-slate-400 light:text-slate-500 hover:bg-white/5"><Download size={13} />Download template CSV</button>
             )}
           </div>
         ) : (
           <>
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
               {fields.map((f) => (
-                <label key={f.key} className="text-sm text-slate-300">{f.label}
-                  <Select value={mapping[f.key]} onChange={(e) => setMapping({ ...mapping, [f.key]: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-2.5 text-white outline-none">
+                <label key={f.key} className="text-sm text-slate-300 light:text-slate-700">{f.label}
+                  <Select value={mapping[f.key]} onChange={(e) => setMapping({ ...mapping, [f.key]: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-[#101621] light:bg-white px-3 py-2.5 text-white light:text-slate-900 outline-none">
                     <option value="">— none —</option>
                     {headers.map((h) => <option key={h} value={h}>{h}</option>)}
                   </Select>
@@ -126,19 +126,19 @@ export function CsvBulkImport({
             </div>
 
             {preview.length === 0 ? (
-              <div className="mt-5 rounded-xl border border-amber-300/20 bg-amber-300/5 px-4 py-3 text-xs text-amber-200">Map {requiredFields.map((f) => f.label).join(', ')} to see a preview of what will be imported.</div>
+              <div className="mt-5 rounded-xl border border-amber-300/20 bg-amber-300/5 px-4 py-3 text-xs text-amber-200 light:text-amber-700">Map {requiredFields.map((f) => f.label).join(', ')} to see a preview of what will be imported.</div>
             ) : (
               <>
                 <div className="mt-5 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
                   <span>{preview.length} row{preview.length === 1 ? '' : 's'} detected{duplicateCount ? ` · ${duplicateCount} likely duplicate${duplicateCount === 1 ? '' : 's'} (unchecked by default)` : ''}{invalidCount ? ` · ${invalidCount} ${invalidLabel}` : ''}</span>
-                  <button type="button" onClick={() => setExcluded(excluded.size > 0 ? new Set() : new Set(preview.map((_, i) => i)))} className="text-accent-300 hover:underline">{excluded.size > 0 ? 'Select all' : 'Deselect all'}</button>
+                  <button type="button" onClick={() => setExcluded(excluded.size > 0 ? new Set() : new Set(preview.map((_, i) => i)))} className="text-accent-300 light:text-accent-700 hover:underline">{excluded.size > 0 ? 'Select all' : 'Deselect all'}</button>
                 </div>
-                <div className="mt-2 max-h-72 overflow-auto rounded-xl border border-white/10 bg-black/20 text-xs">
+                <div className="mt-2 max-h-72 overflow-auto rounded-xl border border-white/10 light:border-black/10 bg-black/20 light:bg-black/[.06] text-xs">
                   <table className="w-full">
-                    <thead className="sticky top-0 bg-[#141a28] text-slate-500"><tr><th className="px-3 py-2" />{renderTableHead()}</tr></thead>
+                    <thead className="sticky top-0 bg-[#141a28] light:bg-white text-slate-500"><tr><th className="px-3 py-2" />{renderTableHead()}</tr></thead>
                     <tbody>
                       {preview.map((p, i) => (
-                        <tr key={i} className={`border-t border-white/5 ${!p.valid ? 'opacity-40' : excluded.has(i) ? 'opacity-50' : ''}`}>
+                        <tr key={i} className={`border-t border-white/5 light:border-black/5 ${!p.valid ? 'opacity-40' : excluded.has(i) ? 'opacity-50' : ''}`}>
                           <td className="px-3 py-2">
                             <input type="checkbox" disabled={!p.valid} checked={p.valid && !excluded.has(i)} onChange={() => setExcluded((s) => { const n = new Set(s); n.has(i) ? n.delete(i) : n.add(i); return n })} />
                           </td>
@@ -151,7 +151,7 @@ export function CsvBulkImport({
               </>
             )}
             {belowTable?.(toImport)}
-            <button onClick={doImport} disabled={busy || toImport.length === 0} className="mt-5 w-full rounded-xl bg-gradient-to-r from-accent-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Importing…' : `Import ${toImport.length} ${itemLabel}${toImport.length === 1 ? '' : 's'}`}</button>
+            <button onClick={doImport} disabled={busy || toImport.length === 0} className="mt-5 w-full rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Importing…' : `Import ${toImport.length} ${itemLabel}${toImport.length === 1 ? '' : 's'}`}</button>
           </>
         )}
       </div>

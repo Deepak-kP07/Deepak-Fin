@@ -10,45 +10,45 @@ import { useIsMobile } from '@/hooks/use-mobile'
 function ScholarshipFormFields({ form, setForm, editing, accounts, linkedAccount }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2">
-      <label className="text-sm text-slate-300 sm:col-span-2">Name
-        <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-accent-300/50" placeholder="Merit scholarship Q1" />
+      <label className="text-sm text-slate-300 light:text-slate-700 sm:col-span-2">Name
+        <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" placeholder="Merit scholarship Q1" />
       </label>
-      <label className="text-sm text-slate-300">Total amount
-        <input required type="number" step="0.01" min="0" value={form.total_amount} onChange={(e) => setForm({ ...form, total_amount: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-accent-300/50" />
+      <label className="text-sm text-slate-300 light:text-slate-700">Total amount
+        <input required type="number" step="0.01" min="0" value={form.total_amount} onChange={(e) => setForm({ ...form, total_amount: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
       </label>
-      <label className="text-sm text-slate-300">Academic year
-        <input value={form.academic_year || ''} onChange={(e) => setForm({ ...form, academic_year: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-accent-300/50" placeholder="2025-26" />
+      <label className="text-sm text-slate-300 light:text-slate-700">Academic year
+        <input value={form.academic_year || ''} onChange={(e) => setForm({ ...form, academic_year: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" placeholder="2025-26" />
       </label>
-      <label className="text-sm text-slate-300">Source
-        <input value={form.source || ''} onChange={(e) => setForm({ ...form, source: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-accent-300/50" placeholder="Govt / Foundation / College" />
+      <label className="text-sm text-slate-300 light:text-slate-700">Source
+        <input value={form.source || ''} onChange={(e) => setForm({ ...form, source: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" placeholder="Govt / Foundation / College" />
       </label>
-      <label className="text-sm text-slate-300">Status
-        <Select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
+      <label className="text-sm text-slate-300 light:text-slate-700">Status
+        <Select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-[#101621] light:bg-white px-3 py-3 text-white light:text-slate-900 outline-none">
           <option value="pending">Pending</option><option value="received">Received</option><option value="paid">Paid to college</option>
         </Select>
         {form.status === 'paid' && <p className="mt-1.5 text-[11px] text-slate-500">Marks the full amount as paid to college right away. To log paid amounts one at a time (with dates and which account they left from), use the &quot;Pay to college&quot; button on the scholarship instead.</p>}
       </label>
-      <label className="text-sm text-slate-300">Received date
-        <DateInput value={form.received_date || ''} onChange={(e) => setForm({ ...form, received_date: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-accent-300/50" />
+      <label className="text-sm text-slate-300 light:text-slate-700">Received date
+        <DateInput value={form.received_date || ''} onChange={(e) => setForm({ ...form, received_date: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
       </label>
-      <label className="text-sm text-slate-300">Due date (to college)
-        <DateInput value={form.due_date || ''} onChange={(e) => setForm({ ...form, due_date: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-accent-300/50" />
+      <label className="text-sm text-slate-300 light:text-slate-700">Due date (to college)
+        <DateInput value={form.due_date || ''} onChange={(e) => setForm({ ...form, due_date: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
       </label>
       {editing ? (
-        <div className="rounded-xl border border-white/10 bg-white/[.02] px-3 py-2.5 text-xs text-slate-400 sm:col-span-2">
-          {linkedAccount ? <>Linked to <span className="text-white">{linkedAccount.name}</span> — marking this received/paid posts a transaction on that account.</> : 'Not linked to a bank account — this scholarship stays only in this module.'} Linking can only be set when a scholarship is created, not changed afterward.
+        <div className="rounded-xl border border-white/10 light:border-black/10 bg-white/[.02] light:bg-black/[.02] px-3 py-2.5 text-xs text-slate-400 light:text-slate-500 sm:col-span-2">
+          {linkedAccount ? <>Linked to <span className="text-white light:text-slate-900">{linkedAccount.name}</span> — marking this received/paid posts a transaction on that account.</> : 'Not linked to a bank account — this scholarship stays only in this module.'} Linking can only be set when a scholarship is created, not changed afterward.
         </div>
       ) : (
-        <label className="text-sm text-slate-300 sm:col-span-2">Link to a bank account <span className="text-xs text-slate-500">(optional — can't be changed later)</span>
-          <Select value={form.received_to_account_id || ''} onChange={(e) => setForm({ ...form, received_to_account_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
+        <label className="text-sm text-slate-300 light:text-slate-700 sm:col-span-2">Link to a bank account <span className="text-xs text-slate-500">(optional — can't be changed later)</span>
+          <Select value={form.received_to_account_id || ''} onChange={(e) => setForm({ ...form, received_to_account_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-[#101621] light:bg-white px-3 py-3 text-white light:text-slate-900 outline-none">
             <option value="">Don't link — keep this separate</option>
             {accounts.filter((a) => a.type !== 'debit_card').map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
           </Select>
           <p className="mt-1.5 text-[11px] text-slate-500">{form.received_to_account_id ? 'Marking this received (or paid) posts a transaction on this account, and stays in sync as you edit status/amount.' : "This scholarship won't show up anywhere outside this module."}</p>
         </label>
       )}
-      <label className="text-sm text-slate-300 sm:col-span-2">Notes
-        <input value={form.notes || ''} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-accent-300/50" />
+      <label className="text-sm text-slate-300 light:text-slate-700 sm:col-span-2">Notes
+        <input value={form.notes || ''} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
       </label>
     </div>
   )
@@ -90,7 +90,7 @@ export function ScholarshipForm({ open, onClose, onSaved, editing, accounts, toa
   }
 
   const fieldsProps = { form, setForm, editing, accounts, linkedAccount }
-  const submitButton = <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-accent-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : editing ? 'Update' : 'Save'}</button>
+  const submitButton = <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : editing ? 'Update' : 'Save'}</button>
 
   if (isMobile) {
     return (
@@ -105,10 +105,10 @@ export function ScholarshipForm({ open, onClose, onSaved, editing, accounts, toa
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={onClose}>
-      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-xl rounded-3xl border border-white/10 bg-[#141a28] p-6">
+      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-xl rounded-3xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white">{editing ? 'Edit scholarship' : 'Add scholarship'}</h2>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-white/5"><X size={18} /></button>
+          <h2 className="text-lg font-semibold text-white light:text-slate-900">{editing ? 'Edit scholarship' : 'Add scholarship'}</h2>
+          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 light:text-slate-500 hover:bg-white/5"><X size={18} /></button>
         </div>
         <div className="mt-5">
           <ScholarshipFormFields {...fieldsProps} />

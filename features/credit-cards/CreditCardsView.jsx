@@ -1,8 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { CreditCard, Eye, EyeOff, Landmark, Plus, Target } from 'lucide-react'
+import { CreditCard, Landmark, Plus, Target } from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
+import { HeroStatTile } from '@/components/shared/HeroStatTile'
+import { utilisationSeverity } from '@/lib/creditCards'
 import { money } from '@/lib/format'
 import { CreditCardFlip } from '@/features/credit-cards/CreditCardFlip'
 import { CreditCardDetailView } from '@/features/credit-cards/CreditCardDetailView'
@@ -35,49 +37,88 @@ export function CreditCardsView({ data, onAdd, onEdit, onDelete, onSpend, onPay,
   const totalOutstanding = credit_cards.reduce((s, c) => s + Number(c.current_outstanding || 0), 0)
   const totalLimit = credit_cards.reduce((s, c) => s + Number(c.credit_limit || 0), 0)
   const overallUtil = totalLimit > 0 ? Math.round((totalOutstanding / totalLimit) * 100) : 0
+  const overallSeverity = utilisationSeverity(overallUtil)
+
+  // Per-card share of total outstanding, for the hero's desktop-only side region — "which card
+  // is dragging my utilisation up," same idea as Investments' portfolio-mix bar.
+  const cardMix = credit_cards.map((c) => ({ id: c.id, name: c.name, color: c.color || '#a78bfa', value: Number(c.current_outstanding || 0) }))
+    .filter((c) => c.value > 0).sort((a, b) => b.value - a.value)
+  const cardMixTotal = cardMix.reduce((s, c) => s + c.value, 0)
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex items-end justify-between gap-3">
         <div>
-          <div className="mb-2 text-xs uppercase tracking-widest text-accent-200/70">Plastic tracker</div>
-          <h1 className="text-3xl font-semibold tracking-tight text-white">Credit cards</h1>
+          <div className="mb-2 text-xs uppercase tracking-widest text-accent-200/70 light:text-accent-700">Plastic tracker</div>
+          <h1 className="text-3xl font-semibold tracking-tight text-white light:text-slate-900">Credit cards</h1>
         </div>
-        <div className="flex gap-2">
-          <button onClick={onAdd} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-accent-300 to-blue-500 px-4 py-2.5 text-sm font-semibold text-[#07101c] sm:flex-none"><Plus size={15} />Add card</button>
-          <button onClick={onToggleMoney} className="rounded-xl border border-white/10 p-2.5 text-slate-400 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
-            {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
-          </button>
+        <div className="flex justify-end gap-2">
+          <button onClick={onAdd} className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-4 py-2.5 text-sm font-semibold text-[#07101c]"><Plus size={15} /><span className="sm:hidden">Add</span><span className="hidden sm:inline">Add card</span></button>
         </div>
       </div>
 
       {credit_cards.length > 0 && (
-        <div className="rounded-3xl border border-white/10 bg-white/[.035] p-6">
-          <div className="text-xs uppercase tracking-widest text-slate-500">Total outstanding</div>
-          <div className="mt-1 text-[clamp(2rem,6vw,3rem)] font-semibold leading-[1.1] tracking-[-0.01em] text-white">
-            {showMoney ? money(totalOutstanding) : '••••••••'}
+        // lg:+ splits into two regions, same recipe as Investments' hero: the figure stays the
+        // left column, and a per-card outstanding breakdown fills the right column instead of
+        // the two HeroStatTiles just stretching wider with nothing beside them.
+        <div className="rounded-3xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] p-6 lg:grid lg:grid-cols-[minmax(300px,1.05fr)_minmax(0,1fr)] lg:items-center lg:gap-8">
+          <div>
+            <div className="text-xs uppercase tracking-widest text-slate-500">Total outstanding</div>
+            <div className="mt-1 text-[clamp(2rem,6vw,3rem)] font-semibold leading-[1.1] tracking-[-0.01em] text-white light:text-slate-900">
+              {showMoney ? money(totalOutstanding) : '••••••••'}
+            </div>
+            <div className="mt-1 text-sm text-slate-500">{credit_cards.length} card{credit_cards.length === 1 ? '' : 's'}</div>
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <HeroStatTile icon={Landmark} label="Total limit" value={showMoney ? money(totalLimit) : '••••'} />
+              <HeroStatTile icon={Target} label="Utilisation" value={`${overallUtil}%`} valueTone={overallSeverity.tone} sub={overallSeverity.label} />
+            </div>
           </div>
-          <div className="mt-1 text-sm text-slate-500">{credit_cards.length} card{credit_cards.length === 1 ? '' : 's'}</div>
-          <div className="mt-5 grid grid-cols-2 gap-3">
-            <div className="rounded-2xl bg-white/[.04] p-3.5">
-              <div className="flex items-center gap-1.5 text-xs text-slate-400"><Landmark size={13} />Total limit</div>
-              <div className="mt-1 text-lg font-semibold text-white">{showMoney ? money(totalLimit) : '••••'}</div>
-            </div>
-            <div className="rounded-2xl bg-white/[.04] p-3.5">
-              <div className="flex items-center gap-1.5 text-xs text-slate-400"><Target size={13} />Utilisation</div>
-              <div className={`mt-1 text-lg font-semibold ${overallUtil <= 30 ? 'text-emerald-300' : overallUtil <= 60 ? 'text-amber-300' : 'text-rose-300'}`}>{overallUtil}%</div>
-              <div className="text-[11px] text-slate-500">{overallUtil <= 30 ? 'Healthy' : overallUtil <= 60 ? 'Rising' : 'High'}</div>
-            </div>
+
+          <div className="hidden min-w-0 border-white/[.07] light:border-black/[.07] lg:flex lg:flex-col lg:justify-center lg:gap-2.5 lg:border-l lg:pl-8">
+            {cardMix.length === 0 ? (
+              <div className="text-sm text-slate-500">Nothing outstanding — every card is paid off.</div>
+            ) : (
+              <>
+                <span className="text-[11px] font-semibold uppercase tracking-widest text-slate-500">Outstanding by card</span>
+                <div
+                  role="img"
+                  aria-label={`Outstanding by card: ${cardMix.map((c) => `${c.name} ${((c.value / cardMixTotal) * 100).toFixed(1)}%`).join(', ')}`}
+                  className="mt-1.5 flex h-2 gap-px overflow-hidden rounded-full bg-white/[.07] light:bg-black/[.07]"
+                >
+                  {cardMix.map((c) => <div key={c.id} style={{ width: `${(c.value / cardMixTotal) * 100}%`, background: c.color }} />)}
+                </div>
+                <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-400 light:text-slate-500">
+                  {cardMix.map((c) => (
+                    <span key={c.id} className="flex items-center gap-1.5">
+                      <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: c.color }} />
+                      {c.name} · {((c.value / cardMixTotal) * 100).toFixed(0)}%
+                    </span>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
 
       {credit_cards.length === 0 ? (
-        <div className="rounded-2xl border border-white/10 bg-white/[.035]">
+        <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025]">
           <EmptyState icon={CreditCard} title="No credit cards yet" message="Track credit card spends, utilisation and pay bills without leaving the app." cta="Add first card" onCta={onAdd} />
         </div>
       ) : (
-        <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
+        // 300-340px matches CreditCardFlip's own fixed aspect-ratio face (it self-caps at
+        // max-w-[340px] with mx-auto) — auto-fit lets more cards per row on wide screens instead
+        // of capping at 2 columns until 1280px. Bounded to 340px, not left as 1fr: an unbounded
+        // track still stretches the whole row width with 1-2 cards, and CreditCardFlip's own
+        // mx-auto then centers the card inside that empty track instead of sitting flush left
+        // like every other card grid in the app — capping the track is what actually fixes it,
+        // the internal max-width alone only stopped the card's own size from growing.
+        // justify-center: capping the track leaves leftover container width undistributed once
+        // there are fewer tracks than fit a row (mobile's single column, or a lone card on
+        // desktop) — grid's default justify-content dumps that leftover at the end, so the
+        // track itself sits flush left instead of centered even though mx-auto centers the card
+        // *within* its track.
+        <div className="grid justify-center gap-6 grid-cols-[repeat(auto-fit,minmax(300px,340px))]">
           {credit_cards.map((card) => (
             <CreditCardFlip
               key={card.id}

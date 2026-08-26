@@ -14,34 +14,34 @@ function MoneyProfileEntryFormFields({ form, setForm, profile, categoryOptions, 
     <>
       <div className="grid grid-cols-3 gap-2">
         {ENTRY_TYPES.map((t) => (
-          <button key={t.value} type="button" onClick={() => setForm({ ...form, entry_type: t.value })} className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${form.entry_type === t.value ? ENTRY_TYPE_STYLE[t.value] + ' border-transparent' : 'border-white/10 text-slate-400 hover:bg-white/5'}`}>{t.label}</button>
+          <button key={t.value} type="button" onClick={() => setForm({ ...form, entry_type: t.value })} className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${form.entry_type === t.value ? ENTRY_TYPE_STYLE[t.value] + ' border-transparent' : 'border-white/10 light:border-black/10 text-slate-400 light:text-slate-500 hover:bg-white/5'}`}>{t.label}</button>
         ))}
       </div>
 
       <div className="mt-5 grid gap-4 sm:grid-cols-2">
-        <label className="text-sm text-slate-300">Date
-          <DateInput value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-accent-300/50" />
+        <label className="text-sm text-slate-300 light:text-slate-700">Date
+          <DateInput value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
         </label>
-        <label className="text-sm text-slate-300">Amount
-          <input required type="number" step="0.01" min="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-accent-300/50" />
+        <label className="text-sm text-slate-300 light:text-slate-700">Amount
+          <input required type="number" step="0.01" min="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
         </label>
-        <label className="text-sm text-slate-300 sm:col-span-2">Description
-          <input required value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-accent-300/50" placeholder="Rent, groceries, salary…" />
+        <label className="text-sm text-slate-300 light:text-slate-700 sm:col-span-2">Description
+          <input required value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" placeholder="Rent, groceries, salary…" />
         </label>
-        <div className="text-sm text-slate-300">
+        <div className="text-sm text-slate-300 light:text-slate-700">
           <label>Category <span className="text-xs text-slate-500">(optional)</span></label>
-          <CategorySelect value={form.category_id || ''} onChange={(e) => setForm({ ...form, category_id: e.target.value })} categories={categoryOptions} onAddCategory={onAddCategory} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none focus:border-accent-300/50" />
+          <CategorySelect value={form.category_id || ''} onChange={(e) => setForm({ ...form, category_id: e.target.value })} categories={categoryOptions} onAddCategory={onAddCategory} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-[#101621] light:bg-white px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
         </div>
-        <label className="text-sm text-slate-300">Paid to / Received from <span className="text-xs text-slate-500">(optional)</span>
-          <input value={form.paid_party} onChange={(e) => setForm({ ...form, paid_party: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-accent-300/50" />
+        <label className="text-sm text-slate-300 light:text-slate-700">Paid to / Received from <span className="text-xs text-slate-500">(optional)</span>
+          <input value={form.paid_party} onChange={(e) => setForm({ ...form, paid_party: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
         </label>
-        <label className="text-sm text-slate-300 sm:col-span-2">Notes <span className="text-xs text-slate-500">(optional)</span>
-          <input value={form.notes || ''} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-accent-300/50" />
+        <label className="text-sm text-slate-300 light:text-slate-700 sm:col-span-2">Notes <span className="text-xs text-slate-500">(optional)</span>
+          <input value={form.notes || ''} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
         </label>
       </div>
 
       {profile?.linked_account_id && (
-        <div className="mt-4 rounded-xl border border-accent-300/20 bg-accent-300/5 px-3 py-2.5 text-xs text-accent-200">This profile is linked to a bank account — this entry will also post as a transaction there.</div>
+        <div className="mt-4 rounded-xl border border-accent-300/20 bg-accent-300/5 px-3 py-2.5 text-xs text-accent-200 light:text-accent-700">This profile is linked to a bank account — this entry will also post as a transaction there.</div>
       )}
     </>
   )
@@ -84,7 +84,7 @@ export function MoneyProfileEntryForm({ open, onClose, onSaved, editing, profile
   }
 
   const fieldsProps = { form, setForm, profile, categoryOptions, onAddCategory }
-  const submitButton = <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-accent-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : editing ? 'Update entry' : 'Save entry'}</button>
+  const submitButton = <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : editing ? 'Update entry' : 'Save entry'}</button>
 
   if (isMobile) {
     return (
@@ -99,10 +99,10 @@ export function MoneyProfileEntryForm({ open, onClose, onSaved, editing, profile
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={onClose}>
-      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="max-h-[85vh] w-full max-w-xl overflow-y-auto rounded-3xl border border-white/10 bg-[#141a28] p-6">
+      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="max-h-[85vh] w-full max-w-xl overflow-y-auto rounded-3xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white">{editing ? 'Edit entry' : `Add entry · ${profile?.name || ''}`}</h2>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-white/5"><X size={18} /></button>
+          <h2 className="text-lg font-semibold text-white light:text-slate-900">{editing ? 'Edit entry' : `Add entry · ${profile?.name || ''}`}</h2>
+          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 light:text-slate-500 hover:bg-white/5"><X size={18} /></button>
         </div>
         <div className="mt-5">
           <MoneyProfileEntryFormFields {...fieldsProps} />

@@ -14,32 +14,32 @@ function LoanPaymentFormFields({ form, setForm, accounts, creditCards, loan, cur
     <div className="grid gap-4">
       <div className="grid grid-cols-2 gap-2">
         {[{ v: 'emi', l: 'EMI' }, { v: 'prepayment', l: 'Prepayment' }].map((t) => (
-          <button key={t.v} type="button" onClick={() => setForm({ ...form, type: t.v })} className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${form.type === t.v ? 'border-accent-400/30 bg-accent-400/15 text-accent-200' : 'border-white/10 text-slate-400 hover:bg-white/5'}`}>{t.l}</button>
+          <button key={t.v} type="button" onClick={() => setForm({ ...form, type: t.v })} className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${form.type === t.v ? 'border-accent-400/30 bg-accent-400/15 text-accent-200 light:text-accent-700' : 'border-white/10 light:border-black/10 text-slate-400 light:text-slate-500 hover:bg-white/5'}`}>{t.l}</button>
         ))}
       </div>
-      <label className="text-sm text-slate-300">Amount
+      <label className="text-sm text-slate-300 light:text-slate-700">Amount
         <input required type="number" step="0.01" min="0.01" value={form.amount} onChange={(e) => {
           const amount = e.target.value
           const excess = Math.max(0, Number(amount || 0) - currentEmiAmount)
           setForm({ ...form, amount, type: excess > 0.01 ? 'prepayment' : form.type })
-        }} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-accent-300/50" />
+        }} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
         {excessAmount > 0.01 && (
-          <div className="mt-1 text-[11px] text-accent-200">{money(currentEmiAmount)} covers the regular EMI — the extra {money(excessAmount)} is treated as a prepayment.</div>
+          <div className="mt-1 text-[11px] text-accent-200 light:text-accent-700">{money(currentEmiAmount)} covers the regular EMI — the extra {money(excessAmount)} is treated as a prepayment.</div>
         )}
       </label>
       {showPrepayModeToggle && (
         <div>
           <div className="grid grid-cols-2 gap-2">
             {[{ v: 'reduce_tenure', l: 'Reduce tenure' }, { v: 'reduce_emi', l: 'Reduce EMI' }].map((m) => (
-              <button key={m.v} type="button" onClick={() => setForm({ ...form, prepay_mode: m.v })} className={`rounded-xl border px-3 py-2 text-xs font-medium transition ${form.prepay_mode === m.v ? 'border-emerald-400/30 bg-emerald-400/15 text-emerald-200' : 'border-white/10 text-slate-400 hover:bg-white/5'}`}>{m.l}</button>
+              <button key={m.v} type="button" onClick={() => setForm({ ...form, prepay_mode: m.v })} className={`rounded-xl border px-3 py-2 text-xs font-medium transition ${form.prepay_mode === m.v ? 'border-emerald-400/30 bg-emerald-400/15 text-emerald-200 light:text-emerald-700' : 'border-white/10 light:border-black/10 text-slate-400 light:text-slate-500 hover:bg-white/5'}`}>{m.l}</button>
             ))}
           </div>
           <div className="mt-1 text-[11px] text-slate-500">Reduce tenure keeps the EMI the same and finishes the loan sooner — it saves more interest than reducing the EMI.</div>
           {form.prepay_mode === 'reduce_emi' && (
-            <div className="mt-1 text-[11px] text-amber-300/80">Most lenders default to reducing tenure, not EMI, after a prepayment — reducing the EMI usually needs an explicit request to your lender to take effect on their side. This just tracks your intent here.</div>
+            <div className="mt-1 text-[11px] text-amber-300/80 light:text-amber-700">Most lenders default to reducing tenure, not EMI, after a prepayment — reducing the EMI usually needs an explicit request to your lender to take effect on their side. This just tracks your intent here.</div>
           )}
           {prepayPreview && (
-            <div className="mt-2 rounded-lg bg-emerald-400/5 px-3 py-2 text-[11px] text-emerald-200">
+            <div className="mt-2 rounded-lg bg-emerald-400/5 px-3 py-2 text-[11px] text-emerald-200 light:text-emerald-700">
               {form.prepay_mode === 'reduce_emi'
                 ? <>New EMI ≈ {money(prepayPreview.newEmi)} · same ~{prepayPreview.monthsAfter} months left</>
                 : <>~{Math.max(0, prepayPreview.monthsBefore - prepayPreview.monthsAfter)} months cut off the loan</>}
@@ -48,18 +48,18 @@ function LoanPaymentFormFields({ form, setForm, accounts, creditCards, loan, cur
           )}
         </div>
       )}
-      <label className="text-sm text-slate-300">Payment date
-        <DateInput value={form.payment_date} onChange={(e) => setForm({ ...form, payment_date: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-accent-300/50" />
+      <label className="text-sm text-slate-300 light:text-slate-700">Payment date
+        <DateInput value={form.payment_date} onChange={(e) => setForm({ ...form, payment_date: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
       </label>
-      <label className="text-sm text-slate-300">Pay from account
-        <Select required value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
+      <label className="text-sm text-slate-300 light:text-slate-700">Pay from account
+        <Select required value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-[#101621] light:bg-white px-3 py-3 text-white light:text-slate-900 outline-none">
           <option value="">Choose account…</option>
           {accounts.filter((a) => a.type !== 'debit_card').map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
           {creditCards.map((c) => <option key={c.id} value={`cc:${c.id}`}>{c.name} (card)</option>)}
         </Select>
       </label>
-      <label className="text-sm text-slate-300">Notes
-        <input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-accent-300/50" placeholder="Optional" />
+      <label className="text-sm text-slate-300 light:text-slate-700">Notes
+        <input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" placeholder="Optional" />
       </label>
     </div>
   )
@@ -120,7 +120,7 @@ export function LoanPaymentForm({ open, onClose, onSaved, loan, accounts, credit
   }
 
   const fieldsProps = { form, setForm, accounts, creditCards, loan, currentEmiAmount, excessAmount, showPrepayModeToggle, prepayPreview }
-  const submitButton = <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-accent-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : 'Log payment'}</button>
+  const submitButton = <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : 'Log payment'}</button>
 
   if (isMobile) {
     return (
@@ -136,13 +136,13 @@ export function LoanPaymentForm({ open, onClose, onSaved, loan, accounts, credit
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={onClose}>
-      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-3xl border border-white/10 bg-[#141a28] p-6">
+      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-3xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-6">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-white">Log payment</h2>
+            <h2 className="text-lg font-semibold text-white light:text-slate-900">Log payment</h2>
             <p className="mt-1 text-xs text-slate-500">{loan.name} · outstanding {money(loan.outstanding)}</p>
           </div>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-white/5"><X size={18} /></button>
+          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 light:text-slate-500 hover:bg-white/5"><X size={18} /></button>
         </div>
         <div className="mt-5">
           <LoanPaymentFormFields {...fieldsProps} />

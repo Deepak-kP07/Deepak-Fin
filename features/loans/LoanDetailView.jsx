@@ -119,22 +119,22 @@ export function LoanDetailView({ loan, payments, accounts, onBack, onPay, onDele
 
   return (
     <div className="space-y-5">
-      <button onClick={onBack} className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-white"><ChevronRight size={14} className="rotate-180" /> Back to loans</button>
+      <button onClick={onBack} className="flex items-center gap-1.5 text-sm text-slate-400 light:text-slate-500 hover:text-white hover:light:text-slate-900"><ChevronRight size={14} className="rotate-180" /> Back to loans</button>
 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-3xl font-semibold tracking-tight text-white">{loan.name}</h1>
-            <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-widest ${loan.status === 'closed' ? 'bg-emerald-400/15 text-emerald-200' : 'bg-accent-400/15 text-accent-200'}`}>{loan.status}</span>
+            <h1 className="text-3xl font-semibold tracking-tight text-white light:text-slate-900">{loan.name}</h1>
+            <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-widest ${loan.status === 'closed' ? 'bg-emerald-400/15 text-emerald-200 light:text-emerald-700' : 'bg-accent-400/15 text-accent-200 light:text-accent-700'}`}>{loan.status}</span>
           </div>
           <div className="mt-1 text-sm text-slate-500">{loan.lender || 'Lender'}{account ? ` · Paying from ${account.name}` : ''}</div>
         </div>
         <div className="flex w-full flex-wrap gap-2 sm:w-auto">
-          <button onClick={() => onPay(loan)} disabled={loan.status === 'closed'} className="rounded-xl bg-gradient-to-r from-accent-300 to-blue-500 px-4 py-2.5 text-sm font-semibold text-[#07101c] disabled:opacity-50">Log payment</button>
-          <button onClick={() => setSyncOpen((o) => !o)} className={`flex items-center gap-1.5 rounded-xl border px-3 py-2.5 text-sm font-medium transition ${syncOpen ? 'border-accent-300/40 bg-accent-400/10 text-accent-200' : 'border-white/10 text-slate-400 hover:bg-white/5 hover:text-white'}`}><RefreshCw size={15} /><span className="hidden sm:inline">Sync</span></button>
-          <button onClick={() => onEdit(loan)} className="rounded-xl border border-white/10 p-2.5 text-slate-400 hover:bg-white/5 hover:text-white"><Pencil size={15} /></button>
-          <button onClick={() => onDelete(loan)} className="rounded-xl border border-white/10 p-2.5 text-rose-300/70 hover:bg-rose-300/10"><Trash2 size={15} /></button>
-          <button onClick={onToggleMoney} className="rounded-xl border border-white/10 p-2.5 text-slate-400 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
+          <button onClick={() => onPay(loan)} disabled={loan.status === 'closed'} className="rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-4 py-2.5 text-sm font-semibold text-[#07101c] disabled:opacity-50">Log payment</button>
+          <button onClick={() => setSyncOpen((o) => !o)} className={`flex items-center gap-1.5 rounded-xl border px-3 py-2.5 text-sm font-medium transition ${syncOpen ? 'border-accent-300/40 bg-accent-400/10 text-accent-200 light:text-accent-700' : 'border-white/10 light:border-black/10 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900'}`}><RefreshCw size={15} /><span className="hidden sm:inline">Sync</span></button>
+          <button onClick={() => onEdit(loan)} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900"><Pencil size={15} /></button>
+          <button onClick={() => onDelete(loan)} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-rose-300/70 light:text-rose-700 hover:bg-rose-300/10"><Trash2 size={15} /></button>
+          <button onClick={onToggleMoney} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
             {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
           </button>
         </div>
@@ -142,10 +142,10 @@ export function LoanDetailView({ loan, payments, accounts, onBack, onPay, onDele
 
       {syncOpen && (
         <div className="rounded-xl border border-accent-300/20 bg-accent-400/[.03] p-4">
-          <div className="text-sm text-slate-300">Sync with your lender's app</div>
+          <div className="text-sm text-slate-300 light:text-slate-700">Sync with your lender's app</div>
           <div className="mt-1 text-[11px] text-slate-500">The Outstanding figure above already includes today's not-yet-billed interest, same as your lender's app. If there's still a small gap after that — rounding, an unmodeled fee — enter your lender's figure here to close it, without logging it as a payment.</div>
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <input type="number" step="0.01" min="0" value={syncValue} onChange={(e) => setSyncValue(e.target.value)} placeholder={String(Math.round(todaysOutstanding))} className="w-40 rounded-xl border border-white/10 bg-white/[.04] px-3 py-2 text-sm text-white outline-none focus:border-accent-300/50" />
+            <input type="number" step="0.01" min="0" value={syncValue} onChange={(e) => setSyncValue(e.target.value)} placeholder={String(Math.round(todaysOutstanding))} className="w-40 rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-2 text-sm text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
             <button
               type="button"
               disabled={syncBusy || !syncValue}
@@ -154,7 +154,7 @@ export function LoanDetailView({ loan, payments, accounts, onBack, onPay, onDele
                 await onSync(loan, Number(syncValue))
                 setSyncBusy(false); setSyncOpen(false); setSyncValue('')
               }}
-              className="rounded-xl bg-gradient-to-r from-accent-300 to-blue-500 px-4 py-2 text-sm font-semibold text-[#07101c] disabled:opacity-50"
+              className="rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-4 py-2 text-sm font-semibold text-[#07101c] disabled:opacity-50"
             >{syncBusy ? 'Syncing…' : 'Sync'}</button>
             {syncValue && (
               <span className="text-[11px] text-slate-500">
@@ -178,69 +178,69 @@ export function LoanDetailView({ loan, payments, accounts, onBack, onPay, onDele
       )}
 
       <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-6">
-        <StatCard label="Outstanding" value={showMoney ? money(todaysOutstanding) : '••••'} icon={Landmark} accent="bg-rose-400/15 text-rose-200" tone="text-rose-300" sub={<span>{cleared}% cleared{accruedSinceLastPayment > 0.5 ? ` · +${money(accruedSinceLastPayment)} accrued today` : ''}</span>} />
-        <StatCard label="EMI" value={showMoney ? money(emi) : '••••'} icon={RefreshCw} accent="bg-accent-300/15 text-accent-200" sub={<span>{rate}% p.a.</span>} />
-        <StatCard label="EMIs paid" value={String(emisPaid)} icon={Target} accent="bg-violet-400/15 text-violet-200" sub={<span>of ~{loan.status === 'closed' ? emisPaid : emisPaid + monthsRemaining} total</span>} />
-        <StatCard label="EMIs remaining" value={loan.status === 'closed' ? '0' : String(monthsRemaining)} icon={Target} accent="bg-emerald-400/15 text-emerald-200" sub={<span>{payoffDate ? `payoff ~${formatDate(payoffDate)}` : 'Paid off'}</span>} />
-        <StatCard label="Interest paid" value={showMoney ? money(totalInterestPaid) : '••••'} icon={ArrowDownRight} accent="bg-amber-400/15 text-amber-200" tone="text-amber-300" sub={<span>so far</span>} />
-        <StatCard label="Interest saved" value={showMoney ? money(loan.interest_saved || 0) : '••••'} icon={ArrowUpRight} accent="bg-emerald-400/15 text-emerald-200" sub={<span>from prepayments</span>} />
+        <StatCard label="Outstanding" value={showMoney ? money(todaysOutstanding) : '••••'} icon={Landmark} accent="bg-rose-400/15 text-rose-200 light:text-rose-700" tone="text-rose-300 light:text-rose-700" sub={<span>{cleared}% cleared{accruedSinceLastPayment > 0.5 ? ` · +${money(accruedSinceLastPayment)} accrued today` : ''}</span>} />
+        <StatCard label="EMI" value={showMoney ? money(emi) : '••••'} icon={RefreshCw} accent="bg-accent-300/15 text-accent-200 light:text-accent-700" sub={<span>{rate}% p.a.</span>} />
+        <StatCard label="EMIs paid" value={String(emisPaid)} icon={Target} accent="bg-accent-400/15 text-accent-200 light:text-accent-700" sub={<span>of ~{loan.status === 'closed' ? emisPaid : emisPaid + monthsRemaining} total</span>} />
+        <StatCard label="EMIs remaining" value={loan.status === 'closed' ? '0' : String(monthsRemaining)} icon={Target} accent="bg-emerald-400/15 text-emerald-200 light:text-emerald-700" sub={<span>{payoffDate ? `payoff ~${formatDate(payoffDate)}` : 'Paid off'}</span>} />
+        <StatCard label="Interest paid" value={showMoney ? money(totalInterestPaid) : '••••'} icon={ArrowDownRight} accent="bg-amber-400/15 text-amber-200 light:text-amber-700" tone="text-amber-300 light:text-amber-700" sub={<span>so far</span>} />
+        <StatCard label="Interest saved" value={showMoney ? money(loan.interest_saved || 0) : '••••'} icon={ArrowUpRight} accent="bg-emerald-400/15 text-emerald-200 light:text-emerald-700" sub={<span>from prepayments</span>} />
       </div>
 
       {prepaymentEvents.length > 0 && (
         <div className="rounded-2xl border border-emerald-400/15 bg-emerald-500/[.03]">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 px-5 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 light:border-black/10 px-5 py-3">
             <div className="text-xs uppercase tracking-widest text-slate-500">Prepayments · {prepaymentEvents.length}</div>
-            <div className="text-xs text-slate-400">
-              <span className="font-semibold text-white">{showMoney ? money(totalExtraPrepaid) : '••••'}</span> extra paid · <span className="font-semibold text-emerald-300">{showMoney ? money(loan.interest_saved || 0) : '••••'}</span> saved
+            <div className="text-xs text-slate-400 light:text-slate-500">
+              <span className="font-semibold text-white light:text-slate-900">{showMoney ? money(totalExtraPrepaid) : '••••'}</span> extra paid · <span className="font-semibold text-emerald-300 light:text-emerald-700">{showMoney ? money(loan.interest_saved || 0) : '••••'}</span> saved
             </div>
           </div>
-          <div className="divide-y divide-white/5">
+          <div className="divide-y divide-white/5 light:divide-black/5">
             {prepaymentEvents.map((p) => (
               <div key={p.id} className="grid grid-cols-1 items-center gap-1.5 px-5 py-3 text-sm sm:grid-cols-[1.2fr_1fr_1fr] sm:gap-3 sm:gap-y-0">
-                <div className="text-slate-300">{formatDate(p.payment_date)}<span className="ml-1 text-[11px] text-slate-500">{p.extra < Number(p.amount) - 0.01 ? '· on top of EMI' : '· standalone'}</span></div>
-                <div className="font-medium text-white">{showMoney ? `+${money(p.extra)}` : '••••'} extra</div>
-                <div className="text-emerald-300 sm:text-right">{showMoney ? money(p.interest_saved || 0) : '••••'} saved</div>
+                <div className="text-slate-300 light:text-slate-700">{formatDate(p.payment_date)}<span className="ml-1 text-[11px] text-slate-500">{p.extra < Number(p.amount) - 0.01 ? '· on top of EMI' : '· standalone'}</span></div>
+                <div className="font-medium text-white light:text-slate-900">{showMoney ? `+${money(p.extra)}` : '••••'} extra</div>
+                <div className="text-emerald-300 light:text-emerald-700 sm:text-right">{showMoney ? money(p.interest_saved || 0) : '••••'} saved</div>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      <div className="rounded-2xl border border-white/10 bg-white/[.035]">
-        <div className="border-b border-white/10 px-5 py-3 text-xs uppercase tracking-widest text-slate-500">Payment history · {payments.length}</div>
+      <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025]">
+        <div className="border-b border-white/10 light:border-black/10 px-5 py-3 text-xs uppercase tracking-widest text-slate-500">Payment history · {payments.length}</div>
         {payments.length === 0 ? (
           <div className="px-5 py-6 text-sm text-slate-500">No payments logged yet.</div>
         ) : (
           <>
-            <div className="hidden grid-cols-[1.4fr_.9fr_.6fr_.6fr_auto] gap-4 border-b border-white/10 px-5 py-2.5 text-[10px] uppercase tracking-widest text-slate-600 sm:grid">
+            <div className="hidden grid-cols-[1.4fr_.9fr_.6fr_.6fr_auto] gap-4 border-b border-white/10 light:border-black/10 px-5 py-2.5 text-[10px] uppercase tracking-widest text-slate-600 sm:grid">
               <span>Payment</span>
               <span>Type</span>
               <span>Date</span>
               <span className="text-right">Amount</span>
               <span />
             </div>
-            <div className="max-h-96 divide-y divide-white/5 overflow-y-auto">
+            <div className="max-h-96 divide-y divide-white/5 light:divide-black/5 overflow-y-auto">
               {payments.map((p) => {
                 const acc = accounts.find((a) => a.id === p.account_id)
                 const typeLabel = p.type === 'adjustment' ? 'Synced' : p.prepay_mode ? (p.prepay_mode === 'reduce_emi' ? 'Reduce EMI' : 'Reduce tenure') : p.type === 'emi' ? 'EMI' : 'Prepayment'
                 return (
                   <div key={p.id} className="grid grid-cols-1 gap-2 px-5 py-4 sm:grid-cols-[1.4fr_.9fr_.6fr_.6fr_auto] sm:items-center sm:gap-4">
                     <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/[.05] text-accent-200">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/[.05] light:bg-black/[.035] text-accent-200 light:text-accent-700">
                         {p.type === 'adjustment' ? <RefreshCw size={16} /> : <ArrowDownRight size={16} />}
                       </div>
                       <div className="min-w-0">
-                        <div className="truncate text-sm font-medium text-white">{paymentRowLabel(p)}</div>
+                        <div className="truncate text-sm font-medium text-white light:text-slate-900">{paymentRowLabel(p)}</div>
                         {acc && <div className="text-[11px] text-slate-500">{acc.name}</div>}
                       </div>
                     </div>
-                    <div className="text-xs text-slate-400">
-                      <span className="inline-block rounded-md bg-white/[.05] px-2 py-0.5 text-accent-200">{typeLabel}</span>
+                    <div className="text-xs text-slate-400 light:text-slate-500">
+                      <span className="inline-block rounded-md bg-white/[.05] light:bg-black/[.035] px-2 py-0.5 text-accent-200 light:text-accent-700">{typeLabel}</span>
                     </div>
                     <div className="text-xs text-slate-500">paid {formatDate(p.payment_date)}</div>
-                    <div className="text-sm font-semibold text-white sm:text-right">{showMoney ? money(p.amount) : '••••'}</div>
+                    <div className="text-sm font-semibold text-white light:text-slate-900 sm:text-right">{showMoney ? money(p.amount) : '••••'}</div>
                     <div className="flex justify-end">
-                      <button onClick={() => onDeletePayment(p)} className="rounded-lg p-1.5 text-rose-300/70 hover:bg-rose-300/10"><Trash2 size={13} /></button>
+                      <button onClick={() => onDeletePayment(p)} className="rounded-lg p-1.5 text-rose-300/70 light:text-rose-700 hover:bg-rose-300/10"><Trash2 size={13} /></button>
                     </div>
                   </div>
                 )
@@ -251,20 +251,20 @@ export function LoanDetailView({ loan, payments, accounts, onBack, onPay, onDele
       </div>
 
       {emiCalendar.length > 0 && (
-        <div className="rounded-2xl border border-white/10 bg-white/[.035]">
-          <button type="button" onClick={() => setScheduleOpen((o) => !o)} className="flex w-full items-center justify-between px-5 py-3 text-xs uppercase tracking-widest text-slate-500 hover:text-slate-300">
+        <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025]">
+          <button type="button" onClick={() => setScheduleOpen((o) => !o)} className="flex w-full items-center justify-between px-5 py-3 text-xs uppercase tracking-widest text-slate-500 hover:text-slate-300 hover:light:text-slate-700">
             <span>EMI calendar · {emisPaid} paid, {monthsRemaining} to go{monthsSaved > 0 ? `, ${monthsSaved} saved` : ''} of {emiCalendar.length} original</span>
             <ChevronDown size={14} className={`transition-transform ${scheduleOpen ? 'rotate-180' : ''}`} />
           </button>
           {scheduleOpen && (
-            <div className="max-h-[28rem] overflow-y-auto border-t border-white/10">
+            <div className="max-h-[28rem] overflow-y-auto border-t border-white/10 light:border-black/10">
               {Object.entries(emiCalendarByYear).map(([year, months]) => (
                 <div key={year}>
-                  <div className="sticky top-0 border-b border-white/5 bg-[#161d2c] px-5 py-2 text-xs font-semibold text-accent-200/80">{year}</div>
+                  <div className="sticky top-0 border-b border-white/5 light:border-black/5 bg-[#161d2c] px-5 py-2 text-xs font-semibold text-accent-200/80 light:text-accent-700">{year}</div>
                   <div className="grid grid-cols-2 gap-x-4 gap-y-1 px-5 py-3 sm:grid-cols-3">
                     {months.map((m) => (
-                      <div key={m.date.toISOString()} className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm ${m.status === 'saved' ? 'text-slate-600' : 'text-slate-300'}`}>
-                        {m.status === 'paid' && <CheckCircle2 size={14} className="shrink-0 text-emerald-400" />}
+                      <div key={m.date.toISOString()} className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm ${m.status === 'saved' ? 'text-slate-600' : 'text-slate-300 light:text-slate-700'}`}>
+                        {m.status === 'paid' && <CheckCircle2 size={14} className="shrink-0 text-emerald-400 light:text-emerald-700" />}
                         {m.status === 'upcoming' && <Clock size={14} className="shrink-0 text-slate-500" />}
                         {m.status === 'saved' && <Sparkles size={14} className="shrink-0 text-slate-700" />}
                         <span className={m.status === 'saved' ? 'line-through decoration-slate-700' : ''}>{formatDate(m.date.toISOString().slice(0, 10))}</span>
@@ -274,7 +274,7 @@ export function LoanDetailView({ loan, payments, accounts, onBack, onPay, onDele
                 </div>
               ))}
               {monthsSaved > 0 && (
-                <div className="flex items-center gap-2 border-t border-white/10 px-5 py-3 text-xs text-emerald-300">
+                <div className="flex items-center gap-2 border-t border-white/10 light:border-black/10 px-5 py-3 text-xs text-emerald-300 light:text-emerald-700">
                   <Sparkles size={13} />{monthsSaved} month{monthsSaved === 1 ? '' : 's'} saved off the original schedule thanks to your prepayments.
                 </div>
               )}

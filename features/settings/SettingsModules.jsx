@@ -32,18 +32,18 @@ export function SettingsModules({ data, onSaveProfile }) {
   }
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[.035] p-5">
-      <div className="text-sm font-semibold text-white">Modules</div>
+    <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] p-5">
+      <div className="text-sm font-semibold text-white light:text-slate-900">Modules</div>
       <div className="text-xs text-slate-500">Turn modules on or off, and reorder them in the sidebar. Dashboard, Transactions, and Accounts are always on and always come first.</div>
       <div className="mt-3 space-y-2">
         {orderedKeys.map((key, i) => (
-          <div key={key} className="flex items-center gap-3 rounded-xl bg-black/20 px-4 py-3">
+          <div key={key} className="flex items-center gap-3 rounded-xl bg-black/20 light:bg-black/[.06] px-4 py-3">
             <div className="flex shrink-0 flex-col">
-              <button disabled={i === 0} onClick={() => move(key, -1)} className="rounded p-0.5 text-slate-500 hover:text-white disabled:opacity-20"><ChevronUp size={14} /></button>
-              <button disabled={i === orderedKeys.length - 1} onClick={() => move(key, 1)} className="rounded p-0.5 text-slate-500 hover:text-white disabled:opacity-20"><ChevronDown size={14} /></button>
+              <button disabled={i === 0} onClick={() => move(key, -1)} className="rounded p-0.5 text-slate-500 hover:text-white hover:light:text-slate-900 disabled:opacity-20"><ChevronUp size={14} /></button>
+              <button disabled={i === orderedKeys.length - 1} onClick={() => move(key, 1)} className="rounded p-0.5 text-slate-500 hover:text-white hover:light:text-slate-900 disabled:opacity-20"><ChevronDown size={14} /></button>
             </div>
             <div className="flex-1">
-              <div className="text-sm text-white">{MODULE_INFO[key]?.label || key}</div>
+              <div className="text-sm text-white light:text-slate-900">{MODULE_INFO[key]?.label || key}</div>
               <div className="mt-0.5 text-xs text-slate-500">{MODULE_INFO[key]?.description}</div>
             </div>
             <ToggleSwitch checked={resolved[key].enabled} onChange={() => toggle(key)} />

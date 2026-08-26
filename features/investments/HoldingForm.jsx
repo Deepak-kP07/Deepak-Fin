@@ -12,37 +12,37 @@ import { useIsMobile } from '@/hooks/use-mobile'
 function HoldingFormFields({ form, setForm, portfolios }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2">
-      <label className="text-sm text-slate-300 sm:col-span-2">Portfolio
-        <Select required value={form.portfolio_id} onChange={(e) => setForm({ ...form, portfolio_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
+      <label className="text-sm text-slate-300 light:text-slate-700 sm:col-span-2">Portfolio
+        <Select required value={form.portfolio_id} onChange={(e) => setForm({ ...form, portfolio_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-[#101621] light:bg-white px-3 py-3 text-white light:text-slate-900 outline-none">
           <option value="">Choose portfolio…</option>
           {portfolios.map((p) => <option key={p.id} value={p.id}>{p.name} · {money(p.cash_balance || 0)} cash</option>)}
         </Select>
       </label>
-      <label className="text-sm text-slate-300">Symbol
-        <input required value={form.symbol} onChange={(e) => setForm({ ...form, symbol: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 uppercase text-white outline-none focus:border-accent-300/50" placeholder="RELIANCE" />
+      <label className="text-sm text-slate-300 light:text-slate-700">Symbol
+        <input required value={form.symbol} onChange={(e) => setForm({ ...form, symbol: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 uppercase text-white light:text-slate-900 outline-none focus:border-accent-300/50" placeholder="RELIANCE" />
       </label>
-      <label className="text-sm text-slate-300">Exchange
-        <Select value={form.exchange} onChange={(e) => setForm({ ...form, exchange: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
+      <label className="text-sm text-slate-300 light:text-slate-700">Exchange
+        <Select value={form.exchange} onChange={(e) => setForm({ ...form, exchange: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-[#101621] light:bg-white px-3 py-3 text-white light:text-slate-900 outline-none">
           <option value="NSE">NSE</option><option value="BSE">BSE</option>
         </Select>
       </label>
-      <label className="text-sm text-slate-300 sm:col-span-2">Asset type
-        <Select value={form.asset_type || 'equity'} onChange={(e) => setForm({ ...form, asset_type: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
+      <label className="text-sm text-slate-300 light:text-slate-700 sm:col-span-2">Asset type
+        <Select value={form.asset_type || 'equity'} onChange={(e) => setForm({ ...form, asset_type: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-[#101621] light:bg-white px-3 py-3 text-white light:text-slate-900 outline-none">
           <option value="equity">Equity</option>
           <option value="gold">Gold</option>
         </Select>
       </label>
-      <label className="text-sm text-slate-300 sm:col-span-2">Company name
-        <input value={form.company_name || ''} onChange={(e) => setForm({ ...form, company_name: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-accent-300/50" placeholder="Reliance Industries" />
+      <label className="text-sm text-slate-300 light:text-slate-700 sm:col-span-2">Company name
+        <input value={form.company_name || ''} onChange={(e) => setForm({ ...form, company_name: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" placeholder="Reliance Industries" />
       </label>
-      <label className="text-sm text-slate-300">Quantity
-        <input required type="number" step="0.0001" min="0" value={form.qty} onChange={(e) => setForm({ ...form, qty: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-accent-300/50" />
+      <label className="text-sm text-slate-300 light:text-slate-700">Quantity
+        <input required type="number" step="0.0001" min="0" value={form.qty} onChange={(e) => setForm({ ...form, qty: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
       </label>
-      <label className="text-sm text-slate-300">Avg buy price
-        <input required type="number" step="0.01" min="0" value={form.avg_buy_price} onChange={(e) => setForm({ ...form, avg_buy_price: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-accent-300/50" />
+      <label className="text-sm text-slate-300 light:text-slate-700">Avg buy price
+        <input required type="number" step="0.01" min="0" value={form.avg_buy_price} onChange={(e) => setForm({ ...form, avg_buy_price: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
       </label>
-      <label className="text-sm text-slate-300 sm:col-span-2">Current price <span className="text-xs text-slate-500">(starting value — refresh live prices anytime from the toolbar)</span>
-        <input type="number" step="0.01" min="0" value={form.current_price} onChange={(e) => setForm({ ...form, current_price: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-accent-300/50" placeholder="Same as avg if blank" />
+      <label className="text-sm text-slate-300 light:text-slate-700 sm:col-span-2">Current price <span className="text-xs text-slate-500">(starting value — refresh live prices anytime from the toolbar)</span>
+        <input type="number" step="0.01" min="0" value={form.current_price} onChange={(e) => setForm({ ...form, current_price: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" placeholder="Same as avg if blank" />
       </label>
     </div>
   )
@@ -101,7 +101,7 @@ export function HoldingForm({ open, onClose, onSaved, editing, portfolios, defau
     } catch (err) { toast.push(err.message, 'error') } finally { setBusy(false) }
   }
 
-  const submitButton = <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-accent-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : editing ? 'Update holding' : 'Save holding'}</button>
+  const submitButton = <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : editing ? 'Update holding' : 'Save holding'}</button>
 
   if (isMobile) {
     return (
@@ -117,10 +117,10 @@ export function HoldingForm({ open, onClose, onSaved, editing, portfolios, defau
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={onClose}>
-      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-xl rounded-3xl border border-white/10 bg-[#141a28] p-6">
+      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-xl rounded-3xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white">{editing ? 'Edit holding' : 'Add holding'}</h2>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-white/5"><X size={18} /></button>
+          <h2 className="text-lg font-semibold text-white light:text-slate-900">{editing ? 'Edit holding' : 'Add holding'}</h2>
+          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 light:text-slate-500 hover:bg-white/5"><X size={18} /></button>
         </div>
         <div className="mt-5">
           <HoldingFormFields form={form} setForm={setForm} portfolios={portfolios} />

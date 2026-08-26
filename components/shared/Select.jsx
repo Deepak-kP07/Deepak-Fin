@@ -28,7 +28,7 @@ export function Select({ value, onChange, children, disabled, placeholder, class
   const currentValue = value ?? ''
   const selected = options.find((o) => String(o.value) === String(currentValue))
   const isEmpty = required && !disabled && (currentValue === '' || currentValue == null)
-  const base = className || 'w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none focus:border-accent-300/50'
+  const base = className || 'w-full rounded-xl border border-white/10 light:border-black/10 bg-[#101621] light:bg-white px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50'
 
   return (
     <div ref={ref} className="relative">
@@ -50,9 +50,9 @@ export function Select({ value, onChange, children, disabled, placeholder, class
         </select>
       )}
       {open && (
-        <div className="absolute left-0 z-30 mt-1 max-h-64 w-max min-w-full max-w-[min(20rem,90vw)] overflow-y-auto rounded-xl border border-white/10 bg-[#141a28] p-1 shadow-2xl">
+        <div className="absolute left-0 z-30 mt-1 max-h-64 w-max min-w-full max-w-[min(20rem,90vw)] overflow-y-auto rounded-xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-1 shadow-2xl">
           {options.map((o, i) => (
-            <button key={`${o.value}-${i}`} type="button" disabled={o.disabled} onClick={() => { onChange({ target: { value: o.value } }); setOpen(false) }} className={`block w-full rounded-lg px-3 py-2 text-left text-sm transition ${String(o.value) === String(currentValue) ? 'bg-accent-400/15 text-accent-200' : 'text-slate-300 hover:bg-white/5'} disabled:opacity-40`}>{o.label}</button>
+            <button key={`${o.value}-${i}`} type="button" disabled={o.disabled} onClick={() => { onChange({ target: { value: o.value } }); setOpen(false) }} className={`block w-full rounded-lg px-3 py-2 text-left text-sm transition ${String(o.value) === String(currentValue) ? 'bg-accent-400/15 text-accent-200 light:text-accent-700' : 'text-slate-300 light:text-slate-700 hover:bg-white/5'} disabled:opacity-40`}>{o.label}</button>
           ))}
         </div>
       )}

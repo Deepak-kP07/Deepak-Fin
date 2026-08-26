@@ -13,7 +13,7 @@ export function Avatar({ src, name, email, size = 36, rounded = 'rounded-xl', cl
         alt=""
         referrerPolicy="no-referrer"
         onError={() => setFailed(true)}
-        className={`shrink-0 border border-white/10 object-cover ${rounded} ${className}`}
+        className={`shrink-0 border border-white/10 light:border-black/10 object-cover ${rounded} ${className}`}
         style={{ height: size, width: size }}
       />
     )

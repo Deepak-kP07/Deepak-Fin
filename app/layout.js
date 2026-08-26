@@ -1,4 +1,5 @@
 import './globals.css'
+import { ThemeProvider } from '@/components/ThemeProvider'
 
 export const metadata = {
   title: 'Personal Finance',
@@ -29,12 +30,12 @@ export const viewport = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" className="dark" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{__html:'window.addEventListener("error",function(e){if(e.error instanceof DOMException&&e.error.name==="DataCloneError"&&e.message&&e.message.includes("PerformanceServerTiming")){e.stopImmediatePropagation();e.preventDefault()}},true);'}} />
       </head>
-      <body className="bg-[#080b12] text-slate-100 antialiased" suppressHydrationWarning>
-        {children}
+      <body className="bg-[#080b12] light:bg-[#eef1f6] text-slate-100 light:text-slate-900 antialiased" suppressHydrationWarning>
+        <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>
   )

@@ -8,7 +8,7 @@ import { motion } from 'framer-motion'
 export function Skeleton({ className = '' }) {
   return (
     <motion.div
-      className={`rounded-xl bg-white/[.04] ${className}`}
+      className={`rounded-xl bg-white/[.04] light:bg-black/[.03] ${className}`}
       animate={{ opacity: [0.55, 1, 0.55] }}
       transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
     />

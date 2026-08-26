@@ -11,8 +11,8 @@ const ROLE_LABEL = { read: 'View only', admin: 'Edit & manage access' }
 
 function Shell({ children }) {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#080b12] p-4">
-      <div className="w-full max-w-md rounded-3xl border border-white/10 bg-[#141a28] p-8 text-center">{children}</div>
+    <div className="flex min-h-screen items-center justify-center bg-[#080b12] light:bg-[#eef1f6] p-4">
+      <div className="w-full max-w-md rounded-3xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-8 text-center">{children}</div>
     </div>
   )
 }
@@ -48,9 +48,9 @@ export default function LendInvitePage() {
   if (!preview) {
     return (
       <Shell>
-        <ShieldAlert size={32} className="mx-auto text-rose-300" />
-        <h1 className="mt-4 text-lg font-semibold text-white">Invite not found</h1>
-        <p className="mt-2 text-sm text-slate-400">{previewError || "This invite link doesn't exist or has already been used."}</p>
+        <ShieldAlert size={32} className="mx-auto text-rose-300 light:text-rose-700" />
+        <h1 className="mt-4 text-lg font-semibold text-white light:text-slate-900">Invite not found</h1>
+        <p className="mt-2 text-sm text-slate-400 light:text-slate-500">{previewError || "This invite link doesn't exist or has already been used."}</p>
       </Shell>
     )
   }
@@ -61,12 +61,12 @@ export default function LendInvitePage() {
   if (result) {
     return (
       <Shell>
-        {result.status === 'accepted' ? <Check size={32} className="mx-auto text-emerald-300" /> : <X size={32} className="mx-auto text-slate-400" />}
-        <h1 className="mt-4 text-lg font-semibold text-white">{result.status === 'accepted' ? "You're in" : 'Invite declined'}</h1>
-        <p className="mt-2 text-sm text-slate-400">
+        {result.status === 'accepted' ? <Check size={32} className="mx-auto text-emerald-300 light:text-emerald-700" /> : <X size={32} className="mx-auto text-slate-400 light:text-slate-500" />}
+        <h1 className="mt-4 text-lg font-semibold text-white light:text-slate-900">{result.status === 'accepted' ? "You're in" : 'Invite declined'}</h1>
+        <p className="mt-2 text-sm text-slate-400 light:text-slate-500">
           {result.status === 'accepted' ? <>This record now shows up in your own Lend / Borrow list.</> : 'You can ignore this invite from now on.'}
         </p>
-        <a href="/" className="mt-6 inline-block rounded-xl bg-gradient-to-r from-accent-300 to-blue-500 px-5 py-3 text-sm font-semibold text-[#07101c]">Go to Personal Fin</a>
+        <a href="/" className="mt-6 inline-block rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-5 py-3 text-sm font-semibold text-[#07101c]">Go to Personal Fin</a>
       </Shell>
     )
   }
@@ -89,24 +89,24 @@ export default function LendInvitePage() {
 
   return (
     <Shell>
-      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-400/15 text-violet-200"><Heart size={22} /></div>
-      <h1 className="mt-4 text-lg font-semibold text-white">{preview.status === 'pending' && !isExpired ? "You're invited" : 'This invite'}</h1>
-      <p className="mt-2 text-sm text-slate-400">
-        to {ROLE_LABEL[preview.role]?.toLowerCase() || preview.role} — <span className="text-white">{money(preview.amount)} {verb} {preview.person_name}</span>
+      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-accent-400/15 text-accent-200 light:text-accent-700"><Heart size={22} /></div>
+      <h1 className="mt-4 text-lg font-semibold text-white light:text-slate-900">{preview.status === 'pending' && !isExpired ? "You're invited" : 'This invite'}</h1>
+      <p className="mt-2 text-sm text-slate-400 light:text-slate-500">
+        to {ROLE_LABEL[preview.role]?.toLowerCase() || preview.role} — <span className="text-white light:text-slate-900">{money(preview.amount)} {verb} {preview.person_name}</span>
       </p>
 
       {isExpired ? (
-        <p className="mt-6 rounded-xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-200">This invite has expired — ask them to send a new one.</p>
+        <p className="mt-6 rounded-xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-200 light:text-amber-700">This invite has expired — ask them to send a new one.</p>
       ) : preview.status !== 'pending' ? (
-        <p className="mt-6 rounded-xl border border-white/10 bg-white/[.03] px-4 py-3 text-sm text-slate-400">This invite was already {preview.status}.</p>
+        <p className="mt-6 rounded-xl border border-white/10 light:border-black/10 bg-white/[.03] light:bg-black/[.02] px-4 py-3 text-sm text-slate-400 light:text-slate-500">This invite was already {preview.status}.</p>
       ) : !emailMatches ? (
-        <p className="mt-6 rounded-xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-200">This invite was sent to <span className="text-white">{preview.invited_email}</span> — log in as that address to accept it.</p>
+        <p className="mt-6 rounded-xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-200 light:text-amber-700">This invite was sent to <span className="text-white light:text-slate-900">{preview.invited_email}</span> — log in as that address to accept it.</p>
       ) : (
         <>
-          {respondError && <p className="mt-4 text-sm text-rose-300">{respondError}</p>}
+          {respondError && <p className="mt-4 text-sm text-rose-300 light:text-rose-700">{respondError}</p>}
           <div className="mt-6 flex gap-3">
-            <button onClick={() => respond('decline')} disabled={responding} className="flex-1 rounded-xl border border-white/10 px-4 py-3 text-sm font-medium text-slate-300 hover:bg-white/5 disabled:opacity-60">Decline</button>
-            <button onClick={() => respond('accept')} disabled={responding} className="flex-1 rounded-xl bg-gradient-to-r from-accent-300 to-blue-500 px-4 py-3 text-sm font-semibold text-[#07101c] disabled:opacity-60">{responding ? 'Accepting…' : 'Accept'}</button>
+            <button onClick={() => respond('decline')} disabled={responding} className="flex-1 rounded-xl border border-white/10 light:border-black/10 px-4 py-3 text-sm font-medium text-slate-300 light:text-slate-700 hover:bg-white/5 disabled:opacity-60">Decline</button>
+            <button onClick={() => respond('accept')} disabled={responding} className="flex-1 rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-4 py-3 text-sm font-semibold text-[#07101c] disabled:opacity-60">{responding ? 'Accepting…' : 'Accept'}</button>
           </div>
         </>
       )}

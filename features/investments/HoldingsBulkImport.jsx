@@ -66,16 +66,16 @@ export function HoldingsBulkImport({ open, onClose, onImported, portfolio, toast
       )}
       renderTableRow={(r) => (
         <>
-          <td className="px-3 py-2 text-white">
+          <td className="px-3 py-2 text-white light:text-slate-900">
             {r.symbol || '—'}
-            {r.asset_type === 'gold' && <span className="ml-2 rounded-full bg-amber-400/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-amber-200">Gold</span>}
-            {!r.valid && <span className="ml-2 rounded-full bg-rose-300/15 px-1.5 py-0.5 text-[10px] text-rose-200">invalid</span>}
+            {r.asset_type === 'gold' && <span className="ml-2 rounded-full bg-amber-400/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-amber-200 light:text-amber-700">Gold</span>}
+            {!r.valid && <span className="ml-2 rounded-full bg-rose-300/15 px-1.5 py-0.5 text-[10px] text-rose-200 light:text-rose-700">invalid</span>}
           </td>
-          <td className="px-3 py-2 text-slate-400">{r.exchange}</td>
-          <td className="px-3 py-2 text-right text-slate-300">{r.qty || '—'}</td>
-          <td className="px-3 py-2 text-right text-slate-300">{r.avg_buy_price ? money2(r.avg_buy_price) : '—'}</td>
-          <td className="px-3 py-2 text-right text-slate-300">{r.current_price ? money2(r.current_price) : '—'}</td>
-          <td className="px-3 py-2 text-right text-slate-400">{r.valid ? money2(r.cost) : '—'}</td>
+          <td className="px-3 py-2 text-slate-400 light:text-slate-500">{r.exchange}</td>
+          <td className="px-3 py-2 text-right text-slate-300 light:text-slate-700">{r.qty || '—'}</td>
+          <td className="px-3 py-2 text-right text-slate-300 light:text-slate-700">{r.avg_buy_price ? money2(r.avg_buy_price) : '—'}</td>
+          <td className="px-3 py-2 text-right text-slate-300 light:text-slate-700">{r.current_price ? money2(r.current_price) : '—'}</td>
+          <td className="px-3 py-2 text-right text-slate-400 light:text-slate-500">{r.valid ? money2(r.cost) : '—'}</td>
         </>
       )}
       belowTable={(toImport) => {
@@ -84,7 +84,7 @@ export function HoldingsBulkImport({ open, onClose, onImported, portfolio, toast
           // Imported holdings are recorded as already-owned (source: 'import'), so unlike
           // "+ Holding" they don't spend this portfolio's cash — this is just an informational
           // total, not a cash-available check.
-          <div className="mt-3 text-xs text-slate-400">Total value: <span className="font-semibold text-white">{money(totalCost)}</span></div>
+          <div className="mt-3 text-xs text-slate-400 light:text-slate-500">Total value: <span className="font-semibold text-white light:text-slate-900">{money(totalCost)}</span></div>
         )
       }}
       onImportRow={async (r) => {

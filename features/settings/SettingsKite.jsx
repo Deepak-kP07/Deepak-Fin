@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { Youtube } from 'lucide-react'
 
 export function SettingsKite({ data, onSaveKiteCredentials, onRemoveKiteCredentials }) {
   const { profile } = data
@@ -29,7 +30,17 @@ export function SettingsKite({ data, onSaveKiteCredentials, onRemoveKiteCredenti
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] p-5">
-        <div className="mb-1 text-sm font-semibold text-white light:text-slate-900">Your own Kite Connect app</div>
+        <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+          <div className="text-sm font-semibold text-white light:text-slate-900">Your own Kite Connect app</div>
+          <a
+            href="https://youtu.be/r88L9AqnNaE?si=Rgx9I3-92aXc1KX_&t=68"
+            target="_blank"
+            rel="noreferrer"
+            className="flex shrink-0 items-center gap-1.5 rounded-xl border border-white/10 light:border-black/10 px-3 py-1.5 text-xs text-slate-400 light:text-slate-500 hover:bg-white/5"
+          >
+            <Youtube size={13} />Watch how-to video
+          </a>
+        </div>
         <p className="text-sm leading-6 text-slate-400 light:text-slate-600">
           Connecting Kite already works out of the box using the app's default Kite Connect app — you
           don't need to do anything here unless you want to use your own instead. If you do, register a
@@ -53,7 +64,7 @@ export function SettingsKite({ data, onSaveKiteCredentials, onRemoveKiteCredenti
         </div>
 
         <div className="mt-5 flex flex-wrap items-center gap-3">
-          <button onClick={save} disabled={busy || !apiKey.trim() || !apiSecret.trim()} className="rounded-xl bg-gradient-to-r from-accent-300 to-blue-500 px-6 py-2.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : 'Save'}</button>
+          <button onClick={save} disabled={busy || !apiKey.trim() || !apiSecret.trim()} className="rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-6 py-2.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : 'Save'}</button>
           {configured && (
             <button onClick={remove} disabled={removing} className="rounded-xl border border-rose-300/20 bg-rose-300/5 px-4 py-2.5 text-sm font-medium text-rose-200 transition hover:bg-rose-300/10 disabled:opacity-60">{removing ? 'Removing…' : 'Disconnect Kite app'}</button>
           )}

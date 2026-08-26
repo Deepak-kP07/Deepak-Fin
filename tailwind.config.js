@@ -1,3 +1,5 @@
+const plugin = require('tailwindcss/plugin')
+
 /** @type {import('tailwindcss').Config} */
 module.exports = {
     darkMode: ["class"],
@@ -121,5 +123,15 @@ module.exports = {
         }
       }
     },
-    plugins: [require("tailwindcss-animate")],
+    plugins: [
+      require("tailwindcss-animate"),
+      // The app is dark-by-default with every existing utility class unprefixed (see DESIGN.md) —
+      // rather than inverting that (which Tailwind's built-in `dark:` assumes: light-by-default,
+      // dark opt-in), `light:` is the opt-in variant instead, active whenever `<html>` carries the
+      // `light` class (set by next-themes). Existing `dark:` usage (a couple of shadcn primitives)
+      // is untouched and keeps meaning ".dark ancestor".
+      plugin(({ addVariant }) => {
+        addVariant('light', ':is(.light &)')
+      }),
+    ],
   }

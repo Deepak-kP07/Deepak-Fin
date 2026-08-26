@@ -11,17 +11,17 @@ import { useIsMobile } from '@/hooks/use-mobile'
 function ScholarshipPayFormFields({ form, setForm, accounts }) {
   return (
     <div className="grid gap-4">
-      <label className="text-sm text-slate-300">Amount
-        <input required type="number" step="0.01" min="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-accent-300/50" />
+      <label className="text-sm text-slate-300 light:text-slate-700">Amount
+        <input required type="number" step="0.01" min="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
       </label>
-      <label className="text-sm text-slate-300">Paid to
-        <input value={form.paid_to} onChange={(e) => setForm({ ...form, paid_to: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-accent-300/50" placeholder="College name / bursar" />
+      <label className="text-sm text-slate-300 light:text-slate-700">Paid to
+        <input value={form.paid_to} onChange={(e) => setForm({ ...form, paid_to: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" placeholder="College name / bursar" />
       </label>
-      <label className="text-sm text-slate-300">Date
-        <DateInput value={form.payment_date} onChange={(e) => setForm({ ...form, payment_date: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-accent-300/50" />
+      <label className="text-sm text-slate-300 light:text-slate-700">Date
+        <DateInput value={form.payment_date} onChange={(e) => setForm({ ...form, payment_date: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
       </label>
-      <label className="text-sm text-slate-300">From account
-        <Select required value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
+      <label className="text-sm text-slate-300 light:text-slate-700">From account
+        <Select required value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-[#101621] light:bg-white px-3 py-3 text-white light:text-slate-900 outline-none">
           <option value="">Choose account…</option>
           {accounts.filter((a) => a.type !== 'debit_card').map((a) => <option key={a.id} value={a.id}>{a.name} · {money(a.current_balance)}</option>)}
         </Select>
@@ -58,7 +58,7 @@ export function ScholarshipPayForm({ open, onClose, onSaved, scholarship, accoun
   }
 
   const fieldsProps = { form, setForm, accounts }
-  const submitButton = <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-accent-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Paying…' : 'Log payment'}</button>
+  const submitButton = <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Paying…' : 'Log payment'}</button>
 
   if (isMobile) {
     return (
@@ -74,13 +74,13 @@ export function ScholarshipPayForm({ open, onClose, onSaved, scholarship, accoun
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={onClose}>
-      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-3xl border border-white/10 bg-[#141a28] p-6">
+      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-3xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-6">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-white">Pay to college</h2>
+            <h2 className="text-lg font-semibold text-white light:text-slate-900">Pay to college</h2>
             <p className="mt-1 text-xs text-slate-500">{scholarship.name} · pending {money(pending)}</p>
           </div>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-white/5"><X size={18} /></button>
+          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 light:text-slate-500 hover:bg-white/5"><X size={18} /></button>
         </div>
         <div className="mt-5">
           <ScholarshipPayFormFields {...fieldsProps} />

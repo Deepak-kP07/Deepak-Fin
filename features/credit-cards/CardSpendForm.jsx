@@ -12,17 +12,17 @@ import { useIsMobile } from '@/hooks/use-mobile'
 function CardSpendFormFields({ form, setForm, expenseCats }) {
   return (
     <div className="grid gap-4">
-      <label className="text-sm text-slate-300">Amount
-        <input required type="number" step="0.01" min="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-accent-300/50" />
+      <label className="text-sm text-slate-300 light:text-slate-700">Amount
+        <input required type="number" step="0.01" min="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
       </label>
-      <label className="text-sm text-slate-300">Description
-        <input required value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-accent-300/50" placeholder="Swiggy order" />
+      <label className="text-sm text-slate-300 light:text-slate-700">Description
+        <input required value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" placeholder="Swiggy order" />
       </label>
-      <label className="text-sm text-slate-300">Category
-        <CategorySelect value={form.category_id} onChange={(e) => setForm({ ...form, category_id: e.target.value })} categories={expenseCats} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none focus:border-accent-300/50" />
+      <label className="text-sm text-slate-300 light:text-slate-700">Category
+        <CategorySelect value={form.category_id} onChange={(e) => setForm({ ...form, category_id: e.target.value })} categories={expenseCats} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-[#101621] light:bg-white px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
       </label>
-      <label className="text-sm text-slate-300">Date
-        <DateInput value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value, time: new Date().toTimeString().slice(0, 5) })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-accent-300/50" />
+      <label className="text-sm text-slate-300 light:text-slate-700">Date
+        <DateInput value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value, time: new Date().toTimeString().slice(0, 5) })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
       </label>
     </div>
   )
@@ -83,7 +83,7 @@ export function CardSpendForm({ open, onClose, onSaved, card, categories, toast 
   }
 
   const expenseCats = categories.filter((c) => c.type === 'expense' && !(c.hidden_in_modules || []).includes('credit_card_spend'))
-  const submitButton = <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-accent-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : 'Log spend'}</button>
+  const submitButton = <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : 'Log spend'}</button>
 
   if (isMobile) {
     return (
@@ -100,13 +100,13 @@ export function CardSpendForm({ open, onClose, onSaved, card, categories, toast 
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={onClose}>
-      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-3xl border border-white/10 bg-[#141a28] p-6">
+      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-3xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-6">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-white">Log spend</h2>
+            <h2 className="text-lg font-semibold text-white light:text-slate-900">Log spend</h2>
             <p className="mt-1 text-xs text-slate-500">{card.name} · outstanding {money(card.current_outstanding)}</p>
           </div>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-white/5"><X size={18} /></button>
+          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 light:text-slate-500 hover:bg-white/5"><X size={18} /></button>
         </div>
         <div className="mt-5">
           <CardSpendFormFields form={form} setForm={setForm} expenseCats={expenseCats} />

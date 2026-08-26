@@ -31,9 +31,9 @@ function ToggleList({ keys, info, resolved, onToggle }) {
   return (
     <div className="mt-3 space-y-2">
       {keys.map((key) => (
-        <div key={key} className="flex items-center gap-3 rounded-xl bg-black/20 px-4 py-3">
+        <div key={key} className="flex items-center gap-3 rounded-xl bg-black/20 light:bg-black/[.06] px-4 py-3">
           <div className="flex-1">
-            <div className="text-sm text-white">{info[key]?.label || key}</div>
+            <div className="text-sm text-white light:text-slate-900">{info[key]?.label || key}</div>
             {info[key]?.description && <div className="mt-0.5 text-xs text-slate-500">{info[key].description}</div>}
           </div>
           <ToggleSwitch checked={resolved[key].enabled} onChange={() => onToggle(key)} />
@@ -49,13 +49,13 @@ export function SettingsDashboard({ data, onSaveProfile }) {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-white/10 bg-white/[.035] p-5">
-        <div className="text-sm font-semibold text-white">Stat cards</div>
+      <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] p-5">
+        <div className="text-sm font-semibold text-white light:text-slate-900">Stat cards</div>
         <div className="text-xs text-slate-500">Choose which numbers show in the top row. Position is fixed — only visibility is configurable.</div>
         <ToggleList keys={DASHBOARD_STAT_KEYS} info={STAT_INFO} resolved={resolved} onToggle={toggle} />
       </div>
-      <div className="rounded-2xl border border-white/10 bg-white/[.035] p-5">
-        <div className="text-sm font-semibold text-white">Sections</div>
+      <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] p-5">
+        <div className="text-sm font-semibold text-white light:text-slate-900">Sections</div>
         <div className="text-xs text-slate-500">Show or hide whole sections of the dashboard.</div>
         <ToggleList keys={DASHBOARD_SECTION_KEYS} info={SECTION_INFO} resolved={resolved} onToggle={toggle} />
       </div>

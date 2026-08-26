@@ -12,37 +12,40 @@ import { useIsMobile } from '@/hooks/use-mobile'
 function MoneyProfileFormFields({ form, setForm, editing, accounts, linkedAccount }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2">
-      <label className="text-sm text-slate-300 sm:col-span-2">Name
-        <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-accent-300/50" placeholder="Home / Dad's finances / Acme Pvt Ltd…" />
+      <label className="text-sm text-slate-300 light:text-slate-700 sm:col-span-2">Name
+        <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" placeholder="Home / Dad's finances / Acme Pvt Ltd…" />
       </label>
-      <label className="text-sm text-slate-300">Type
-        <Select value={form.profile_type} onChange={(e) => setForm({ ...form, profile_type: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
+      <label className="text-sm text-slate-300 light:text-slate-700">Type
+        <Select value={form.profile_type} onChange={(e) => setForm({ ...form, profile_type: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-[#101621] light:bg-white px-3 py-3 text-white light:text-slate-900 outline-none">
           {PROFILE_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
         </Select>
       </label>
 
       {editing ? (
-        <label className="text-sm text-slate-300">Opening balance date
-          <DateInput value={form.opening_balance_date} onChange={(e) => setForm({ ...form, opening_balance_date: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-accent-300/50" />
+        <label className="text-sm text-slate-300 light:text-slate-700">Opening balance date
+          <DateInput value={form.opening_balance_date} onChange={(e) => setForm({ ...form, opening_balance_date: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
         </label>
       ) : (
         <>
-          <label className="text-sm text-slate-300">Opening balance
-            <input type="number" step="0.01" value={form.opening_balance} onChange={(e) => setForm({ ...form, opening_balance: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-accent-300/50" placeholder="Leave 0 and add your first entry instead, if you'd rather" />
+          <label className="text-sm text-slate-300 light:text-slate-700">Opening balance
+            <input type="number" step="0.01" value={form.opening_balance} onChange={(e) => setForm({ ...form, opening_balance: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" placeholder="Leave 0 and add your first entry instead, if you'd rather" />
           </label>
-          <label className="text-sm text-slate-300">Opening balance date
-            <DateInput value={form.opening_balance_date} onChange={(e) => setForm({ ...form, opening_balance_date: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-accent-300/50" />
+          <label className="text-sm text-slate-300 light:text-slate-700">Opening balance date
+            <DateInput value={form.opening_balance_date} onChange={(e) => setForm({ ...form, opening_balance_date: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
           </label>
         </>
       )}
+      <div className="text-[11px] text-slate-500 sm:col-span-2">
+        The opening balance is your real total as of that date. Entries dated before it are only for your own records — they won't change this profile's balance. Anything on or after it does.
+      </div>
 
       {editing ? (
-        <div className="rounded-xl border border-white/10 bg-white/[.02] px-3 py-2.5 text-xs text-slate-400 sm:col-span-2">
-          {linkedAccount ? <>Linked to <span className="text-white">{linkedAccount.name}</span> — every entry here reflects in your Transactions module.</> : 'Not linked to a bank account — entries here stay only in this module.'} Linking can only be set when a profile is created, not changed afterward.
+        <div className="rounded-xl border border-white/10 light:border-black/10 bg-white/[.02] light:bg-black/[.02] px-3 py-2.5 text-xs text-slate-400 light:text-slate-500 sm:col-span-2">
+          {linkedAccount ? <>Linked to <span className="text-white light:text-slate-900">{linkedAccount.name}</span> — every entry here reflects in your Transactions module.</> : 'Not linked to a bank account — entries here stay only in this module.'} Linking can only be set when a profile is created, not changed afterward.
         </div>
       ) : (
-        <label className="text-sm text-slate-300 sm:col-span-2">Link to a bank account <span className="text-xs text-slate-500">(optional — can't be changed later)</span>
-          <Select value={form.linked_account_id} onChange={(e) => setForm({ ...form, linked_account_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-3 text-white outline-none">
+        <label className="text-sm text-slate-300 light:text-slate-700 sm:col-span-2">Link to a bank account <span className="text-xs text-slate-500">(optional — can't be changed later)</span>
+          <Select value={form.linked_account_id} onChange={(e) => setForm({ ...form, linked_account_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-[#101621] light:bg-white px-3 py-3 text-white light:text-slate-900 outline-none">
             <option value="">Don't link — keep this separate</option>
             {accounts.filter((a) => a.type !== 'debit_card').map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
           </Select>
@@ -50,8 +53,8 @@ function MoneyProfileFormFields({ form, setForm, editing, accounts, linkedAccoun
         </label>
       )}
 
-      <label className="text-sm text-slate-300 sm:col-span-2">Notes <span className="text-xs text-slate-500">(optional)</span>
-        <input value={form.notes || ''} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-accent-300/50" />
+      <label className="text-sm text-slate-300 light:text-slate-700 sm:col-span-2">Notes <span className="text-xs text-slate-500">(optional)</span>
+        <input value={form.notes || ''} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
       </label>
     </div>
   )
@@ -81,7 +84,7 @@ export function MoneyProfileForm({ open, onClose, onSaved, editing, accounts, to
   }
 
   const fieldsProps = { form, setForm, editing, accounts, linkedAccount }
-  const submitButton = <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-accent-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : editing ? 'Update profile' : 'Create profile'}</button>
+  const submitButton = <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : editing ? 'Update profile' : 'Create profile'}</button>
 
   if (isMobile) {
     return (
@@ -96,10 +99,10 @@ export function MoneyProfileForm({ open, onClose, onSaved, editing, accounts, to
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={onClose}>
-      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-xl rounded-3xl border border-white/10 bg-[#141a28] p-6">
+      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-xl rounded-3xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white">{editing ? 'Edit profile' : 'New Family / Company profile'}</h2>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-white/5"><X size={18} /></button>
+          <h2 className="text-lg font-semibold text-white light:text-slate-900">{editing ? 'Edit profile' : 'New Family / Company profile'}</h2>
+          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 light:text-slate-500 hover:bg-white/5"><X size={18} /></button>
         </div>
         <div className="mt-5">
           <MoneyProfileFormFields {...fieldsProps} />

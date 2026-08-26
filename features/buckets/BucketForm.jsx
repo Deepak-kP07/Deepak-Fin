@@ -8,19 +8,19 @@ import { useIsMobile } from '@/hooks/use-mobile'
 function BucketFormFields({ form, setForm, setReason }) {
   return (
     <div className="grid gap-4">
-      <label className="text-sm text-slate-300">Product
-        <input required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-accent-300/50" placeholder="iPhone 15 Pro" />
+      <label className="text-sm text-slate-300 light:text-slate-700">Product
+        <input required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" placeholder="iPhone 15 Pro" />
       </label>
-      <label className="text-sm text-slate-300">Product link <span className="text-xs text-slate-500">(optional)</span>
-        <input type="url" value={form.product_url} onChange={(e) => setForm({ ...form, product_url: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-accent-300/50" placeholder="https://amazon.in/…" />
+      <label className="text-sm text-slate-300 light:text-slate-700">Product link <span className="text-xs text-slate-500">(optional)</span>
+        <input type="url" value={form.product_url} onChange={(e) => setForm({ ...form, product_url: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" placeholder="https://amazon.in/…" />
       </label>
-      <label className="text-sm text-slate-300">Estimated cost <span className="text-xs text-slate-500">(optional)</span>
-        <input type="number" step="0.01" min="0" value={form.estimated_cost} onChange={(e) => setForm({ ...form, estimated_cost: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-accent-300/50" placeholder="60000" />
+      <label className="text-sm text-slate-300 light:text-slate-700">Estimated cost <span className="text-xs text-slate-500">(optional)</span>
+        <input type="number" step="0.01" min="0" value={form.estimated_cost} onChange={(e) => setForm({ ...form, estimated_cost: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" placeholder="60000" />
       </label>
-      <div className="text-sm text-slate-300">Reasons to buy <span className="text-xs text-slate-500">(up to 3)</span>
+      <div className="text-sm text-slate-300 light:text-slate-700">Reasons to buy <span className="text-xs text-slate-500">(up to 3)</span>
         <div className="mt-2 space-y-2">
           {[0, 1, 2].map((i) => (
-            <input key={i} value={form.reasons[i]} onChange={(e) => setReason(i, e.target.value)} className="w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-accent-300/50" placeholder={`Reason ${i + 1}`} />
+            <input key={i} value={form.reasons[i]} onChange={(e) => setReason(i, e.target.value)} className="w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" placeholder={`Reason ${i + 1}`} />
           ))}
         </div>
       </div>
@@ -58,7 +58,7 @@ export function BucketForm({ open, onClose, onSaved, editing, toast, mutate }) {
   }
 
   const fieldsProps = { form, setForm, setReason }
-  const submitButton = <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-accent-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : editing ? 'Update' : 'Add to list'}</button>
+  const submitButton = <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : editing ? 'Update' : 'Add to list'}</button>
 
   if (isMobile) {
     return (
@@ -73,10 +73,10 @@ export function BucketForm({ open, onClose, onSaved, editing, toast, mutate }) {
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={onClose}>
-      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-3xl border border-white/10 bg-[#141a28] p-6">
+      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-3xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white">{editing ? 'Edit item' : 'Thinking of buying something?'}</h2>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-white/5"><X size={18} /></button>
+          <h2 className="text-lg font-semibold text-white light:text-slate-900">{editing ? 'Edit item' : 'Thinking of buying something?'}</h2>
+          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 light:text-slate-500 hover:bg-white/5"><X size={18} /></button>
         </div>
         <div className="mt-5">
           <BucketFormFields {...fieldsProps} />

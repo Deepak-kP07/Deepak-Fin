@@ -35,17 +35,17 @@ export function InstallPrompt() {
   }
 
   return (
-    <div className="fixed inset-x-4 bottom-24 z-40 flex items-center gap-3 rounded-2xl border border-white/10 bg-[#141a28]/95 p-3.5 shadow-2xl backdrop-blur-xl lg:inset-x-auto lg:bottom-8 lg:left-8 lg:w-80">
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent-400/15 text-accent-200">
+    <div className="fixed inset-x-4 bottom-24 z-40 flex items-center gap-3 rounded-2xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white/95 p-3.5 shadow-2xl backdrop-blur-xl lg:inset-x-auto lg:bottom-8 lg:left-8 lg:w-80">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent-400/15 text-accent-200 light:text-accent-700">
         <Download size={18} />
       </div>
       <div className="min-w-0 flex-1">
-        <div className="text-sm font-semibold text-white">Install the app</div>
-        <div className="text-xs text-slate-400">Faster, full-screen, works offline.</div>
+        <div className="text-sm font-semibold text-white light:text-slate-900">Install the app</div>
+        <div className="text-xs text-slate-400 light:text-slate-500">Faster, full-screen, works offline.</div>
       </div>
       <div className="flex shrink-0 items-center gap-1.5">
         <button onClick={install} className="rounded-lg bg-gradient-to-r from-accent-300 to-accent-500 px-3 py-1.5 text-xs font-semibold text-[#07101c]">Install</button>
-        <button onClick={() => setDismissed(true)} className="rounded-lg p-1.5 text-slate-500 hover:bg-white/5 hover:text-white" title="Dismiss"><X size={14} /></button>
+        <button onClick={() => setDismissed(true)} className="rounded-lg p-1.5 text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900" title="Dismiss"><X size={14} /></button>
       </div>
     </div>
   )

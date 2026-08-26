@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { ArrowDownRight, ArrowUpRight, Eye, EyeOff, Link2, Plus, ShieldCheck } from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
+import { HeroStatTile } from '@/components/shared/HeroStatTile'
 import { formatDate, money } from '@/lib/format'
 import { scholarshipDisplayStatus } from '@/lib/scholarships'
 import { ScholarshipDetailView } from '@/features/scholarships/ScholarshipDetailView'
@@ -40,43 +41,47 @@ export function ScholarshipsView({ data, onAdd, onEdit, onDelete, onPay, onRefre
     <div className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <div className="mb-2 text-xs uppercase tracking-widest text-accent-200/70">Scholarship trail</div>
-          <h1 className="text-3xl font-semibold tracking-tight text-white">Scholarships &amp; fees</h1>
+          <div className="mb-2 text-xs uppercase tracking-widest text-accent-200/70 light:text-accent-700">Scholarship trail</div>
+          <h1 className="text-3xl font-semibold tracking-tight text-white light:text-slate-900">Scholarships &amp; fees</h1>
         </div>
         <div className="flex gap-2">
-          <button onClick={onAdd} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-accent-300 to-blue-500 px-4 py-2.5 text-sm font-semibold text-[#07101c] sm:flex-none"><Plus size={15} />Add scholarship</button>
-          <button onClick={onToggleMoney} className="rounded-xl border border-white/10 p-2.5 text-slate-400 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
+          <button onClick={onAdd} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-4 py-2.5 text-sm font-semibold text-[#07101c] sm:flex-none"><Plus size={15} />Add scholarship</button>
+          <button onClick={onToggleMoney} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
             {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
           </button>
         </div>
       </div>
 
       {scholarships.length > 0 && (
-        <div className="rounded-3xl border border-white/10 bg-white/[.035] p-6">
+        <div className="rounded-3xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] p-6">
           <div className="text-xs uppercase tracking-widest text-slate-500">Pending to college</div>
-          <div className={`mt-1 text-[clamp(2rem,6vw,3rem)] font-semibold leading-[1.1] tracking-[-0.01em] ${pendingToCollege > 0 ? 'text-amber-300' : 'text-emerald-300'}`}>{showMoney ? money(pendingToCollege) : '••••••'}</div>
+          <div className={`mt-1 text-[clamp(2rem,6vw,3rem)] font-semibold leading-[1.1] tracking-[-0.01em] ${pendingToCollege > 0 ? 'text-amber-300 light:text-amber-700' : 'text-emerald-300 light:text-emerald-700'}`}>{showMoney ? money(pendingToCollege) : '••••••'}</div>
           <div className="mt-1 text-sm text-slate-500">{pendingToCollege > 0 ? 'Due to college' : 'All paid'}</div>
           <div className="mt-5 grid grid-cols-2 gap-3">
-            <div className="rounded-2xl bg-white/[.04] p-3.5">
-              <div className="flex items-center gap-1.5 text-xs text-slate-400"><ArrowUpRight size={13} />Received</div>
-              <div className="mt-1 text-lg font-semibold text-emerald-300">{showMoney ? money(totalReceived) : '••••'}</div>
-              <div className="text-[11px] text-slate-500">{receivedScholarships.length} batch(es)</div>
-            </div>
-            <div className="rounded-2xl bg-white/[.04] p-3.5">
-              <div className="flex items-center gap-1.5 text-xs text-slate-400"><ArrowDownRight size={13} />Paid to college</div>
-              <div className="mt-1 text-lg font-semibold text-accent-300">{showMoney ? money(totalPaidCollege) : '••••'}</div>
-              <div className="text-[11px] text-slate-500">{scholarship_payments.length} payment(s)</div>
-            </div>
+            <HeroStatTile
+              icon={ArrowUpRight}
+              label="Received"
+              value={showMoney ? money(totalReceived) : '••••'}
+              valueTone="text-emerald-300 light:text-emerald-700"
+              sub={`${receivedScholarships.length} batch(es)`}
+            />
+            <HeroStatTile
+              icon={ArrowDownRight}
+              label="Paid to college"
+              value={showMoney ? money(totalPaidCollege) : '••••'}
+              valueTone="text-accent-300 light:text-accent-700"
+              sub={`${scholarship_payments.length} payment(s)`}
+            />
           </div>
         </div>
       )}
 
       {scholarships.length === 0 ? (
-        <div className="rounded-2xl border border-white/10 bg-white/[.035]">
+        <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025]">
           <EmptyState icon={ShieldCheck} title="No scholarships yet" message="Log received batches and payments to college, and we'll warn if funds are misused." cta="Add first batch" onCta={onAdd} />
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(260px,360px))]">
           {scholarships.map((s) => {
             const paid = Number(s.amount_paid_to_college || 0)
             const total = Number(s.total_amount || 0)
@@ -84,19 +89,19 @@ export function ScholarshipsView({ data, onAdd, onEdit, onDelete, onPay, onRefre
             const pending = Math.max(0, total - paid)
             const displayStatus = scholarshipDisplayStatus(s)
             return (
-              <div key={s.id} onClick={() => setSelectedId(s.id)} className="cursor-pointer rounded-2xl border border-white/10 bg-white/[.035] p-5 transition hover:border-accent-300/30 hover:bg-white/[.05]">
+              <div key={s.id} onClick={() => setSelectedId(s.id)} className="cursor-pointer rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] p-5 transition hover:border-accent-300/30 hover:bg-white/[.05] hover:light:bg-black/[.035]">
                 <div className="flex items-center gap-2">
-                  <div className="text-base font-semibold text-white">{s.name}</div>
-                  <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-widest ${displayStatus === 'paid' ? 'bg-emerald-400/15 text-emerald-200' : displayStatus === 'received' ? 'bg-accent-400/15 text-accent-200' : 'bg-slate-500/15 text-slate-300'}`}>{displayStatus}</span>
-                  {s.received_to_account_id && <span className="flex shrink-0 items-center gap-1 rounded-full bg-accent-400/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-widest text-accent-200"><Link2 size={9} />Linked</span>}
+                  <div className="text-base font-semibold text-white light:text-slate-900">{s.name}</div>
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-widest ${displayStatus === 'paid' ? 'bg-emerald-400/15 text-emerald-200 light:text-emerald-700' : displayStatus === 'received' ? 'bg-accent-400/15 text-accent-200 light:text-accent-700' : 'bg-slate-500/15 text-slate-300 light:text-slate-700'}`}>{displayStatus}</span>
+                  {s.received_to_account_id && <span className="flex shrink-0 items-center gap-1 rounded-full bg-accent-400/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-widest text-accent-200 light:text-accent-700"><Link2 size={9} />Linked</span>}
                 </div>
                 <div className="mt-1 text-xs text-slate-500">{s.source || '—'} · {s.academic_year || '—'}</div>
                 <div className="mt-4 flex items-baseline justify-between">
                   <div>
                     <div className="text-xs text-slate-500">Pending</div>
-                    <div className="text-xl font-semibold text-white">{showMoney ? money(pending) : '••••'}</div>
+                    <div className="text-xl font-semibold text-white light:text-slate-900">{showMoney ? money(pending) : '••••'}</div>
                   </div>
-                  <div className="text-right text-emerald-300">
+                  <div className="text-right text-emerald-300 light:text-emerald-700">
                     <div className="text-xs opacity-70">Paid</div>
                     <div className="text-sm font-semibold">{money(paid)}</div>
                   </div>

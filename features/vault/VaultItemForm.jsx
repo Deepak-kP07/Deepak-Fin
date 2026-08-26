@@ -28,24 +28,24 @@ function formatCardNumber(raw) {
   return digits.replace(/(.{4})/g, '$1 ').trim()
 }
 
-const inputClass = 'mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-accent-300/50'
+const inputClass = 'mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50'
 
 function VaultItemFormFields({ form, setForm, accounts, isBank, prefilling }) {
   if (prefilling) return <div className="py-10 text-center text-sm text-slate-500">Decrypting…</div>
   return (
     <div className="grid gap-4 sm:grid-cols-2">
-      <label className="text-sm text-slate-300 sm:col-span-2">Type
+      <label className="text-sm text-slate-300 light:text-slate-700 sm:col-span-2">Type
         <Select value={form.item_type} onChange={(e) => setForm({ ...form, item_type: e.target.value })} className={inputClass}>
           {TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </Select>
       </label>
-      <label className="text-sm text-slate-300 sm:col-span-2">Label
+      <label className="text-sm text-slate-300 light:text-slate-700 sm:col-span-2">Label
         <input required value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} className={inputClass} placeholder={isBank ? 'HDFC Salary Account' : 'HDFC Millennia'} />
       </label>
-      <label className="text-sm text-slate-300">Bank
+      <label className="text-sm text-slate-300 light:text-slate-700">Bank
         <input value={form.bank_name} onChange={(e) => setForm({ ...form, bank_name: e.target.value })} className={inputClass} placeholder="HDFC Bank" />
       </label>
-      <label className="text-sm text-slate-300">Linked account (optional)
+      <label className="text-sm text-slate-300 light:text-slate-700">Linked account (optional)
         <Select value={form.linked_account_id} onChange={(e) => setForm({ ...form, linked_account_id: e.target.value })} className={inputClass} placeholder="None">
           <option value="">None</option>
           {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
@@ -54,41 +54,41 @@ function VaultItemFormFields({ form, setForm, accounts, isBank, prefilling }) {
 
       {isBank ? (
         <>
-          <label className="text-sm text-slate-300 sm:col-span-2">Account number
+          <label className="text-sm text-slate-300 light:text-slate-700 sm:col-span-2">Account number
             <input required inputMode="numeric" value={form.account_number} onChange={(e) => setForm({ ...form, account_number: e.target.value.replace(/\D/g, '') })} className={`${inputClass} font-mono`} placeholder="0123456789012" />
           </label>
-          <label className="text-sm text-slate-300">IFSC code
+          <label className="text-sm text-slate-300 light:text-slate-700">IFSC code
             <input required value={form.ifsc_code} onChange={(e) => setForm({ ...form, ifsc_code: e.target.value.toUpperCase() })} className={`${inputClass} font-mono`} placeholder="HDFC0001234" />
           </label>
-          <label className="text-sm text-slate-300">Branch
+          <label className="text-sm text-slate-300 light:text-slate-700">Branch
             <input value={form.branch} onChange={(e) => setForm({ ...form, branch: e.target.value })} className={inputClass} placeholder="Koramangala" />
           </label>
         </>
       ) : (
         <>
-          <label className="text-sm text-slate-300 sm:col-span-2">Card number
+          <label className="text-sm text-slate-300 light:text-slate-700 sm:col-span-2">Card number
             <input required inputMode="numeric" value={form.card_number} onChange={(e) => setForm({ ...form, card_number: formatCardNumber(e.target.value) })} className={`${inputClass} font-mono`} placeholder="4111 1111 1111 1111" />
           </label>
-          <label className="text-sm text-slate-300">Expiry (MM/YY)
+          <label className="text-sm text-slate-300 light:text-slate-700">Expiry (MM/YY)
             <div className="mt-2 flex gap-2">
               <input required maxLength={2} value={form.expiry_month} onChange={(e) => setForm({ ...form, expiry_month: e.target.value.replace(/\D/g, '') })} className={`${inputClass} mt-0 w-16 font-mono`} placeholder="MM" />
               <input required maxLength={2} value={form.expiry_year} onChange={(e) => setForm({ ...form, expiry_year: e.target.value.replace(/\D/g, '') })} className={`${inputClass} mt-0 w-16 font-mono`} placeholder="YY" />
             </div>
           </label>
-          <label className="text-sm text-slate-300">CVV
+          <label className="text-sm text-slate-300 light:text-slate-700">CVV
             <input required maxLength={4} value={form.cvv} onChange={(e) => setForm({ ...form, cvv: e.target.value.replace(/\D/g, '') })} className={`${inputClass} font-mono`} placeholder="123" />
           </label>
-          <label className="text-sm text-slate-300">PIN
+          <label className="text-sm text-slate-300 light:text-slate-700">PIN
             <input maxLength={6} value={form.pin} onChange={(e) => setForm({ ...form, pin: e.target.value.replace(/\D/g, '') })} className={`${inputClass} font-mono`} placeholder="Optional" />
           </label>
         </>
       )}
 
-      <label className="text-sm text-slate-300 sm:col-span-2">Notes (optional)
+      <label className="text-sm text-slate-300 light:text-slate-700 sm:col-span-2">Notes (optional)
         <input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className={inputClass} placeholder="Anything else worth remembering" />
       </label>
 
-      <div className="text-sm text-slate-300 sm:col-span-2">Colour
+      <div className="text-sm text-slate-300 light:text-slate-700 sm:col-span-2">Colour
         <ColorPicker value={form.color} onChange={(c) => setForm({ ...form, color: c })} />
       </div>
     </div>
@@ -142,7 +142,7 @@ export function VaultItemForm({ open, onClose, onSaved, editing, accounts = [], 
   }
 
   const fieldsProps = { form, setForm, accounts, isBank, prefilling }
-  const submitButton = <button disabled={busy || prefilling} className="mt-6 w-full rounded-xl bg-gradient-to-r from-accent-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : editing ? 'Update item' : 'Save to vault'}</button>
+  const submitButton = <button disabled={busy || prefilling} className="mt-6 w-full rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : editing ? 'Update item' : 'Save to vault'}</button>
 
   if (isMobile) {
     return (
@@ -157,10 +157,10 @@ export function VaultItemForm({ open, onClose, onSaved, editing, accounts = [], 
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={onClose}>
-      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl border border-white/10 bg-[#141a28] p-6">
+      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white">{editing ? 'Edit vault item' : 'Add to vault'}</h2>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-white/5"><X size={18} /></button>
+          <h2 className="text-lg font-semibold text-white light:text-slate-900">{editing ? 'Edit vault item' : 'Add to vault'}</h2>
+          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 light:text-slate-500 hover:bg-white/5"><X size={18} /></button>
         </div>
         <div className="mt-5">
           <VaultItemFormFields {...fieldsProps} />

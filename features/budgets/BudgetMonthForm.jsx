@@ -94,41 +94,41 @@ export function BudgetMonthForm({ open, onClose, onSaved, initialYear, initialMo
   const body = (
     <>
       <div className="flex items-center justify-center gap-3">
-        <button type="button" onClick={() => shiftMonth(-1)} className="rounded-lg p-1.5 text-slate-400 hover:bg-white/5 hover:text-white"><ChevronLeft size={16} /></button>
-        <p className="w-36 text-center text-sm font-medium text-white">{monthLabel(cursor.year, cursor.month)}</p>
-        <button type="button" onClick={() => shiftMonth(1)} className="rounded-lg p-1.5 text-slate-400 hover:bg-white/5 hover:text-white"><ChevronRight size={16} /></button>
+        <button type="button" onClick={() => shiftMonth(-1)} className="rounded-lg p-1.5 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900"><ChevronLeft size={16} /></button>
+        <p className="w-36 text-center text-sm font-medium text-white light:text-slate-900">{monthLabel(cursor.year, cursor.month)}</p>
+        <button type="button" onClick={() => shiftMonth(1)} className="rounded-lg p-1.5 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900"><ChevronRight size={16} /></button>
       </div>
 
       {isClosed && (
-        <div className="mt-4 rounded-xl border border-slate-500/25 bg-slate-500/5 px-4 py-2.5 text-xs text-slate-300">
+        <div className="mt-4 rounded-xl border border-slate-500/25 bg-slate-500/5 px-4 py-2.5 text-xs text-slate-300 light:text-slate-700">
           This month is closed — reopen it from its card in your history log before editing.
         </div>
       )}
 
       <fieldset disabled={isClosed} className="disabled:opacity-50">
-        <label className="mt-5 block text-sm text-slate-300">Overall monthly budget
-          <input required type="number" step="0.01" min="0" value={form.total_amount} onChange={(e) => setForm({ ...form, total_amount: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-white outline-none focus:border-accent-300/50" placeholder="50000" />
+        <label className="mt-5 block text-sm text-slate-300 light:text-slate-700">Overall monthly budget
+          <input required type="number" step="0.01" min="0" value={form.total_amount} onChange={(e) => setForm({ ...form, total_amount: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" placeholder="50000" />
         </label>
 
         <div className="mt-5">
           <div className="flex items-center justify-between">
-            <div className="text-sm text-slate-300">Category breakdown <span className="text-xs text-slate-500">(optional)</span></div>
-            <button type="button" onClick={addRow} className="flex items-center gap-1 rounded-lg bg-white/[.06] px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-white/[.1]"><Plus size={13} />Add category</button>
+            <div className="text-sm text-slate-300 light:text-slate-700">Category breakdown <span className="text-xs text-slate-500">(optional)</span></div>
+            <button type="button" onClick={addRow} className="flex items-center gap-1 rounded-lg bg-white/[.06] light:bg-black/[.04] px-2.5 py-1.5 text-xs font-semibold text-white light:text-slate-900 hover:bg-white/[.1] hover:light:bg-black/[.06]"><Plus size={13} />Add category</button>
           </div>
 
           {/* Live running total — updates on every keystroke so you can see how much of the
               overall budget is left to plan before you save, and can't accidentally allocate
               more across categories than the total actually allows. */}
           {total > 0 && (
-            <div className={`mt-3 rounded-xl border px-4 py-2.5 text-xs ${overAllocated ? 'border-rose-300/30 bg-rose-300/5 text-rose-200' : 'border-white/10 bg-white/[.02] text-slate-300'}`}>
+            <div className={`mt-3 rounded-xl border px-4 py-2.5 text-xs ${overAllocated ? 'border-rose-300/30 bg-rose-300/5 text-rose-200 light:text-rose-700' : 'border-white/10 light:border-black/10 bg-white/[.02] light:bg-black/[.02] text-slate-300 light:text-slate-700'}`}>
               <div className="flex items-center justify-between">
                 <span>{overAllocated ? `${money(-remaining)} over your overall budget` : `${money(remaining)} left to plan`}</span>
-                <span className={overAllocated ? 'text-rose-300' : 'text-slate-500'}>{money(allocated)} of {money(total)} planned · {allocatedPct}%</span>
+                <span className={overAllocated ? 'text-rose-300 light:text-rose-700' : 'text-slate-500'}>{money(allocated)} of {money(total)} planned · {allocatedPct}%</span>
               </div>
               <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/5">
                 <div className={`h-full rounded-full transition-all ${overAllocated ? 'bg-rose-400' : 'bg-accent-300'}`} style={{ width: `${Math.min(100, allocatedPct)}%` }} />
               </div>
-              {overAllocated && <p className="mt-2 text-[11px] text-rose-300/80">Trim a category below, or raise the overall monthly budget above — you can't save while categories add up to more than the total.</p>}
+              {overAllocated && <p className="mt-2 text-[11px] text-rose-300/80 light:text-rose-700">Trim a category below, or raise the overall monthly budget above — you can't save while categories add up to more than the total.</p>}
             </div>
           )}
 
@@ -140,12 +140,12 @@ export function BudgetMonthForm({ open, onClose, onSaved, initialYear, initialMo
                     value={row.category_id} onChange={(e) => setRow(i, { category_id: e.target.value })}
                     categories={expenseCats} onAddCategory={onAddCategory} placeholder="Choose category…"
                     open={openRowIndex === i} onOpenChange={(v) => setOpenRowIndex(v ? i : null)}
-                    className="w-full rounded-xl border border-white/10 bg-[#101621] px-3 py-2.5 text-sm text-white outline-none"
+                    className="w-full rounded-xl border border-white/10 light:border-black/10 bg-[#101621] light:bg-white px-3 py-2.5 text-sm text-white light:text-slate-900 outline-none"
                   />
                 </div>
                 <div className="flex items-center gap-2">
-                  <input type="number" step="0.01" min="0" value={row.amount} onChange={(e) => setRow(i, { amount: e.target.value })} className="w-full flex-1 rounded-xl border border-white/10 bg-white/[.04] px-3 py-2.5 text-sm text-white outline-none focus:border-accent-300/50 sm:w-28 sm:flex-none" placeholder="10000" />
-                  <button type="button" onClick={() => removeRow(i)} className="shrink-0 rounded-lg p-2 text-rose-300/70 hover:bg-rose-300/10"><Trash2 size={14} /></button>
+                  <input type="number" step="0.01" min="0" value={row.amount} onChange={(e) => setRow(i, { amount: e.target.value })} className="w-full flex-1 rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-2.5 text-sm text-white light:text-slate-900 outline-none focus:border-accent-300/50 sm:w-28 sm:flex-none" placeholder="10000" />
+                  <button type="button" onClick={() => removeRow(i)} className="shrink-0 rounded-lg p-2 text-rose-300/70 light:text-rose-700 hover:bg-rose-300/10"><Trash2 size={14} /></button>
                 </div>
               </div>
             ))}
@@ -155,7 +155,7 @@ export function BudgetMonthForm({ open, onClose, onSaved, initialYear, initialMo
           {openRowIndex !== null && <div className="h-72" aria-hidden="true" />}
         </div>
 
-        <button disabled={busy || overAllocated} className="mt-6 w-full rounded-xl bg-gradient-to-r from-accent-300 to-blue-500 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : overAllocated ? 'Categories exceed overall budget' : existingPlan ? 'Update budget' : 'Save budget'}</button>
+        <button disabled={busy || overAllocated} className="mt-6 w-full rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : overAllocated ? 'Categories exceed overall budget' : existingPlan ? 'Update budget' : 'Save budget'}</button>
       </fieldset>
     </>
   )
@@ -170,10 +170,10 @@ export function BudgetMonthForm({ open, onClose, onSaved, initialYear, initialMo
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={onClose}>
-      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-xl max-h-[85vh] overflow-y-auto rounded-3xl border border-white/10 bg-[#141a28] p-6">
+      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-xl max-h-[85vh] overflow-y-auto rounded-3xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white">{existingPlan ? 'Edit budget' : 'Set a budget'}</h2>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-white/5"><X size={18} /></button>
+          <h2 className="text-lg font-semibold text-white light:text-slate-900">{existingPlan ? 'Edit budget' : 'Set a budget'}</h2>
+          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 light:text-slate-500 hover:bg-white/5"><X size={18} /></button>
         </div>
         <div className="mt-3">{body}</div>
       </form>
