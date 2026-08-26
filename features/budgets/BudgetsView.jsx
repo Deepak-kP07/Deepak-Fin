@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { AlertTriangle, Calendar, Eye, EyeOff, Lock, Pencil, Plus, Target, Trash2, TrendingUp, Upload, X } from 'lucide-react'
+import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { HeroStatTile } from '@/components/shared/HeroStatTile'
 import { budgetInsights, categoryBreakdown, monthLabel, planTotals } from '@/lib/budgets'
@@ -136,37 +137,40 @@ export function BudgetsView({ data, onSetMonth, onCloseMonth, onReopenMonth, onD
               </div>
             </div>
 
-            {/* Insights and the category breakdown are two independent secondary sections that
-                used to stack full-width — at lg:+ they sit side by side instead, so the
-                breakdown's progress bars don't stretch across the whole desktop width with
-                nothing next to them. */}
-            <div className="mt-4 lg:grid lg:grid-cols-2 lg:items-start lg:gap-6">
-              {insights.filter((ins) => !dismissedInsights.has(ins.line.id)).length > 0 && (
-                <div className="space-y-2">
-                  {insights.filter((ins) => !dismissedInsights.has(ins.line.id)).map((ins) => (
-                    <div key={ins.line.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-300/25 bg-amber-300/5 px-4 py-2.5 text-xs text-amber-200 light:text-amber-700">
-                      <div className="flex items-start gap-2">
-                        <AlertTriangle size={13} className="mt-0.5 shrink-0" />
-                        <span>
-                          <b>{ins.category?.name}</b>{' '}
-                          {ins.overPace
-                            ? <>is trending over — at this pace, ~{money(ins.projected)} by month end against a {money(ins.budgeted)} budget.</>
-                            : <>has gone over budget {ins.streak} months running.</>}
-                          {ins.overPace && ins.streak >= 2 && ` Over budget ${ins.streak} months running.`}
-                          {ins.vsLastMonth && <span className="text-amber-200/70 light:text-amber-700"> · {money(ins.vsLastMonth.spent)} last month</span>}
-                        </span>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-1.5">
-                        <button type="button" onClick={() => onSetMonth(activePlan.year, activePlan.month)} className="rounded-lg bg-amber-300/20 px-2.5 py-1 text-[11px] font-semibold text-amber-100 light:text-amber-800 hover:bg-amber-300/30">Adjust budget</button>
-                        <button type="button" onClick={() => dismissInsight(ins.line.id)} className="rounded-lg p-1 opacity-60 transition hover:bg-white/10 hover:opacity-100" title="Dismiss"><X size={13} /></button>
-                      </div>
+            {/* Insights, when present, get their own full-width row above — pairing them with
+                the breakdown as fixed lg: columns meant the breakdown fell into column 1 alone
+                (a dismissible, often-empty section) whenever insights were dismissed/absent,
+                leaving column 2 permanently empty instead of ever holding real content. */}
+            {insights.filter((ins) => !dismissedInsights.has(ins.line.id)).length > 0 && (
+              <div className="mt-4 space-y-2">
+                {insights.filter((ins) => !dismissedInsights.has(ins.line.id)).map((ins) => (
+                  <div key={ins.line.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-300/25 bg-amber-300/5 px-4 py-2.5 text-xs text-amber-200 light:text-amber-700">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+                      <span>
+                        <b>{ins.category?.name}</b>{' '}
+                        {ins.overPace
+                          ? <>is trending over — at this pace, ~{money(ins.projected)} by month end against a {money(ins.budgeted)} budget.</>
+                          : <>has gone over budget {ins.streak} months running.</>}
+                        {ins.overPace && ins.streak >= 2 && ` Over budget ${ins.streak} months running.`}
+                        {ins.vsLastMonth && <span className="text-amber-200/70 light:text-amber-700"> · {money(ins.vsLastMonth.spent)} last month</span>}
+                      </span>
                     </div>
-                  ))}
-                </div>
-              )}
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      <button type="button" onClick={() => onSetMonth(activePlan.year, activePlan.month)} className="rounded-lg bg-amber-300/20 px-2.5 py-1 text-[11px] font-semibold text-amber-100 light:text-amber-800 hover:bg-amber-300/30">Adjust budget</button>
+                      <button type="button" onClick={() => dismissInsight(ins.line.id)} className="rounded-lg p-1 opacity-60 transition hover:bg-white/10 hover:opacity-100" title="Dismiss"><X size={13} /></button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
 
-              {activeBreakdown.length > 0 && (
-                <div className="mt-5 space-y-3 lg:mt-0">
+            {/* Breakdown list + a spend-share donut sit side by side at lg:+ — the donut always
+                fills this slot (unlike insights above, it isn't dismissible or conditional on
+                pace), so there's no longer a permanently empty column next to the list. */}
+            {activeBreakdown.length > 0 && (
+              <div className="mt-5 lg:grid lg:grid-cols-[1.3fr_1fr] lg:items-start lg:gap-6">
+                <div className="space-y-3">
                   {activeBreakdown.map((b) => {
                     const tone = b.pct >= 100 ? 'bg-rose-400' : b.pct >= 80 ? 'bg-amber-400' : 'bg-emerald-400'
                     return (
@@ -183,8 +187,28 @@ export function BudgetsView({ data, onSetMonth, onCloseMonth, onReopenMonth, onD
                     )
                   })}
                 </div>
-              )}
-            </div>
+
+                {(() => {
+                  const spendMix = activeBreakdown.filter((b) => b.spent > 0).map((b) => ({ name: b.category?.name || 'Category', value: b.spent, color: b.category?.color || '#94a3b8' }))
+                  return spendMix.length === 0 ? null : (
+                    <div className="mt-6 min-w-0 lg:mt-0">
+                      <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-500">Spend split</div>
+                      <div className="mt-2 h-56">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie data={spendMix} dataKey="value" nameKey="name" innerRadius={45} outerRadius={78} stroke="none">
+                              {spendMix.map((s, i) => <Cell key={i} fill={s.color} />)}
+                            </Pie>
+                            <Tooltip contentStyle={{ background: '#0f1420', border: '1px solid #ffffff22', borderRadius: 12, color: '#fff' }} formatter={(v) => showMoney ? money(v) : '••••'} />
+                            <Legend iconType="circle" wrapperStyle={{ color: '#94a3b8', fontSize: 11 }} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  )
+                })()}
+              </div>
+            )}
           </>
         )}
       </div>
