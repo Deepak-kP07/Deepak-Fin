@@ -59,21 +59,27 @@ export function BudgetsView({ data, onSetMonth, onCloseMonth, onReopenMonth, onD
   const insights = activePlan ? budgetInsights(activePlan, activeLines, budget_months, budget_month_categories, categories, transactions) : []
 
   const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+  const daysInCurrentMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
+  const daysLeft = Math.max(0, daysInCurrentMonth - now.getDate())
 
   return (
-    <div className="space-y-5">
+    // pb-28 (not the pb-16 used by Accounts) — this page's last section (Yearly budgets) ends in
+    // its own small "+ Add" button, which needs more clearance than a plain list to avoid sitting
+    // under the fixed bottom nav + floating add button, confirmed via a real scrolled screenshot.
+    <div className="space-y-5 pb-28">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <div className="mb-2 text-xs uppercase tracking-widest text-accent-200/70 light:text-accent-700">Guardrails</div>
           <h1 className="text-3xl font-semibold tracking-tight text-white light:text-slate-900">Budgets</h1>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
           <button
             onClick={() => downloadBudgetsExport({ budgetMonths: budget_months, budgetMonthCategories: budget_month_categories, yearlyBudgets, categories, transactions }, new Date().toISOString().slice(0, 10))}
             disabled={budget_months.length === 0 && yearlyBudgets.length === 0}
-            className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-white/10 light:border-black/10 px-4 py-2.5 text-sm font-medium text-slate-300 light:text-slate-700 hover:bg-white/5 disabled:opacity-50 sm:flex-none"
-          ><Upload size={14} />Export</button>
-          <button onClick={() => onSetMonth(nextMonth.getFullYear(), nextMonth.getMonth())} className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-white/10 light:border-black/10 px-4 py-2.5 text-sm font-medium text-slate-300 light:text-slate-700 hover:bg-white/5 sm:flex-none"><Plus size={14} />Plan a month</button>
+            title="Export"
+            className="flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-400 light:text-slate-500 transition hover:bg-white/5 hover:text-slate-200 hover:light:text-slate-700 disabled:opacity-50"
+          ><Upload size={14} /><span className="hidden sm:inline">Export</span></button>
+          <button onClick={() => onSetMonth(nextMonth.getFullYear(), nextMonth.getMonth())} className="flex items-center justify-center gap-2 rounded-xl bg-white/[.06] light:bg-black/[.04] px-4 py-2.5 text-sm font-semibold text-white light:text-slate-900 transition hover:bg-white/[.1] hover:light:bg-black/[.06]"><Plus size={14} />Plan a month</button>
           <button onClick={onToggleMoney} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
             {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
           </button>
@@ -99,7 +105,18 @@ export function BudgetsView({ data, onSetMonth, onCloseMonth, onReopenMonth, onD
             <div className="mt-5">
               <div className="text-xs uppercase tracking-widest text-slate-500">Budgeted</div>
               <div className="mt-1 text-[clamp(2rem,6vw,3rem)] font-semibold leading-[1.1] tracking-[-0.01em] text-white light:text-slate-900">{showMoney ? money(activeTotals.budgeted) : '••••••'}</div>
-              <div className={`mt-1 text-sm ${activeTotals.remaining >= 0 ? 'text-emerald-300 light:text-emerald-700' : 'text-rose-300 light:text-rose-700'}`}>{activeTotals.remaining >= 0 ? 'Remaining' : 'Over by'} {showMoney ? money(Math.abs(activeTotals.remaining)) : '••••'}</div>
+              {activeTotals.remaining >= 0 ? (
+                <div className="mt-1 text-sm text-emerald-300 light:text-emerald-700">Remaining {showMoney ? money(activeTotals.remaining) : '••••'}</div>
+              ) : (
+                // Same border + 5%-wash + tinted-text Status Banner pattern as the insights list
+                // below and CreditCardBillAlert — the headline overspend figure gets the same
+                // alarm treatment the app already uses for every other overdue/over-budget signal,
+                // instead of plain tinted text that reads no more urgent than "on track."
+                <div className="mt-3 inline-flex items-center gap-1.5 rounded-xl border border-rose-300/25 bg-rose-300/5 px-3 py-1.5 text-sm font-medium text-rose-200 light:text-rose-700">
+                  <AlertTriangle size={13} className="shrink-0" />
+                  Over by {showMoney ? money(Math.abs(activeTotals.remaining)) : '••••'}
+                </div>
+              )}
               <div className="mt-5 grid grid-cols-2 gap-3">
                 <HeroStatTile
                   icon={TrendingUp}
@@ -108,11 +125,13 @@ export function BudgetsView({ data, onSetMonth, onCloseMonth, onReopenMonth, onD
                   valueTone="text-rose-300 light:text-rose-700"
                   sub={`${activeTotals.pct}% of budget`}
                 />
+                {/* Days left, not a repeat of "Over by"/"Remaining" already shown above — this slot
+                    used to just restate the same figure a second time. */}
                 <HeroStatTile
-                  icon={Target}
-                  label={activeTotals.remaining >= 0 ? 'Remaining' : 'Over by'}
-                  value={showMoney ? money(Math.abs(activeTotals.remaining)) : '••••'}
-                  valueTone={activeTotals.remaining >= 0 ? 'text-emerald-300 light:text-emerald-700' : 'text-rose-300 light:text-rose-700'}
+                  icon={Calendar}
+                  label="Days left"
+                  value={`${daysLeft}`}
+                  sub={`${now.getDate()} of ${daysInCurrentMonth} days used`}
                 />
               </div>
             </div>
@@ -153,10 +172,10 @@ export function BudgetsView({ data, onSetMonth, onCloseMonth, onReopenMonth, onD
                     return (
                       <div key={b.line.id}>
                         <div className="flex items-center justify-between gap-3 text-sm">
-                          <div className="flex items-center gap-2">
-                            <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: b.category?.color || '#94a3b8' }} />
-                            <span className="text-white light:text-slate-900">{b.category?.name || 'Category'}</span>
-                          </div>
+                          {/* No decorative category-color dot here — the bar right below already
+                              carries meaning through color (status, not category identity); a
+                              second, unrelated color per row forced a text read on every line. */}
+                          <span className="text-white light:text-slate-900">{b.category?.name || 'Category'}</span>
                           <div className="text-slate-400 light:text-slate-500">{showMoney ? `${money(b.spent)} of ${money(b.budgeted)}` : '••••'}</div>
                         </div>
                         <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/5"><div className={`h-full rounded-full ${tone}`} style={{ width: `${b.pct}%` }} /></div>

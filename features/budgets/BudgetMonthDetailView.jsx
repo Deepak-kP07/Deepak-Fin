@@ -49,10 +49,9 @@ export function BudgetMonthDetailView({ plan, lines, categories, transactions, o
               return (
                 <div key={b.line.id} className="px-5 py-4">
                   <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2.5">
-                      <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: b.category?.color || '#94a3b8' }} />
-                      <span className="text-sm font-medium text-white light:text-slate-900">{b.category?.name || 'Category'}</span>
-                    </div>
+                    {/* No decorative category-color dot — the bar below already carries meaning
+                        through status color, so a second unrelated color per row is dropped. */}
+                    <span className="text-sm font-medium text-white light:text-slate-900">{b.category?.name || 'Category'}</span>
                     <div className="text-sm text-slate-300 light:text-slate-700">{money(b.spent)} <span className="text-slate-500">of {money(b.budgeted)}</span></div>
                   </div>
                   <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/5"><div className={`h-full rounded-full ${tone}`} style={{ width: `${b.pct}%` }} /></div>
