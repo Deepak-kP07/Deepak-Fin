@@ -3,6 +3,14 @@
     {
       "path": "/api/cron/notifications",
       "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/cron/reports/weekly",
+      "schedule": "30 2 * * 1"
+    },
+    {
+      "path": "/api/cron/reports/monthly",
+      "schedule": "30 2 1 * *"
     }
   ]
 }

@@ -363,6 +363,16 @@ export const profiles = pgTable('profiles', {
   // gold (lib/color.js's DEFAULT_ACCENT); existing profiles saved before this change keep
   // whatever they'd already chosen.
   accentColor: text('accent_color').notNull().default('#d4af37'),
+  // Settings > Notifications toggles for the two recurring digest emails (see
+  // app/api/cron/reports/{weekly,monthly}/route.js) — opt-out, default true for every profile.
+  weeklyReportEnabled: boolean('weekly_report_enabled').notNull().default(true),
+  monthlyReportEnabled: boolean('monthly_report_enabled').notNull().default(true),
+  // System-only dedup bookkeeping for those two crons — null means never sent. Deliberately not
+  // in safeFields.js's profiles list: a client PATCH must never be able to write this, or a user
+  // could reset/spoof "already sent this period" and get duplicate emails, or a stale client
+  // could stamp it early and suppress a real send.
+  lastWeeklyReportSentAt: timestamp('last_weekly_report_sent_at', { withTimezone: true }),
+  lastMonthlyReportSentAt: timestamp('last_monthly_report_sent_at', { withTimezone: true }),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 

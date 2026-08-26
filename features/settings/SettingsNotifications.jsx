@@ -15,7 +15,8 @@ function urlBase64ToUint8Array(base64String) {
   return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)))
 }
 
-export function SettingsNotifications({ toast }) {
+export function SettingsNotifications({ data, onSaveProfile, toast }) {
+  const { profile } = data
   const [supported, setSupported] = useState(true)
   const [enabled, setEnabled] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -72,24 +73,44 @@ export function SettingsNotifications({ toast }) {
   }
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[.035] p-5">
-      <div className="text-sm font-semibold text-white">Push notifications</div>
+    <div className="space-y-4">
+    <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] p-5">
+      <div className="text-sm font-semibold text-white light:text-slate-900">Push notifications</div>
       {!supported ? (
-        <div className="mt-3 flex items-center gap-3 rounded-xl bg-black/20 px-4 py-3 text-xs text-slate-500">
+        <div className="mt-3 flex items-center gap-3 rounded-xl bg-black/20 light:bg-black/[.06] px-4 py-3 text-xs text-slate-500">
           <BellOff size={16} />This browser doesn't support push notifications.
         </div>
       ) : (
-        <div className="mt-3 flex items-center justify-between gap-4 rounded-xl bg-black/20 px-4 py-3">
+        <div className="mt-3 flex items-center justify-between gap-4 rounded-xl bg-black/20 light:bg-black/[.06] px-4 py-3">
           <div className="flex items-start gap-3">
-            <Bell size={16} className="mt-0.5 shrink-0 text-slate-400" />
+            <Bell size={16} className="mt-0.5 shrink-0 text-slate-400 light:text-slate-500" />
             <div>
-              <div className="text-sm text-white">Notify this device</div>
+              <div className="text-sm text-white light:text-slate-900">Notify this device</div>
               <div className="mt-0.5 text-xs text-slate-500">Credit card bills due soon, loan EMIs due soon, recurring transactions added, and budget overspend — nothing else.</div>
             </div>
           </div>
           <ToggleSwitch checked={enabled} disabled={busy} onChange={(v) => (v ? enable() : disable())} />
         </div>
       )}
+    </div>
+
+    <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] p-5">
+      <div className="text-sm font-semibold text-white light:text-slate-900">Email reports</div>
+      <div className="mt-3 flex items-center justify-between gap-4 rounded-xl bg-black/20 light:bg-black/[.06] px-4 py-3">
+        <div>
+          <div className="text-sm text-white light:text-slate-900">Weekly summary</div>
+          <div className="mt-0.5 text-xs text-slate-500">Net worth, income vs expense, budget pace, and upcoming bills — every Monday morning.</div>
+        </div>
+        <ToggleSwitch checked={profile?.weekly_report_enabled !== false} onChange={(v) => onSaveProfile({ weekly_report_enabled: v })} />
+      </div>
+      <div className="mt-3 flex items-center justify-between gap-4 rounded-xl bg-black/20 light:bg-black/[.06] px-4 py-3">
+        <div>
+          <div className="text-sm text-white light:text-slate-900">Monthly summary</div>
+          <div className="mt-0.5 text-xs text-slate-500">Your full month recap — net worth change, budget status, and top spending categories.</div>
+        </div>
+        <ToggleSwitch checked={profile?.monthly_report_enabled !== false} onChange={(v) => onSaveProfile({ monthly_report_enabled: v })} />
+      </div>
+    </div>
     </div>
   )
 }
