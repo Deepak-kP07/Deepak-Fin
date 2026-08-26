@@ -84,12 +84,12 @@ export function MoneyProfileDetailView({
         </div>
       </div>
 
-      <DismissibleBanner tone="cyan">
+      <DismissibleBanner id={`money-profile-linked-${profile.id}-${linkedAccount?.id || 'none'}`} tone="cyan">
         {linkedAccount ? <>Linked to <b>{linkedAccount.name}</b> — every entry here also posts as a transaction on that account and counts toward your net worth.</> : 'Not linked to a bank account — entries here stay only in this module and never affect your other totals.'}
       </DismissibleBanner>
 
       {isClosed && (
-        <DismissibleBanner tone="amber">
+        <DismissibleBanner id={`money-profile-closed-${profile.id}`} tone="amber">
           This profile is closed — no new entries can be added until you reactivate it. Existing entries are still visible and editable.
         </DismissibleBanner>
       )}

@@ -266,7 +266,7 @@ export function InvestmentsView({
         </div>
       </div>
 
-      <DismissibleBanner tone="cyan">
+      <DismissibleBanner id={`investments-kite-status-${kiteConnected ? (kiteBroken ? 'broken' : 'live') : 'yahoo'}`} tone="cyan">
         <div className="flex flex-wrap items-center gap-2">
           <Sparkles size={13} />
           {kiteConnected && kiteBroken ? <span>Kite connection needs attention — the last sync failed.</span> : kiteConnected ? <span>Live prices via <b>Kite</b>. Token refreshes tomorrow after 6 AM IST.</span> : <span>Currently using Yahoo Finance. Connect your Zerodha Kite for real-time NSE quotes and real holdings sync.</span>}

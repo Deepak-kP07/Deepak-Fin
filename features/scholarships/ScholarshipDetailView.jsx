@@ -89,7 +89,7 @@ export function ScholarshipDetailView({
         </div>
       </div>
 
-      <DismissibleBanner tone="cyan">
+      <DismissibleBanner id={`scholarship-linked-${s.id}-${linkedAccount?.id || 'none'}`} tone="cyan">
         {linkedAccount ? <>Linked to <b>{linkedAccount.name}</b> — marking this received/paid posts a transaction there, kept in sync as you edit.</> : 'Not linked to a bank account — stays only in this module.'}
       </DismissibleBanner>
 

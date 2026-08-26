@@ -110,7 +110,7 @@ export function PortfolioDetailView({
       </div>
 
       {kiteLinked && (
-        <DismissibleBanner tone="cyan">
+        <DismissibleBanner id={`portfolio-kite-linked-${portfolio.id}`} tone="cyan">
           Synced from Kite · {portfolio.last_kite_sync_at ? `last synced ${relativeTime(portfolio.last_kite_sync_at)}` : 'not synced yet'}. Holdings here mirror your real Zerodha account — add/edit them from Kite, not here.
         </DismissibleBanner>
       )}

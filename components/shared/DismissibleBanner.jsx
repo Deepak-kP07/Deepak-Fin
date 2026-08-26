@@ -9,18 +9,30 @@ const TONES = {
   slate: 'border-slate-500/25 bg-slate-500/5 text-slate-300 light:text-slate-700',
 }
 
-// A dismiss-for-this-visit status banner — clicking the × hides it immediately, but the
-// dismissal isn't persisted anywhere, so it comes back on the next page load/navigation if the
-// underlying condition (closed profile, EMI due soon, etc.) still applies. That's intentional:
-// these often carry real state the user should still be warned about later, just not forced to
-// stare at right now.
-export function DismissibleBanner({ tone = 'cyan', className = '', children }) {
-  const [dismissed, setDismissed] = useState(false)
+const STORAGE_PREFIX = 'dismissed_banner:'
+
+function readDismissed(id) {
+  if (!id || typeof window === 'undefined') return false
+  try { return localStorage.getItem(STORAGE_PREFIX + id) === '1' } catch { return false }
+}
+
+// A dismiss-permanently status banner — clicking the × hides it and remembers that in
+// localStorage under `id`, so it stays gone across navigation, remounts, and future visits
+// instead of resetting every time the view unmounts. `id` must be unique per distinct banner
+// instance (typically the record's id plus whatever makes its message change, e.g. a linked
+// account or a due-date cycle) so dismissing one doesn't hide an unrelated, later warning that
+// happens to reuse the same tone/copy.
+export function DismissibleBanner({ id, tone = 'cyan', className = '', children }) {
+  const [dismissed, setDismissed] = useState(() => readDismissed(id))
   if (dismissed) return null
+  const dismiss = () => {
+    setDismissed(true)
+    if (id) { try { localStorage.setItem(STORAGE_PREFIX + id, '1') } catch { /* ignore */ } }
+  }
   return (
     <div className={`flex items-start gap-2 rounded-xl border px-4 py-2.5 text-xs ${TONES[tone] || TONES.cyan} ${className}`}>
       <div className="min-w-0 flex-1">{children}</div>
-      <button type="button" onClick={() => setDismissed(true)} className="shrink-0 rounded-lg p-0.5 opacity-60 transition hover:bg-white/10 hover:opacity-100" title="Dismiss"><X size={14} /></button>
+      <button type="button" onClick={dismiss} className="shrink-0 rounded-lg p-0.5 opacity-60 transition hover:bg-white/10 hover:opacity-100" title="Dismiss"><X size={14} /></button>
     </div>
   )
 }

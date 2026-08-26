@@ -166,13 +166,13 @@ export function LoanDetailView({ loan, payments, accounts, onBack, onPay, onDele
       )}
 
       {emiDue && (
-        <DismissibleBanner tone={emiDue.days <= 3 ? 'amber' : 'slate'}>
+        <DismissibleBanner id={`loan-emi-due-${loan.id}-${new Date().getFullYear()}-${new Date().getMonth()}`} tone={emiDue.days <= 3 ? 'amber' : 'slate'}>
           Next EMI due on the {ordinal(loan.emi_due_day)} · {emiDue.days > 0 ? `in ${emiDue.days} day${emiDue.days === 1 ? '' : 's'}` : emiDue.days === 0 ? 'today' : 'overdue'}
         </DismissibleBanner>
       )}
 
       {outstandingExceedsPrincipal && (
-        <DismissibleBanner tone="amber">
+        <DismissibleBanner id={`loan-outstanding-anomaly-${loan.id}`} tone="amber">
           Outstanding ({money(outstanding)}) is higher than Principal ({money(principal)}) — that shouldn't happen. Double-check the Principal amount by editing this loan.
         </DismissibleBanner>
       )}
