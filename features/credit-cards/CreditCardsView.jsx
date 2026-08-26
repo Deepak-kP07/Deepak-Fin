@@ -116,12 +116,12 @@ export function CreditCardsView({ data, onAdd, onEdit, onDelete, onSpend, onPay,
         // mx-auto then centers the card inside that empty track instead of sitting flush left
         // like every other card grid in the app — capping the track is what actually fixes it,
         // the internal max-width alone only stopped the card's own size from growing.
-        // justify-center: capping the track leaves leftover container width undistributed once
-        // there are fewer tracks than fit a row (mobile's single column, or a lone card on
-        // desktop) — grid's default justify-content dumps that leftover at the end, so the
-        // track itself sits flush left instead of centered even though mx-auto centers the card
-        // *within* its track.
-        <div className="grid justify-center gap-6 grid-cols-[repeat(auto-fit,minmax(300px,340px))]">
+        // justify-center below lg: — mobile is always a single column at this min-width (300px
+        // doesn't leave room for two), so a lone card should sit centered like a phone-native
+        // single item instead of stuck flush left with empty space beside it. At lg:+, revert to
+        // the grid default (flush left, matching every other card grid in the app) — desktop has
+        // real room for multiple cards per row, so centering a short row there just looks adrift.
+        <div className="grid justify-center gap-6 grid-cols-[repeat(auto-fit,minmax(300px,340px))] lg:justify-start">
           {credit_cards.map((card) => (
             <CreditCardFlip
               key={card.id}
