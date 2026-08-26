@@ -249,12 +249,14 @@ export function InvestmentsView({
                 aria-label={`Portfolio mix: ${portfolioMix.map((p) => `${p.name} ${((p.value / portfolioMixTotal) * 100).toFixed(1)}%`).join(', ')}`}
                 className="mt-1.5 flex h-2 gap-px overflow-hidden rounded-full bg-white/[.07] light:bg-black/[.07]"
               >
-                {portfolioMix.map((p) => <div key={p.id} style={{ width: `${(p.value / portfolioMixTotal) * 100}%`, background: p.color }} />)}
+                {portfolioMix.map((p) => <div key={p.id} className="ring-1 ring-inset ring-white/15 light:ring-black/10" style={{ width: `${(p.value / portfolioMixTotal) * 100}%`, background: p.color }} />)}
               </div>
               <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-400 light:text-slate-500">
                 {portfolioMix.map((p) => (
                   <span key={p.id} className="flex items-center gap-1.5">
-                    <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: p.color }} />
+                    {/* ring keeps the swatch visible even when a portfolio's own color is
+                        near-black (dark theme) or near-white (light theme) */}
+                    <span className="h-1.5 w-1.5 shrink-0 rounded-full ring-1 ring-inset ring-white/25 light:ring-black/15" style={{ background: p.color }} />
                     {p.name} · {((p.value / portfolioMixTotal) * 100).toFixed(0)}%
                   </span>
                 ))}
@@ -385,12 +387,12 @@ export function InvestmentsView({
                     aria-label={`Allocation: ${buckets.map((b) => `${b.label} ${((b.value / grandTotal) * 100).toFixed(1)}%`).join(', ')}`}
                     className="mt-3 flex h-2.5 overflow-hidden rounded-full bg-white/5"
                   >
-                    {buckets.map((b) => <div key={b.label} style={{ width: `${(b.value / grandTotal) * 100}%`, background: b.color }} />)}
+                    {buckets.map((b) => <div key={b.label} className="ring-1 ring-inset ring-white/15 light:ring-black/10" style={{ width: `${(b.value / grandTotal) * 100}%`, background: b.color }} />)}
                   </div>
                   <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1.5 text-xs">
                     {buckets.map((b) => (
                       <div key={b.label} className="flex items-center gap-1.5 text-slate-400 light:text-slate-500">
-                        <span className="h-2 w-2 rounded-full" style={{ background: b.color }} />
+                        <span className="h-2 w-2 rounded-full ring-1 ring-inset ring-white/25 light:ring-black/15" style={{ background: b.color }} />
                         {b.label} · {((b.value / grandTotal) * 100).toFixed(1)}% {showMoney && <span className="text-slate-600">({money(b.value)})</span>}
                       </div>
                     ))}

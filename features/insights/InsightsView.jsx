@@ -116,7 +116,7 @@ export function InsightsView({ data }) {
                     <span>{c.name}</span><span className="text-white light:text-slate-900">{money(c.value)} · {pct}%</span>
                   </div>
                   <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white/5">
-                    <div className="h-full rounded-full" style={{ width: `${pct}%`, background: c.color }} />
+                    <div className="h-full rounded-full ring-1 ring-inset ring-white/15 light:ring-black/10" style={{ width: `${pct}%`, background: c.color }} />
                   </div>
                 </div>
               )

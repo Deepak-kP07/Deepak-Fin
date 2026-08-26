@@ -85,12 +85,15 @@ export function CreditCardsView({ data, onAdd, onEdit, onDelete, onSpend, onPay,
                   aria-label={`Outstanding by card: ${cardMix.map((c) => `${c.name} ${((c.value / cardMixTotal) * 100).toFixed(1)}%`).join(', ')}`}
                   className="mt-1.5 flex h-2 gap-px overflow-hidden rounded-full bg-white/[.07] light:bg-black/[.07]"
                 >
-                  {cardMix.map((c) => <div key={c.id} style={{ width: `${(c.value / cardMixTotal) * 100}%`, background: c.color }} />)}
+                  {cardMix.map((c) => <div key={c.id} className="ring-1 ring-inset ring-white/15 light:ring-black/10" style={{ width: `${(c.value / cardMixTotal) * 100}%`, background: c.color }} />)}
                 </div>
                 <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-400 light:text-slate-500">
                   {cardMix.map((c) => (
                     <span key={c.id} className="flex items-center gap-1.5">
-                      <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: c.color }} />
+                      {/* ring guarantees the swatch stays visible even when a card's own color is
+                          near-black (e.g. a literal "black card") against this near-black ground,
+                          or near-white against the light-theme ground */}
+                      <span className="h-1.5 w-1.5 shrink-0 rounded-full ring-1 ring-inset ring-white/25 light:ring-black/15" style={{ background: c.color }} />
                       {c.name} · {((c.value / cardMixTotal) * 100).toFixed(0)}%
                     </span>
                   ))}
