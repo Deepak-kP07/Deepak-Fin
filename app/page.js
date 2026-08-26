@@ -22,6 +22,7 @@ import { CsvBulkImport } from '@/components/shared/CsvBulkImport'
 import { CategorySelect } from '@/components/shared/CategorySelect'
 import { DateInput } from '@/components/shared/DateInput'
 import { StatCard } from '@/components/shared/StatCard'
+import { StatDrilldown } from '@/components/shared/StatDrilldown'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { Skeleton } from '@/components/shared/Skeleton'
 import { LoadingScreen } from '@/components/shared/LoadingScreen'
@@ -74,13 +75,14 @@ import { ManageAccessSheet } from '@/features/familyCompany/ManageAccessSheet'
 import { categoriesFor } from '@/lib/moneyProfiles'
 import { VaultItemForm } from '@/features/vault/VaultItemForm'
 import { InsightsView } from '@/features/insights/InsightsView'
+import { NetWorthDetailView } from '@/features/dashboard/NetWorthDetailView'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import {
   Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend,
 } from 'recharts'
 import {
-  ArrowDownRight, ArrowLeftRight, ArrowUpDown, ArrowUpRight, BarChart3, Briefcase, Calendar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock, CreditCard,
+  ArrowDownRight, ArrowLeftRight, ArrowUpDown, ArrowUpRight, BarChart3, Briefcase, Calculator, Calendar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock, CreditCard,
   Download, Eye, EyeOff, FileText, Heart, History, Landmark, LayoutDashboard, LineChart, ListChecks, LogOut, Menu, MoreHorizontal, MoreVertical, Mountain, Paperclip, PieChart as PieChartIcon, Plus,
   RefreshCw, Repeat, Search, Settings, ShieldCheck, Star, Tag, Target, TrendingDown, TrendingUp, Trash2, Pencil, Users,
   Wallet, X, Zap,
@@ -649,18 +651,96 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
   const totalAssets = totalBalance + currentInv
   const totalLiabilities = totalOutstanding + creditCardDebt
   const netWorth = totalAssets - totalLiabilities
+
+  // Net worth detail page — same filters/formulas as the totals just above, so each section's
+  // subtotal always reconciles exactly to totalBalance/currentInv/totalOutstanding/creditCardDebt.
+  // Deliberately NOT gated by moduleSettings (unlike balanceItems below, which feeds the separate
+  // "Accounts, cards & investments" Balances panel) — currentInv/creditCardDebt themselves are
+  // computed ungated (see the comment above creditCardDebt), so hiding an item here because its
+  // module is switched off would make this "how is this number really calculated" page lie about
+  // money that's still silently counted in the headline figure.
+  const [showNetWorthDetail, setShowNetWorthDetail] = useState(false)
+  const cashBankItems = accounts.filter((a) => a.type !== 'debit_card').map((a) => ({
+    id: `acc-${a.id}`, name: a.name, sub: a.type.replace('_', ' '), amount: Number(a.current_balance || 0),
+    icon: a.type === 'cash' ? Wallet : Landmark, color: a.color || '#64748b', debt: false,
+  }))
+  const linkedPortfolioIds = new Set(portfolios.map((p) => p.id))
+  const investmentItems = [
+    ...portfolios.map((p) => {
+      const value = holdings.filter((h) => h.portfolio_id === p.id).reduce((s, h) => s + Number(h.qty) * Number(h.current_price || h.avg_buy_price), 0) + Number(p.cash_balance || 0)
+      return { id: `port-${p.id}`, name: p.name, sub: 'Investment', amount: value, icon: TrendingUp, color: p.color || '#64748b', debt: false }
+    }),
+    // A holding whose portfolio_id doesn't match any live portfolio (data anomaly) still gets a
+    // row, so this section's subtotal keeps reconciling to currentInv exactly even then.
+    ...(() => {
+      const unlinkedValue = holdings.filter((h) => !linkedPortfolioIds.has(h.portfolio_id)).reduce((s, h) => s + Number(h.qty) * Number(h.current_price || h.avg_buy_price), 0)
+      return unlinkedValue > 0 ? [{ id: 'port-unlinked', name: 'Unlinked holdings', sub: 'Investment', amount: unlinkedValue, icon: TrendingUp, color: '#64748b', debt: false }] : []
+    })(),
+  ]
+  const loanItems = loans.filter((l) => l.status !== 'closed').map((l) => ({
+    id: `loan-${l.id}`, name: l.name, sub: l.lender ? `Loan · ${l.lender}` : 'Loan',
+    amount: liveOutstanding(l, loan_payments.filter((p) => p.loan_id === l.id)),
+    icon: Landmark, color: '#fb7185', debt: true,
+  }))
+  const creditCardItems = credit_cards.map((c) => ({
+    id: `cc-${c.id}`, name: c.name, sub: 'Credit card', amount: Number(c.current_outstanding || 0),
+    icon: CreditCard, color: c.color || '#64748b', debt: true,
+  }))
+  if (showNetWorthDetail) {
+    return (
+      <NetWorthDetailView
+        onBack={() => setShowNetWorthDetail(false)}
+        showMoney={showMoney}
+        setView={setView}
+        netWorth={netWorth} totalAssets={totalAssets} totalLiabilities={totalLiabilities}
+        totalBalance={totalBalance} currentInv={currentInv} totalOutstanding={totalOutstanding} creditCardDebt={creditCardDebt}
+        cashBankItems={cashBankItems} investmentItems={investmentItems} loanItems={loanItems} creditCardItems={creditCardItems}
+        investmentsModuleEnabled={moduleSettings.investments.enabled}
+        creditCardsModuleEnabled={moduleSettings.credit_cards.enabled}
+      />
+    )
+  }
+
   // Monthly aggregation for last 6 months
   const now = new Date()
   const months = []
-  for (let i = 5; i >= 0; i--) { const d = new Date(now.getFullYear(), now.getMonth() - i, 1); months.push({ key: `${d.getFullYear()}-${d.getMonth()}`, label: monthName(d), income: 0, expense: 0 }) }
+  for (let i = 5; i >= 0; i--) { const d = new Date(now.getFullYear(), now.getMonth() - i, 1); months.push({ key: `${d.getFullYear()}-${d.getMonth()}`, label: monthName(d), income: 0, expense: 0, invested: 0 }) }
   transactions.forEach((t) => {
     if (t.type === 'transfer') return
     const d = new Date(t.date); const key = `${d.getFullYear()}-${d.getMonth()}`
     const bucket = months.find((m) => m.key === key)
-    if (bucket) bucket[t.type] += Number(t.amount || 0)
+    if (!bucket) return
+    bucket[t.type] += Number(t.amount || 0)
+    // Funding a portfolio posts as a real expense transaction (so the source account's balance
+    // is correct) tagged linked_module: 'investment' — without this, money moved into investing
+    // reads as if it were spent, understating savings by exactly what was actually still saved.
+    if (t.type === 'expense' && t.linked_module === 'investment') bucket.invested += Number(t.amount || 0)
   })
   const thisMonth = months[months.length - 1]
-  const savingsRate = thisMonth?.income > 0 ? Math.round(((thisMonth.income - thisMonth.expense) / thisMonth.income) * 100) : 0
+  const investedThisMonth = thisMonth?.invested || 0
+  const cashSavingsThisMonth = (thisMonth?.income || 0) - (thisMonth?.expense || 0)
+  const savingsRate = thisMonth?.income > 0 ? Math.round(((cashSavingsThisMonth + investedThisMonth) / thisMonth.income) * 100) : 0
+
+  // Life-to-date and this-year totals, for the Income/Expense/Savings stat cards' drill-down —
+  // those three cards default to the current month same as everywhere else in this app; tapping
+  // one opens a StatDrilldown showing the same figures with no period cutoff (or, for Savings,
+  // this year's investment/cash split specifically, per how the user actually wants that one read).
+  const [drilldown, setDrilldown] = useState(null)
+  const thisYear = now.getFullYear()
+  const allTime = { income: 0, expense: 0, invested: 0 }
+  const yearTotals = { income: 0, expense: 0, invested: 0 }
+  transactions.forEach((t) => {
+    if (t.type === 'transfer') return
+    const amt = Number(t.amount || 0)
+    allTime[t.type] += amt
+    if (t.type === 'expense' && t.linked_module === 'investment') allTime.invested += amt
+    if (new Date(t.date).getFullYear() === thisYear) {
+      yearTotals[t.type] += amt
+      if (t.type === 'expense' && t.linked_module === 'investment') yearTotals.invested += amt
+    }
+  })
+  const allTimeSaved = (allTime.income - allTime.expense) + allTime.invested
+  const yearCashSavings = yearTotals.income - yearTotals.expense
   const nowMonthKey = `${now.getFullYear()}-${now.getMonth()}`
   const allThisMonth = transactions.filter((t) => {
     const d = new Date(t.date)
@@ -701,9 +781,9 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
   // disclose no absolute amount, and the toggle's own label is "Hide amounts". Keep new cards
   // consistent with this split.
   const STAT_CARDS = [
-    { key: 'income_month', available: true, node: <StatCard label={`Income · ${thisMonth?.label || ''}`} value={showMoney ? money(thisMonth?.income || 0) : '••••'} sub={<span className="flex items-center gap-1"><ArrowUpRight size={13} aria-hidden="true" /><span className="sr-only">Money in · </span>This month</span>} icon={TrendingUp} accent="bg-emerald-400/15 text-emerald-200 light:text-emerald-700" /> },
-    { key: 'expense_month', available: true, node: <StatCard label={`Expense · ${thisMonth?.label || ''}`} value={showMoney ? money(thisMonth?.expense || 0) : '••••'} sub={<span className="flex items-center gap-1 text-rose-300 light:text-rose-700"><ArrowDownRight size={13} aria-hidden="true" /><span className="sr-only">Money out · </span>This month</span>} icon={TrendingDown} accent="bg-rose-400/15 text-rose-200 light:text-rose-700" tone="text-rose-300 light:text-rose-700" /> },
-    { key: 'savings_rate', available: true, node: <StatCard label="Savings rate" value={`${savingsRate}%`} sub={<span className={savingsRate >= 20 ? 'text-emerald-300 light:text-emerald-700' : 'text-amber-300 light:text-amber-700'}>{savingsRate >= 20 ? 'Great pace' : 'Aim for 20%+'}</span>} icon={Target} accent="bg-accent-400/15 text-accent-200 light:text-accent-700" tone={savingsRate >= 20 ? 'text-emerald-300 light:text-emerald-700' : 'text-amber-300 light:text-amber-700'} /> },
+    { key: 'income_month', available: true, node: <StatCard label={`Income · ${thisMonth?.label || ''}`} value={showMoney ? money(thisMonth?.income || 0) : '••••'} sub={<span className="flex items-center gap-1"><ArrowUpRight size={13} aria-hidden="true" /><span className="sr-only">Money in · </span>This month · tap for all-time</span>} icon={TrendingUp} accent="bg-emerald-400/15 text-emerald-200 light:text-emerald-700" onClick={() => setDrilldown('income')} /> },
+    { key: 'expense_month', available: true, node: <StatCard label={`Expense · ${thisMonth?.label || ''}`} value={showMoney ? money(thisMonth?.expense || 0) : '••••'} sub={<span className="flex items-center gap-1 text-rose-300 light:text-rose-700"><ArrowDownRight size={13} aria-hidden="true" /><span className="sr-only">Money out · </span>This month · tap for all-time</span>} icon={TrendingDown} accent="bg-rose-400/15 text-rose-200 light:text-rose-700" tone="text-rose-300 light:text-rose-700" onClick={() => setDrilldown('expense')} /> },
+    { key: 'savings_rate', available: true, node: <StatCard label="Savings rate" value={`${savingsRate}%`} sub={<span className={savingsRate >= 20 ? 'text-emerald-300 light:text-emerald-700' : 'text-amber-300 light:text-amber-700'}>{savingsRate >= 20 ? 'Great pace' : 'Aim for 20%+'} · tap for detail</span>} icon={Target} accent="bg-accent-400/15 text-accent-200 light:text-accent-700" tone={savingsRate >= 20 ? 'text-emerald-300 light:text-emerald-700' : 'text-amber-300 light:text-amber-700'} onClick={() => setDrilldown('savings')} /> },
     { key: 'net_cashflow', available: true, node: <StatCard label="Net cash flow" value={showMoney ? money(netCashflow) : '••••'} sub={<span className={netCashflow >= 0 ? 'text-emerald-300 light:text-emerald-700' : 'text-rose-300 light:text-rose-700'}>{netCashflow >= 0 ? 'Positive' : 'Negative'} this month</span>} icon={ArrowLeftRight} accent="bg-accent-400/15 text-accent-200 light:text-accent-700" tone={netCashflow >= 0 ? 'text-emerald-300 light:text-emerald-700' : 'text-rose-300 light:text-rose-700'} /> },
     { key: 'total_debt', available: moduleSettings.loans.enabled || moduleSettings.credit_cards.enabled, node: <StatCard label="Total debt" value={showMoney ? money(totalDebt) : '••••'} sub="Loans + credit cards" icon={CreditCard} accent="bg-rose-400/15 text-rose-200 light:text-rose-700" /> },
     { key: 'total_invested', available: moduleSettings.investments.enabled, node: <StatCard label="Total invested" value={showMoney ? money(currentInv) : '••••'} sub={<span className={pnl >= 0 ? 'text-emerald-300 light:text-emerald-700' : 'text-rose-300 light:text-rose-700'}><span className="sr-only">{pnl >= 0 ? 'Profit ' : 'Loss '}</span>{pnl >= 0 ? '+' : '−'}{showMoney ? money(pnl).replace('-', '') : '••••'} P&amp;L</span>} icon={TrendingUp} accent="bg-accent-400/15 text-accent-200 light:text-accent-700" /> },
@@ -811,6 +891,7 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
   const quickActionItems = quickActionSlots.map((key) => quickActionDestinations.find((d) => d.key === key)).filter(Boolean)
 
   return (
+    <>
     <div className="flex min-h-full flex-col gap-3">
       {widgets.credit_card_alert.enabled && moduleSettings.credit_cards.enabled && (
         <CreditCardBillAlert creditCards={credit_cards} transactions={transactions} onPay={onPayCardBill} showMoney={showMoney} />
@@ -819,7 +900,18 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
       {widgets.net_worth?.enabled && (
         <div className="shrink-0 rounded-3xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] p-6 lg:grid lg:grid-cols-[minmax(300px,1.05fr)_minmax(0,1.5fr)] lg:items-center lg:gap-8 xl:grid-cols-[minmax(300px,1fr)_minmax(0,1.5fr)_minmax(0,0.75fr)]">
           <div>
-            <h2 className="text-xs uppercase tracking-widest text-slate-400 light:text-slate-500">Net worth</h2>
+            <div className="flex items-center gap-1.5">
+              <h2 className="text-xs uppercase tracking-widest text-slate-400 light:text-slate-500">Net worth</h2>
+              <button
+                type="button"
+                onClick={() => setShowNetWorthDetail(true)}
+                title="How is this calculated?"
+                aria-label="How is net worth calculated?"
+                className="rounded-lg p-1 text-slate-500 transition hover:bg-white/5 hover:text-white hover:light:bg-black/5 hover:light:text-slate-900"
+              >
+                <Calculator size={13} />
+              </button>
+            </div>
             <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
               <div className={`text-[clamp(2rem,6vw,3rem)] font-semibold leading-[1.1] tracking-[-0.01em] ${netWorth < 0 ? 'text-rose-200 light:text-rose-700' : 'text-white light:text-slate-900'}`}>
                 {showMoney ? `${netWorth < 0 ? '−' : ''}${money(netWorth).replace('-', '')}` : '••••••••'}
@@ -1048,6 +1140,47 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
         </div>
       </div>
     </div>
+
+    <StatDrilldown
+      open={drilldown === 'income'}
+      onClose={() => setDrilldown(null)}
+      title="Income"
+      icon={TrendingUp}
+      accent="bg-emerald-400/15 text-emerald-200 light:text-emerald-700"
+      rows={[
+        { label: thisMonth?.label || 'This month', value: showMoney ? money(thisMonth?.income || 0) : '••••' },
+        { label: `${thisYear} so far`, value: showMoney ? money(yearTotals.income) : '••••' },
+        { label: 'All-time', value: showMoney ? money(allTime.income) : '••••' },
+      ]}
+    />
+    <StatDrilldown
+      open={drilldown === 'expense'}
+      onClose={() => setDrilldown(null)}
+      title="Expense"
+      icon={TrendingDown}
+      accent="bg-rose-400/15 text-rose-200 light:text-rose-700"
+      rows={[
+        { label: thisMonth?.label || 'This month', value: showMoney ? money(thisMonth?.expense || 0) : '••••' },
+        { label: `${thisYear} so far`, value: showMoney ? money(yearTotals.expense) : '••••' },
+        { label: 'All-time', value: showMoney ? money(allTime.expense) : '••••' },
+      ]}
+      note="Includes money moved into investments — see Savings for the cash-vs-invested split."
+    />
+    <StatDrilldown
+      open={drilldown === 'savings'}
+      onClose={() => setDrilldown(null)}
+      title="Savings"
+      icon={Target}
+      accent="bg-accent-400/15 text-accent-200 light:text-accent-700"
+      rows={[
+        { label: 'Invested this year', sub: 'Money moved into portfolios', value: showMoney ? money(yearTotals.invested) : '••••', tone: 'text-accent-300 light:text-accent-700' },
+        { label: 'Other savings this year', sub: 'Cash kept, not invested or spent', value: showMoney ? money(yearCashSavings) : '••••' },
+        { label: `Total set aside · ${thisYear}`, value: showMoney ? money(yearCashSavings + yearTotals.invested) : '••••', tone: 'text-emerald-300 light:text-emerald-700' },
+        { label: 'All-time saved + invested', value: showMoney ? money(allTimeSaved) : '••••' },
+      ]}
+      note="Savings rate now counts what you invested this month as saved, not spent — investing no longer drags the rate down."
+    />
+    </>
   )
 }
 
