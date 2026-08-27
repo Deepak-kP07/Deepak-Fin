@@ -1,10 +1,11 @@
 'use client'
 
-import { useRef, useState } from 'react'
-import { ArrowDownRight, ArrowLeftRight, ArrowUpRight, CheckCircle2, ChevronRight, Eye, EyeOff, Landmark, Pencil, Plus, RefreshCw, Trash2, Wallet, X } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { ArrowDownRight, ArrowLeftRight, ArrowUpRight, CheckCircle2, ChevronRight, Eye, EyeOff, Landmark, MoreVertical, Pencil, Plus, RefreshCw, Trash2, Wallet, X } from 'lucide-react'
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { BankCardFace } from '@/components/shared/BankCardFace'
 import { StatCard } from '@/components/shared/StatCard'
+import { HeroStatTile } from '@/components/shared/HeroStatTile'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { NetBar } from '@/components/shared/NetBar'
 import { MonthCursor } from '@/components/shared/MonthCursor'
@@ -65,37 +66,84 @@ export function AccountDetailView({ account, debitCard, transactions, categories
     bucket.net += isIn ? Number(t.amount || 0) : -Number(t.amount || 0)
   })
 
-  const inflow = activity.reduce((s, t) => { const isIn = t.type === 'income' || (t.type === 'transfer' && t.transfer_direction === 'in'); return isIn ? s + Number(t.amount || 0) : s }, 0)
-  const outflow = activity.reduce((s, t) => { const isOut = t.type === 'expense' || (t.type === 'transfer' && t.transfer_direction === 'out'); return isOut ? s + Number(t.amount || 0) : s }, 0)
+  // Money in/out now track the current calendar month (not all-time) — matches how every other
+  // module's hero card scopes its secondary tiles to "now," and an all-time total on an account
+  // that's years old was rarely the number anyone actually wanted at a glance.
+  const thisMonthActivity = activity.filter((t) => { const d = new Date(t.date); return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() })
+  const inflow = thisMonthActivity.reduce((s, t) => { const isIn = t.type === 'income' || (t.type === 'transfer' && t.transfer_direction === 'in'); return isIn ? s + Number(t.amount || 0) : s }, 0)
+  const outflow = thisMonthActivity.reduce((s, t) => { const isOut = t.type === 'expense' || (t.type === 'transfer' && t.transfer_direction === 'out'); return isOut ? s + Number(t.amount || 0) : s }, 0)
+  // Desktop keeps the original all-time figures unchanged — only the new mobile hero card below
+  // switches Money in/out to the current month.
+  const allTimeInflow = activity.reduce((s, t) => { const isIn = t.type === 'income' || (t.type === 'transfer' && t.transfer_direction === 'in'); return isIn ? s + Number(t.amount || 0) : s }, 0)
+  const allTimeOutflow = activity.reduce((s, t) => { const isOut = t.type === 'expense' || (t.type === 'transfer' && t.transfer_direction === 'out'); return isOut ? s + Number(t.amount || 0) : s }, 0)
+
+  // Mobile: Sync/Edit/Delete collapse into this "..." menu, same pattern as the other detail
+  // views — the eye toggle stays outside it, always visible. Desktop is unchanged.
+  const [moreOpen, setMoreOpen] = useState(false)
+  const moreRef = useRef(null)
+  useEffect(() => {
+    const onDocClick = (e) => { if (moreRef.current && !moreRef.current.contains(e.target)) setMoreOpen(false) }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [])
 
   return (
     <div className="space-y-5 pb-8">
       <button onClick={onBack} className="flex items-center gap-1.5 text-sm text-slate-400 light:text-slate-500 hover:text-white hover:light:text-slate-900"><ChevronRight size={14} className="rotate-180" /> Back to accounts</button>
 
       <div className="flex flex-wrap items-start justify-between gap-4">
-        {debitCard ? (
-          <div className="w-72 sm:w-80">
-            <BankCardFace name={debitCard.name || account.name} subtitle="Debit card" last4={debitCard.account_number_last4 || account.account_number_last4} color={account.color || '#22d3ee'} />
-          </div>
-        ) : (
-          <div className="flex items-center gap-3">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl" style={{ background: `${account.color || '#22d3ee'}22`, color: account.color || '#22d3ee' }}>
-              {account.type === 'cash' ? <Wallet size={22} /> : <Landmark size={22} />}
+        <div className="flex flex-wrap items-start justify-between gap-3 sm:contents">
+          {debitCard ? (
+            <div className="w-72 sm:w-80">
+              <BankCardFace name={debitCard.name || account.name} subtitle="Debit card" last4={debitCard.account_number_last4 || account.account_number_last4} color={account.color || '#22d3ee'} />
             </div>
-            <div>
-              <div className="text-lg font-semibold text-white light:text-slate-900">{account.name}</div>
-              <div className="text-xs capitalize text-slate-500">{account.type.replace('_', ' ')}{account.bank_name ? ` · ${account.bank_name}` : ''}{account.account_number_last4 ? ` · •${account.account_number_last4}` : ''}</div>
+          ) : (
+            <div className="flex items-center gap-3">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl" style={{ background: `${account.color || '#22d3ee'}22`, color: account.color || '#22d3ee' }}>
+                {account.type === 'cash' ? <Wallet size={22} /> : <Landmark size={22} />}
+              </div>
+              <div>
+                <div className="text-lg font-semibold text-white light:text-slate-900">{account.name}</div>
+                <div className="text-xs capitalize text-slate-500">{account.type.replace('_', ' ')}{account.bank_name ? ` · ${account.bank_name}` : ''}{account.account_number_last4 ? ` · •${account.account_number_last4}` : ''}</div>
+              </div>
+            </div>
+          )}
+
+          {/* Mobile: Sync/Edit/Delete collapse into this "..." menu; eye toggle stays outside
+              it, always visible, same as every other detail view. */}
+          {/* ml-auto: for the debit-card branch above (a wide BankCardFace that doesn't fit
+              beside this cluster), this wraps onto its own line — ml-auto keeps it pinned to
+              the right edge of that line instead of the default left/start. */}
+          <div className="ml-auto flex shrink-0 items-center gap-2 sm:hidden">
+            <button onClick={onToggleMoney} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
+              {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
+            </button>
+            <div ref={moreRef} className="relative">
+              <button type="button" onClick={() => setMoreOpen((o) => !o)} className={`rounded-xl border p-2.5 transition ${moreOpen ? 'border-accent-300/40 bg-accent-400/10 text-accent-200 light:text-accent-700' : 'border-white/10 light:border-black/10 text-slate-400 light:text-slate-500 hover:bg-white/5'}`} title="More options">
+                <MoreVertical size={16} />
+              </button>
+              {moreOpen && (
+                <div className="absolute right-0 z-30 mt-2 w-52 rounded-xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-1 shadow-2xl">
+                  <button type="button" onClick={() => { setMoreOpen(false); setSyncOpen((o) => !o) }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-slate-300 light:text-slate-700 hover:bg-white/5"><RefreshCw size={14} />Sync</button>
+                  <button type="button" onClick={() => { setMoreOpen(false); onEdit(account) }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-slate-300 light:text-slate-700 hover:bg-white/5"><Pencil size={14} />Edit account</button>
+                  <button type="button" onClick={() => { setMoreOpen(false); onDelete(account) }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-rose-300/70 light:text-rose-700 hover:bg-rose-300/10"><Trash2 size={14} />Delete account</button>
+                </div>
+              )}
             </div>
           </div>
-        )}
+        </div>
+
         <div className="flex flex-wrap gap-2">
           <button onClick={() => onAddTransaction(account.id)} className="hidden items-center gap-2 rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-4 py-2.5 text-sm font-semibold text-[#07101c] lg:flex"><Plus size={15} />Add transaction</button>
-          <button onClick={() => setSyncOpen((o) => !o)} className={`flex items-center gap-1.5 rounded-xl border px-3 py-2.5 text-sm font-medium transition ${syncOpen ? 'border-accent-300/40 bg-accent-400/10 text-accent-200 light:text-accent-700' : 'border-white/10 light:border-black/10 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900'}`}><RefreshCw size={15} /><span className="hidden sm:inline">Sync</span></button>
-          <button onClick={() => onEdit(account)} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900"><Pencil size={15} /></button>
-          <button onClick={() => onDelete(account)} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-rose-300/70 light:text-rose-700 hover:bg-rose-300/10"><Trash2 size={15} /></button>
-          <button onClick={onToggleMoney} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
-            {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
-          </button>
+          {/* Desktop: unchanged, everything stays inline */}
+          <div className="hidden sm:contents">
+            <button onClick={() => setSyncOpen((o) => !o)} className={`flex items-center gap-1.5 rounded-xl border px-3 py-2.5 text-sm font-medium transition ${syncOpen ? 'border-accent-300/40 bg-accent-400/10 text-accent-200 light:text-accent-700' : 'border-white/10 light:border-black/10 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900'}`}><RefreshCw size={15} /><span className="hidden sm:inline">Sync</span></button>
+            <button onClick={() => onEdit(account)} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900"><Pencil size={15} /></button>
+            <button onClick={() => onDelete(account)} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-rose-300/70 light:text-rose-700 hover:bg-rose-300/10"><Trash2 size={15} /></button>
+            <button onClick={onToggleMoney} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
+              {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -131,10 +179,23 @@ export function AccountDetailView({ account, debitCard, transactions, categories
         </div>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      {/* Mobile: one hero card — Current balance as the headline figure, Money in/out as a
+          2-col row below it, current-month scoped — same shape as every other module's detail
+          hero (Loans, Scholarships, Lend/Borrow, ...). Desktop keeps the original 3-up
+          StatCard grid with all-time totals, unchanged. */}
+      <div className="rounded-3xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-black/[.025] glassy:glass-card p-6 sm:hidden">
+        <div className="text-xs uppercase tracking-widest text-slate-500">Current balance</div>
+        <div className="mt-1 text-[clamp(2rem,6vw,3rem)] font-semibold leading-[1.1] tracking-[-0.01em] text-white light:text-slate-900">{showMoney ? money(account.current_balance) : '••••••'}</div>
+        <div className="mt-1 text-sm text-slate-500">Opening {money(account.opening_balance)}</div>
+        <div className="mt-5 grid grid-cols-2 gap-3">
+          <HeroStatTile icon={ArrowUpRight} label="Money in" value={showMoney ? money(inflow) : '••••'} valueTone="text-emerald-300 light:text-emerald-700" sub={`This month · ${thisMonthActivity.length} txns`} />
+          <HeroStatTile icon={ArrowDownRight} label="Money out" value={showMoney ? money(outflow) : '••••'} valueTone="text-rose-300 light:text-rose-700" sub="This month" />
+        </div>
+      </div>
+      <div className="hidden gap-4 sm:grid sm:grid-cols-3">
         <StatCard label="Current balance" value={showMoney ? money(account.current_balance) : '••••'} icon={Landmark} accent="bg-accent-300/15 text-accent-200 light:text-accent-700" sub={<span>Opening {money(account.opening_balance)}</span>} />
-        <StatCard label="Money in" value={showMoney ? money(inflow) : '••••'} icon={ArrowUpRight} accent="bg-emerald-400/15 text-emerald-200 light:text-emerald-700" tone="text-emerald-300 light:text-emerald-700" sub={<span>{activity.length} total transaction{activity.length === 1 ? '' : 's'}</span>} />
-        <StatCard label="Money out" value={showMoney ? money(outflow) : '••••'} icon={ArrowDownRight} accent="bg-rose-400/15 text-rose-200 light:text-rose-700" tone="text-rose-300 light:text-rose-700" sub={<span>All time</span>} />
+        <StatCard label="Money in" value={showMoney ? money(allTimeInflow) : '••••'} icon={ArrowUpRight} accent="bg-emerald-400/15 text-emerald-200 light:text-emerald-700" tone="text-emerald-300 light:text-emerald-700" sub={<span>{activity.length} total transaction{activity.length === 1 ? '' : 's'}</span>} />
+        <StatCard label="Money out" value={showMoney ? money(allTimeOutflow) : '••••'} icon={ArrowDownRight} accent="bg-rose-400/15 text-rose-200 light:text-rose-700" tone="text-rose-300 light:text-rose-700" sub={<span>All time</span>} />
       </div>
 
       <div className="rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card p-5">
