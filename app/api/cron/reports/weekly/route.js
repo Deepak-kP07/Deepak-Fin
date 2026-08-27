@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { istNow } from '@/lib/reports'
 import { runReportCron } from '@/lib/server/services/reports'
+import { isValidCronSecret } from '@/lib/server/cronAuth'
 
 // Meaningfully more per-user work than the lightweight notifications cron (multiple table fetches
 // + report math + a synchronous Resend call per user, all in one request) — no other route in
@@ -12,10 +13,7 @@ export const maxDuration = 60
 // Vercel Cron adds the Authorization header automatically once CRON_SECRET is set as a Vercel env
 // var; x-cron-secret is the manual-curl testing path.
 async function handler(request) {
-  const auth = request.headers.get('authorization')
-  const bearer = auth?.startsWith('Bearer ') ? auth.slice(7) : null
-  const secret = request.headers.get('x-cron-secret') || bearer
-  if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
+  if (!isValidCronSecret(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

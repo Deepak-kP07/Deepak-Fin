@@ -5,6 +5,8 @@ import { cardsDueSoon } from '@/lib/creditCards'
 import { budgetInsights } from '@/lib/budgets'
 import { nextLoanDueDate } from '@/lib/amortization'
 import { generateDueRecurring } from '@/lib/server/services/recurring'
+import { money } from '@/lib/format'
+import { isValidCronSecret } from '@/lib/server/cronAuth'
 
 const DUE_SOON_DAYS = 4
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
@@ -73,7 +75,7 @@ async function checkUser(supabase, userId) {
     if (await alreadyNotified(supabase, userId, 'card_due', card.id, periodKey)) continue
     notifications.push({
       type: 'card_due', entityId: card.id, periodKey,
-      title: `${card.name} bill due soon`, body: `Due ${periodKey} — outstanding ₹${Number(card.current_outstanding).toLocaleString('en-IN')}`, url: '/?view=credit_cards',
+      title: `${card.name} bill due soon`, body: `Due ${periodKey} — outstanding ${money(card.current_outstanding)}`, url: '/?view=credit_cards',
     })
   }
 
@@ -88,7 +90,7 @@ async function checkUser(supabase, userId) {
     if (await alreadyNotified(supabase, userId, 'loan_due', loan.id, due)) continue
     notifications.push({
       type: 'loan_due', entityId: loan.id, periodKey: due,
-      title: `${loan.name} EMI due soon`, body: `Due ${due} — ₹${Number(loan.emi_amount).toLocaleString('en-IN')}`, url: '/?view=loans',
+      title: `${loan.name} EMI due soon`, body: `Due ${due} — ${money(loan.emi_amount)}`, url: '/?view=loans',
     })
   }
 
@@ -107,7 +109,7 @@ async function checkUser(supabase, userId) {
       if (await alreadyNotified(supabase, userId, 'budget_overspend', insight.line.id, periodKey)) continue
       notifications.push({
         type: 'budget_overspend', entityId: insight.line.id, periodKey,
-        title: `${insight.category?.name || 'A category'} is over budget`, body: `Spent ₹${Math.round(insight.spent).toLocaleString('en-IN')} of ₹${Math.round(insight.budgeted).toLocaleString('en-IN')} this month`, url: '/?view=budgets',
+        title: `${insight.category?.name || 'A category'} is over budget`, body: `Spent ${money(insight.spent)} of ${money(insight.budgeted)} this month`, url: '/?view=budgets',
       })
     }
   }
@@ -119,10 +121,7 @@ async function checkUser(supabase, userId) {
 // adds `Authorization: Bearer <CRON_SECRET>` itself — the x-cron-secret header is the manual-
 // testing path (curl, before this is deployed anywhere). Either is accepted.
 async function handler(request) {
-  const auth = request.headers.get('authorization')
-  const bearer = auth?.startsWith('Bearer ') ? auth.slice(7) : null
-  const secret = request.headers.get('x-cron-secret') || bearer
-  if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
+  if (!isValidCronSecret(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   if (!process.env.VAPID_PRIVATE_KEY || !process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY) {

@@ -5,7 +5,7 @@ import { X } from 'lucide-react'
 import { DateInput } from '@/components/shared/DateInput'
 import { Select } from '@/components/shared/Select'
 import { BOND_INTEREST_FREQUENCIES, OTHER_INVESTMENT_CATEGORIES, currentValueOf } from '@/lib/otherInvestments'
-import { todayISO } from '@/lib/format'
+import { todayISO, money } from '@/lib/format'
 import { BottomSheet } from '@/components/shared/BottomSheet'
 import { useIsMobile } from '@/hooks/use-mobile'
 
@@ -44,7 +44,7 @@ function OtherInvestmentFormFields({ form, setForm, isBond, preview }) {
             </Select>
           </label>
           <div className="rounded-xl border border-white/10 light:border-black/10 bg-white/[.02] light:bg-black/[.02] px-3 py-2.5 text-xs text-slate-400 light:text-slate-500 sm:col-span-2">
-            Current value: <span className="font-semibold text-white light:text-slate-900">₹{preview.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span> — straight-line accretes from purchase value to face value between purchase and maturity. Coupon payouts aren't tracked as cash here, just shown for reference.
+            Current value: <span className="font-semibold text-white light:text-slate-900">{money(preview)}</span> — straight-line accretes from purchase value to face value between purchase and maturity. Coupon payouts aren't tracked as cash here, just shown for reference.
           </div>
         </>
       ) : (
@@ -53,7 +53,7 @@ function OtherInvestmentFormFields({ form, setForm, isBond, preview }) {
             <input required type="number" step="0.1" value={form.expected_cagr_pct} onChange={(e) => setForm({ ...form, expected_cagr_pct: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
           </label>
           <div className="rounded-xl border border-white/10 light:border-black/10 bg-white/[.02] light:bg-black/[.02] px-3 py-2.5 text-xs text-slate-400 light:text-slate-500 sm:col-span-2">
-            Projected current value: <span className="font-semibold text-white light:text-slate-900">₹{preview.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span> — purchase value compounded at the CAGR above, from {form.last_known_value !== '' ? 'your last known value' : 'the purchase date'}.
+            Projected current value: <span className="font-semibold text-white light:text-slate-900">{money(preview)}</span> — purchase value compounded at the CAGR above, from {form.last_known_value !== '' ? 'your last known value' : 'the purchase date'}.
           </div>
           <label className="text-sm text-slate-300 light:text-slate-700">Last known value <span className="text-xs text-slate-500">(optional — a real revaluation)</span>
             <input type="number" step="0.01" min="0" value={form.last_known_value} onChange={(e) => setForm({ ...form, last_known_value: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" placeholder="Leave blank to project from purchase" />

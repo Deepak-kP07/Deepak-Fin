@@ -196,7 +196,15 @@ export const holdings = pgTable('holdings', {
   kiteInstrumentToken: text('kite_instrument_token'),
   assetType: text('asset_type').notNull().default('equity'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [check('holdings_source_check', sql`${t.source} in ('manual','kite','import')`), check('holdings_asset_type_check', sql`${t.assetType} in ('equity','gold')`), index('holdings_user_id_idx').on(t.userId), index('holdings_portfolio_idx').on(t.portfolioId)])
+}, (t) => [
+  check('holdings_source_check', sql`${t.source} in ('manual','kite','import')`),
+  check('holdings_asset_type_check', sql`${t.assetType} in ('equity','gold')`),
+  check('holdings_qty_check', sql`${t.qty} >= 0`),
+  check('holdings_avg_buy_price_check', sql`${t.avgBuyPrice} >= 0`),
+  check('holdings_current_price_check', sql`${t.currentPrice} >= 0`),
+  index('holdings_user_id_idx').on(t.userId),
+  index('holdings_portfolio_idx').on(t.portfolioId),
+])
 
 export const sips = pgTable('sips', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -216,7 +224,14 @@ export const sips = pgTable('sips', {
   source: text('source').notNull().default('manual'),
   lastSyncedAt: timestamp('last_synced_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [check('sips_source_check', sql`${t.source} in ('manual','kite')`), index('sips_user_id_idx').on(t.userId)])
+}, (t) => [
+  check('sips_source_check', sql`${t.source} in ('manual','kite')`),
+  check('sips_monthly_amount_check', sql`${t.monthlyAmount} >= 0`),
+  check('sips_units_held_check', sql`${t.unitsHeld} >= 0`),
+  check('sips_nav_check', sql`${t.nav} >= 0`),
+  check('sips_current_value_check', sql`${t.currentValue} >= 0`),
+  index('sips_user_id_idx').on(t.userId),
+])
 
 // For assets with no exchange/live price at all — physical gold, silver, land, and anything
 // else — where "current value" can only ever be a projection: purchase_value compounded by
@@ -248,6 +263,10 @@ export const otherInvestments = pgTable('other_investments', {
 }, (t) => [
   check('other_investments_category_check', sql`${t.category} in ('gold','silver','land','bond','other')`),
   check('other_investments_interest_frequency_check', sql`${t.interestFrequency} is null or ${t.interestFrequency} in ('annual','semi_annual','quarterly','monthly','cumulative')`),
+  check('other_investments_purchase_value_check', sql`${t.purchaseValue} >= 0`),
+  check('other_investments_last_known_value_check', sql`${t.lastKnownValue} is null or ${t.lastKnownValue} >= 0`),
+  check('other_investments_face_value_check', sql`${t.faceValue} is null or ${t.faceValue} >= 0`),
+  check('other_investments_coupon_rate_pct_check', sql`${t.couponRatePct} is null or ${t.couponRatePct} >= 0`),
   index('other_investments_user_id_idx').on(t.userId),
   index('other_investments_portfolio_idx').on(t.portfolioId),
 ])
@@ -287,7 +306,13 @@ export const loans = pgTable('loans', {
   interestSaved: numeric('interest_saved', { precision: 14, scale: 2 }).notNull().default('0'),
   emiDueDay: integer('emi_due_day'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [index('loans_user_id_idx').on(t.userId)])
+}, (t) => [
+  check('loans_principal_check', sql`${t.principal} >= 0`),
+  check('loans_interest_rate_check', sql`${t.interestRate} >= 0`),
+  check('loans_tenure_months_check', sql`${t.tenureMonths} >= 0`),
+  check('loans_emi_amount_check', sql`${t.emiAmount} >= 0`),
+  index('loans_user_id_idx').on(t.userId),
+])
 
 export const loanPayments = pgTable('loan_payments', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -321,7 +346,7 @@ export const bucketList = pgTable('bucket_list', {
   // able to look back at why you wanted it, not just how long you've waited.
   reasons: text('reasons').array().notNull().default(sql`ARRAY[]::text[]`),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [index('bucket_user_idx').on(t.userId)])
+}, (t) => [check('bucket_list_estimated_cost_check', sql`${t.estimatedCost} is null or ${t.estimatedCost} >= 0`), index('bucket_user_idx').on(t.userId)])
 
 export const profiles = pgTable('profiles', {
   id: uuid('id').primaryKey().references(() => authUsers.id, { onDelete: 'cascade' }),
@@ -459,7 +484,11 @@ export const creditCards = pgTable('credit_cards', {
   currentOutstanding: numeric('current_outstanding', { precision: 14, scale: 2 }).notNull().default('0'),
   color: text('color'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [index('credit_cards_user_idx').on(t.userId)])
+}, (t) => [
+  check('credit_cards_credit_limit_check', sql`${t.creditLimit} >= 0`),
+  check('credit_cards_current_outstanding_check', sql`${t.currentOutstanding} >= 0`),
+  index('credit_cards_user_idx').on(t.userId),
+])
 
 export const creditCardTransactions = pgTable('credit_card_transactions', {
   id: uuid('id').primaryKey().defaultRandom(),

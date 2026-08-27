@@ -344,7 +344,9 @@ async function handleRoute(request, { params }) {
       return applyCookies(new NextResponse(html, { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } }), cookiesToSet)
     }
     if (route === '/kite/postback' && (method === 'POST' || method === 'GET')) {
-      try { const body = method === 'POST' ? await request.json().catch(() => null) : null; console.log('[kite/postback]', body) } catch {}
+      // Unauthenticated by nature (Zerodha calls this, not a logged-in user) — nothing is
+      // persisted, so there's nothing to validate. Previously logged the raw body to server
+      // logs on every hit; dropped since that's unauthenticated-input logging of order data.
       return cors(NextResponse.json({ ok: true }))
     }
 

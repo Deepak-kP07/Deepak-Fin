@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import { DateInput } from '@/components/shared/DateInput'
 import { Select } from '@/components/shared/Select'
-import { todayISO } from '@/lib/format'
+import { todayISO, money2 } from '@/lib/format'
 import { BottomSheet } from '@/components/shared/BottomSheet'
 import { useIsMobile } from '@/hooks/use-mobile'
 
@@ -42,7 +42,7 @@ function SipFormFields({ form, setForm, portfolios, currentValue }) {
           {portfolios.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </Select>
       </label>
-      <div className="rounded-xl border border-white/10 light:border-black/10 bg-white/[.02] light:bg-black/[.02] px-3 py-2.5 text-xs text-slate-400 light:text-slate-500">Current value (units × NAV): <span className="font-semibold text-white light:text-slate-900">₹{currentValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+      <div className="rounded-xl border border-white/10 light:border-black/10 bg-white/[.02] light:bg-black/[.02] px-3 py-2.5 text-xs text-slate-400 light:text-slate-500">Current value (units × NAV): <span className="font-semibold text-white light:text-slate-900">{money2(currentValue)}</span></div>
     </div>
   )
 }

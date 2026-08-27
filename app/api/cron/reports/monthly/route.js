@@ -2,16 +2,14 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { istNow } from '@/lib/reports'
 import { runReportCron } from '@/lib/server/services/reports'
+import { isValidCronSecret } from '@/lib/server/cronAuth'
 
 // See app/api/cron/reports/weekly/route.js for why this is set explicitly.
 export const maxDuration = 60
 
 // Same auth as app/api/cron/notifications and the weekly report route — see that file's comment.
 async function handler(request) {
-  const auth = request.headers.get('authorization')
-  const bearer = auth?.startsWith('Bearer ') ? auth.slice(7) : null
-  const secret = request.headers.get('x-cron-secret') || bearer
-  if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
+  if (!isValidCronSecret(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
