@@ -156,31 +156,39 @@ export function SpotlightTour({ steps, open, context, onSkip, onFinish }) {
         transition={{ duration: 0.35, ease: 'easeInOut' }}
       />
 
-      <AnimatePresence mode="wait">
-        <motion.div
-          ref={setTooltipNode}
-          key={`tooltip-${stepIndex}`}
-          className="fixed z-[61] w-[min(320px,calc(100vw-32px))] rounded-2xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-5 shadow-2xl"
-          style={tooltipPos ? { top: tooltipPos.top, left: tooltipPos.left } : { top: '50%', left: '50%', transform: 'translate(-50%,-50%)' }}
-          initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.18 }}
-        >
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-center gap-2">
-              {Icon && <Icon size={16} className="shrink-0 text-accent-300 light:text-accent-700" />}
-              <div className="text-sm font-semibold text-white light:text-slate-900">{step.title}</div>
+      {/* Position lives on this plain wrapper, not the animated motion.div below — framer-motion
+          takes full ownership of an animated element's `transform` (it's how `y` gets applied),
+          so a manual `transform: translate(-50%,-50%)` on the same node gets silently overwritten,
+          collapsing the "no target" centered fallback to the screen's top-left corner. */}
+      <div
+        className="fixed z-[61] w-[min(320px,calc(100vw-32px))]"
+        style={tooltipPos ? { top: tooltipPos.top, left: tooltipPos.left } : { top: '50%', left: '50%', transform: 'translate(-50%,-50%)' }}
+      >
+        <AnimatePresence mode="wait">
+          <motion.div
+            ref={setTooltipNode}
+            key={`tooltip-${stepIndex}`}
+            className="rounded-2xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-5 shadow-2xl"
+            initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.18 }}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-2">
+                {Icon && <Icon size={16} className="shrink-0 text-accent-300 light:text-accent-700" />}
+                <div className="text-sm font-semibold text-white light:text-slate-900">{step.title}</div>
+              </div>
+              <button onClick={onSkip} className="shrink-0 rounded-lg p-1 text-slate-500 transition hover:bg-white/10 hover:text-white" title="Skip tour"><X size={14} /></button>
             </div>
-            <button onClick={onSkip} className="shrink-0 rounded-lg p-1 text-slate-500 transition hover:bg-white/10 hover:text-white" title="Skip tour"><X size={14} /></button>
-          </div>
-          <p className="mt-2 text-xs leading-5 text-slate-400 light:text-slate-600">{step.description}</p>
-          <div className="mt-4 flex items-center justify-between">
-            <span className="text-[11px] text-slate-500">{stepIndex + 1} / {steps.length}</span>
-            <div className="flex items-center gap-2">
-              {stepIndex > 0 && <button onClick={goBack} className="rounded-lg px-3 py-1.5 text-xs font-medium text-slate-400 light:text-slate-500 hover:bg-white/5">Back</button>}
-              <button onClick={goNext} className="rounded-lg bg-gradient-to-r from-accent-300 to-accent-600 px-3.5 py-1.5 text-xs font-semibold text-[#07101c]">{isLast ? 'Finish' : 'Next'}</button>
+            <p className="mt-2 text-xs leading-5 text-slate-400 light:text-slate-600">{step.description}</p>
+            <div className="mt-4 flex items-center justify-between">
+              <span className="text-[11px] text-slate-500">{stepIndex + 1} / {steps.length}</span>
+              <div className="flex items-center gap-2">
+                {stepIndex > 0 && <button onClick={goBack} className="rounded-lg px-3 py-1.5 text-xs font-medium text-slate-400 light:text-slate-500 hover:bg-white/5">Back</button>}
+                <button onClick={goNext} className="rounded-lg bg-gradient-to-r from-accent-300 to-accent-600 px-3.5 py-1.5 text-xs font-semibold text-[#07101c]">{isLast ? 'Finish' : 'Next'}</button>
+              </div>
             </div>
-          </div>
-        </motion.div>
-      </AnimatePresence>
+          </motion.div>
+        </AnimatePresence>
+      </div>
     </div>
   )
 }
