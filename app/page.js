@@ -2571,15 +2571,18 @@ function Shell({ user, onLogout }) {
     const updated = await response.json()
     setData((d) => ({ ...d, categories: d.categories.map((cat) => (cat.id === updated.id ? updated : cat)) }))
   }
-  const reorderAccount = async (a, b) => {
-    if (!b) return
-    const [r1, r2] = await Promise.all([
-      fetch(`/api/finance/accounts/${a.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order_index: b.order_index ?? 0 }) }),
-      fetch(`/api/finance/accounts/${b.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order_index: a.order_index ?? 0 }) }),
-    ])
-    if (!r1.ok || !r2.ok) { toast.push('Reorder failed', 'error'); return }
-    const [u1, u2] = await Promise.all([r1.json(), r2.json()])
-    setData((d) => ({ ...d, accounts: d.accounts.map((acc) => (acc.id === u1.id ? u1 : acc.id === u2.id ? u2 : acc)) }))
+  // Drag-and-drop can move an account more than one position in a single drop, unlike the old
+  // arrow buttons (always an adjacent swap) — so this PATCHes every account whose index actually
+  // shifted, not just two, still in parallel and merged straight into local state.
+  const reorderAccounts = async (nextOrder) => {
+    const changed = nextOrder.map((a, i) => ({ a, i })).filter(({ a, i }) => (a.order_index ?? 0) !== i)
+    if (changed.length === 0) return
+    const results = await Promise.all(changed.map(({ a, i }) =>
+      fetch(`/api/finance/accounts/${a.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order_index: i }) }),
+    ))
+    if (results.some((r) => !r.ok)) { toast.push('Reorder failed', 'error'); return }
+    const updated = await Promise.all(results.map((r) => r.json()))
+    setData((d) => ({ ...d, accounts: d.accounts.map((acc) => updated.find((u) => u.id === acc.id) || acc) }))
   }
   const openSettings = (section) => { setSettingsSection(section); setView('profile') }
 
@@ -2764,7 +2767,7 @@ function Shell({ user, onLogout }) {
                   accentColor={data.profile?.accent_color} onAccentChange={onAccentChange}
                   onAddCategory={(defaultType) => openCatForm(null, defaultType)} onEditCategory={openCatForm} onDeleteCategory={deleteCategory}
                   onReorderCategory={reorderCategory} onToggleCategoryModule={toggleCategoryModule}
-                  onReorderAccount={reorderAccount}
+                  onReorderAccounts={reorderAccounts}
                   onAddVaultItem={(type) => openVaultForm(null, type)} onEditVaultItem={openVaultForm} onDeleteVaultItem={deleteVaultItem}
                   onAddRule={addRule} onToggleRule={toggleRule} onDeleteRule={deleteRule}
                   onLogout={onLogout}
