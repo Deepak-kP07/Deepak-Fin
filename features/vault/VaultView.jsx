@@ -32,12 +32,17 @@ export function VaultView({ data, onAdd, onEdit, onDelete }) {
         ))}
       </div>
 
+      {/* Same auto-fit sizing as the Credit Cards module's grid (CreditCardsView.jsx) — a
+          column count fixed at every width (sm:grid-cols-2/xl:grid-cols-3) could squeeze each
+          card below CreditCardFlip's 300px floor on an in-between desktop width, cramping the
+          revealed card number onto more than one line. This never goes below 300px; it just
+          adds columns once there's room for another. */}
       {rows.length === 0 ? (
         <div className="rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card">
           <EmptyState icon={KeyRound} title="Nothing here yet" message="Store this account or card's details securely — nothing is shown until you tap to reveal it." cta="Add to vault" onCta={() => onAdd(tab)} />
         </div>
       ) : (
-        <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid justify-center gap-6 grid-cols-[repeat(auto-fit,minmax(300px,340px))] lg:justify-start">
           {rows.map((item) => (
             <VaultCardFlip key={item.id} item={item} onEdit={onEdit} onDelete={onDelete} />
           ))}

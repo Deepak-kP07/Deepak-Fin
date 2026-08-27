@@ -145,7 +145,7 @@ export function VaultCardFlip({ item, onEdit, onDelete }) {
           )}
         </div>
 
-        <div className="absolute inset-0 flex flex-col justify-between rounded-2xl border border-white/10 bg-[#141a28] p-3.5 shadow-lg" style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}>
+        <div className="absolute inset-0 flex flex-col justify-between overflow-hidden rounded-2xl border border-white/10 bg-[#141a28] p-3.5 shadow-lg" style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}>
           <div className="min-h-0 flex-1 overflow-y-auto">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
@@ -162,8 +162,13 @@ export function VaultCardFlip({ item, onEdit, onDelete }) {
               </div>
             </div>
 
+            {/* A real card's back has a magnetic stripe right below the header — this is what
+                was missing, leaving a big blank gap before the reveal button and making the
+                whole face read as a plain settings panel rather than a card. */}
+            <div className="-mx-3.5 mt-3 h-7 bg-black/70" />
+
             {!secrets ? (
-              <div className="mt-4 flex flex-col items-center gap-2 py-4">
+              <div className="mt-4 flex flex-col items-center gap-2 py-2">
                 <button type="button" onClick={stop(reveal)} disabled={revealing} className="flex items-center gap-1.5 rounded-lg bg-white/[.06] px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-white/[.1] disabled:opacity-50">
                   <Eye size={13} />{revealing ? 'Decrypting…' : 'Tap to reveal'}
                 </button>

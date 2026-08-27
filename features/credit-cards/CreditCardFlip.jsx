@@ -31,7 +31,7 @@ export function CreditCardFlip({ card, showMoney, onSpend, onPay, onViewDetails 
         </div>
 
         <div
-          className="absolute inset-0 flex flex-col justify-between rounded-2xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-3.5 shadow-lg"
+          className="absolute inset-0 flex flex-col justify-between overflow-hidden rounded-2xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-3.5 shadow-lg"
           style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
         >
           <div>
@@ -42,6 +42,9 @@ export function CreditCardFlip({ card, showMoney, onSpend, onPay, onViewDetails 
               </div>
               <button type="button" onClick={stop(() => setFlipped(false))} title="Flip back" className="shrink-0 rounded-lg p-1 text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900"><RotateCcw size={13} /></button>
             </div>
+            {/* A real card's back has a magnetic stripe right below the header — same touch
+                added to the Vault card back for the same reason. */}
+            <div className="-mx-3.5 mt-2 h-6 bg-black/70" />
             <div className="mt-2 flex items-baseline justify-between">
               <div>
                 <div className="text-[11px] text-slate-500">Outstanding</div>
