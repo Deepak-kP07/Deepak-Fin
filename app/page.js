@@ -764,22 +764,54 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
   // actually more content below — a short balance list's last row should stay fully opaque.
   const balancesRef = useRef(null)
   const balancesListInnerRef = useRef(null)
+  const txHeaderRef = useRef(null)
+  const leftColRef = useRef(null)
+  const rightColRef = useRef(null)
   const [balancesOverflow, setBalancesOverflow] = useState(false)
-  // Recent Transactions' ticker box targets this height (floor 352px, ~6 rows) so the two cards
-  // share a common bottom edge instead of whichever one has less real content leaving a gap next
-  // to the other. Measured from `balancesListInnerRef` — an unconstrained, non-overflow-clipped
-  // wrapper around just the balance rows — rather than from `balancesRef` (the scrollable box
-  // itself): that box already has a height applied (natural or previously-stretched), so reading
-  // its own size back would just echo whatever it was last given instead of Balances' true
-  // natural content height, and this value would never shrink back down once something else had
-  // stretched it. The inner wrapper has no height of its own to echo, so it always reports the
-  // real thing.
+  // Recent Transactions' ticker box targets a height that lands its card's bottom edge exactly on
+  // Balances' bottom edge (floor 352px, ~6 rows, for whichever direction leaves it short).
+  //
+  // Two mechanisms cooperate here, and both are needed:
+  //  1. This JS measurement sets the ticker's own pixel height so Transactions' card, from ITS
+  //     OWN top, reaches Balances' true natural bottom — computed as `balancesListInnerRef`'s own
+  //     top plus its own height, minus `txHeaderRef`'s bottom. This accounts for the two columns
+  //     starting at different heights (the cash-flow chart and Money rules are rarely the same
+  //     height) instead of assuming they match.
+  //  2. `lg:flex-1` on both outer cards (CSS Grid's default stretch) is the fallback for when
+  //     Balances' own natural content is shorter than Transactions' floor (very few
+  //     accounts/cards/investments) — grid takes the taller natural column as the row height, and
+  //     Balances' flex-1 grows it up to match, since #1 alone only ever shrinks Transactions
+  //     toward Balances, never grows Balances itself.
+  //
+  // The critical detail in #1: it reads `balancesListInnerRef` (the unconstrained inner wrapper
+  // around just the balance rows), never the outer Balances CARD's own rect. The outer card is
+  // exactly what #2 stretches — measuring ITS bottom would mean reading a value that this same
+  // effect had a hand in producing on the previous cycle, and feeding it back in as if it were
+  // independent input. That shipped once: any sub-pixel rounding noise had nothing to damp it, so
+  // it compounded every ResizeObserver tick — a slow, silent 1px-per-cycle growth with no error or
+  // warning, visible only as the page continuously getting taller the longer it sat open. The
+  // inner list wrapper has no height of its own to inherit from a stretch decision made downstream
+  // of it, so it always reports Balances' real, stable content size.
+  //
+  // A ResizeObserver on both column wrappers (not a one-shot effect keyed on item count) keeps
+  // this correct continuously — a web font swap, an icon loading late, or Money rules/Balances
+  // changing size for any reason all re-trigger it, not just a change in how many rows there are.
   const [recentTxMaxHeight, setRecentTxMaxHeight] = useState(352)
   useLayoutEffect(() => {
-    const el = balancesRef.current
-    if (!el) { setBalancesOverflow(false); return }
-    setBalancesOverflow(el.scrollHeight > el.clientHeight + 2)
-    setRecentTxMaxHeight(Math.max(352, balancesListInnerRef.current?.offsetHeight || 0))
+    const scrollEl = balancesRef.current
+    const update = () => {
+      if (scrollEl) setBalancesOverflow(scrollEl.scrollHeight > scrollEl.clientHeight + 2)
+      const listEl = balancesListInnerRef.current
+      const txHeaderBottom = txHeaderRef.current?.getBoundingClientRect().bottom
+      if (!listEl || txHeaderBottom == null) return
+      const balNaturalBottom = listEl.getBoundingClientRect().top + listEl.offsetHeight
+      setRecentTxMaxHeight(Math.max(352, balNaturalBottom - txHeaderBottom))
+    }
+    update()
+    const observer = new ResizeObserver(update)
+    if (leftColRef.current) observer.observe(leftColRef.current)
+    if (rightColRef.current) observer.observe(rightColRef.current)
+    return () => observer.disconnect()
   }, [balanceItems.length])
 
   if (showNetWorthDetail) {
@@ -1114,14 +1146,14 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
       )}
 
       {/*
-        Two independent flex columns for desktop (each sizes its own height from its own content —
-        a shared CSS Grid row here would force the shorter column's row to stretch to match the
-        taller one, leaving a dead gap). Mobile collapses to one column via plain stacking; within
-        the right column, Balances is placed before Money rules in the DOM so mobile shows Balances
-        first, then `lg:order-first` on Money rules pulls it back to the top for desktop only.
+        Both columns still use the grid's default stretch (`lg:flex-1` on the last card in each) —
+        see the long comment on `recentTxMaxHeight` above for why that no longer fights the JS
+        height computation the way it used to. Mobile collapses to one column via plain stacking;
+        within the right column, Balances is placed before Money rules in the DOM so mobile shows
+        Balances first, then `lg:order-first` on Money rules pulls it back to the top for desktop.
       */}
       <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[1.4fr_1fr]">
-        <div className="flex min-h-0 flex-col gap-3">
+        <div ref={leftColRef} className="flex min-h-0 flex-col gap-3">
           {widgets.cashflow_chart.enabled && (
             <div className="shrink-0 rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-3.5">
               <div className="mb-1 flex items-center justify-between">
@@ -1193,17 +1225,11 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
           {/* Desktop-only — mobile has its own bottom-nav "Ledger" tab for browsing transactions,
               so this doesn't need to also live on the dashboard there. */}
           {widgets.recent_transactions.enabled && (
-            // `lg:flex-1` — an account with few balance items made this the row's reference height
-            // (per the old comment here), but an account with MANY balance items flips that: the
-            // Balances column (right) grows past this card's natural header+ticker height, and the
-            // grid still stretches this column to match, so the extra space landed below this
-            // card's border instead of inside it — a bare gap between two differently-tall cards.
-            // `flex-1` grows this card's own background/border down to that same stretched height
-            // instead, so any leftover space reads as part of this card, not a gap next to it. The
-            // ticker itself (`max-h-[352px]`, see TransactionTicker) still caps at ~6 rows and
-            // doesn't stretch — only the card around it grows to reach the common baseline.
+            // The ticker's own height (`recentTxMaxHeight`) is computed to match Balances' actual
+            // bottom edge — `lg:flex-1` here is just the shared-stretch fallback (see the comment
+            // on `recentTxMaxHeight` above), not the primary mechanism.
             <div className="hidden rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card lg:flex lg:flex-col lg:flex-1">
-              <div className="flex shrink-0 items-center justify-between px-3.5 py-2.5">
+              <div ref={txHeaderRef} className="flex shrink-0 items-center justify-between px-3.5 py-2.5">
                 <div>
                   <h2 className="text-sm font-semibold text-white light:text-slate-900">Recent transactions</h2>
                   <div className="text-xs text-slate-400 light:text-slate-500">{thisMonth?.label || 'This month'}'s activity</div>
@@ -1219,16 +1245,12 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
           )}
         </div>
 
-        <div className="flex min-h-0 flex-col gap-3">
+        <div ref={rightColRef} className="flex min-h-0 flex-col gap-3">
           {widgets.balances_panel.enabled && (
             // Mobile: no height cap — it grows to show every account (no other bottom-nav view
-            // shows balances there). Desktop: `lg:flex-1` — Recent Transactions (left column,
-            // above) is now a natural-height card, not flex-1, so its own height (header + up to
-            // ~6 rows) is what the grid stretches this (right) column to match. This card fills
-            // whatever's left in that stretched height after Money rules, so it shrinks as Money
-            // rules grows and grows (up to Recent Transactions' height) as Money rules shrinks —
-            // always landing on the same bottom edge, with its own list already scrollable
-            // (min-h-[160px] floor + overflow-y-auto below) for whatever doesn't fit.
+            // shows balances there). Desktop: `lg:flex-1` only kicks in when this card's own
+            // natural content is shorter than Transactions' floor (very few balance items) — see
+            // the comment on `recentTxMaxHeight` above.
             <div className="flex min-h-[160px] min-w-0 flex-col rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-3.5 lg:flex-1">
               <div className="mb-2 flex shrink-0 items-center justify-between">
                 <div>
