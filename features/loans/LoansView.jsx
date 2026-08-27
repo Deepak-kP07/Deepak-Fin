@@ -1,16 +1,17 @@
 'use client'
 
-import { useState } from 'react'
-import { Landmark, Plus } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Eye, EyeOff, Landmark, Plus } from 'lucide-react'
 import { liveOutstanding, money } from '@/lib/format'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { HeroStatTile } from '@/components/shared/HeroStatTile'
 import { LoanDetailView } from '@/features/loans/LoanDetailView'
 
-export function LoansView({ data, onAdd, onEdit, onDelete, onPay, onDeletePayment, onSync, showMoney, onToggleMoney }) {
+export function LoansView({ data, onAdd, onEdit, onDelete, onPay, onDeletePayment, onSync, showMoney, onToggleMoney, onDetailChange }) {
   const { loans, loan_payments, accounts } = data
   const [selectedLoanId, setSelectedLoanId] = useState(null)
   const selectedLoan = loans.find((l) => l.id === selectedLoanId)
+  useEffect(() => { onDetailChange?.(selectedLoanId) }, [selectedLoanId])
 
   if (selectedLoan) {
     return (
@@ -43,7 +44,10 @@ export function LoansView({ data, onAdd, onEdit, onDelete, onPay, onDeletePaymen
           <h1 className="text-3xl font-semibold tracking-tight text-white light:text-slate-900">Loans</h1>
         </div>
         <div className="flex justify-end gap-2">
-          <button onClick={onAdd} className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-4 py-2.5 text-sm font-semibold text-[#07101c]"><Plus size={15} /><span className="sm:hidden">Add</span><span className="hidden sm:inline">Add loan</span></button>
+          <button onClick={onAdd} className="hidden items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-4 py-2.5 text-sm font-semibold text-[#07101c] lg:flex"><Plus size={15} /><span className="sm:hidden">Add</span><span className="hidden sm:inline">Add loan</span></button>
+          <button onClick={onToggleMoney} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
+            {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
+          </button>
         </div>
       </div>
 

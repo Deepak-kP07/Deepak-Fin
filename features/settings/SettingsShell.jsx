@@ -55,9 +55,9 @@ export function SettingsShell({ activeSection, onSectionChange, onLogout, ...res
           onClick={() => setMenuOpen(true)}
           className="flex w-full items-center gap-2.5 rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3.5 py-3 text-sm font-medium text-white light:text-slate-900 lg:hidden"
         >
+          <Menu size={16} className="text-slate-400 light:text-slate-500" />
           <active.icon size={16} className="text-accent-300 light:text-accent-700" />
           <span className="flex-1 text-left">{active.label}</span>
-          <Menu size={16} className="text-slate-400 light:text-slate-500" />
         </button>
 
         <div className="hidden w-48 shrink-0 flex-col gap-1.5 lg:flex">

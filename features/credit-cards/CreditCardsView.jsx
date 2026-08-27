@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { CreditCard, Landmark, Plus, Target } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { CreditCard, Eye, EyeOff, Landmark, Plus, Target } from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { HeroStatTile } from '@/components/shared/HeroStatTile'
 import { utilisationSeverity } from '@/lib/creditCards'
@@ -10,10 +10,11 @@ import { money } from '@/lib/format'
 import { CreditCardFlip } from '@/features/credit-cards/CreditCardFlip'
 import { CreditCardDetailView } from '@/features/credit-cards/CreditCardDetailView'
 
-export function CreditCardsView({ data, onAdd, onEdit, onDelete, onSpend, onPay, onDeleteSpend, onDeleteTx, showMoney, onToggleMoney }) {
+export function CreditCardsView({ data, onAdd, onEdit, onDelete, onSpend, onPay, onDeleteSpend, onDeleteTx, showMoney, onToggleMoney, onDetailChange }) {
   const { credit_cards, credit_card_transactions, categories, transactions } = data
   const [selectedCardId, setSelectedCardId] = useState(null)
   const selectedCard = credit_cards.find((c) => c.id === selectedCardId)
+  useEffect(() => { onDetailChange?.(selectedCardId) }, [selectedCardId])
 
   if (selectedCard) {
     return (
@@ -59,7 +60,10 @@ export function CreditCardsView({ data, onAdd, onEdit, onDelete, onSpend, onPay,
           <h1 className="text-3xl font-semibold tracking-tight text-white light:text-slate-900">Credit cards</h1>
         </div>
         <div className="flex justify-end gap-2">
-          <button onClick={onAdd} className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-4 py-2.5 text-sm font-semibold text-[#07101c]"><Plus size={15} /><span className="sm:hidden">Add</span><span className="hidden sm:inline">Add card</span></button>
+          <button onClick={onAdd} className="hidden items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-4 py-2.5 text-sm font-semibold text-[#07101c] lg:flex"><Plus size={15} /><span className="sm:hidden">Add</span><span className="hidden sm:inline">Add card</span></button>
+          <button onClick={onToggleMoney} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
+            {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
+          </button>
         </div>
       </div>
 
@@ -91,7 +95,15 @@ export function CreditCardsView({ data, onAdd, onEdit, onDelete, onSpend, onPay,
                   aria-label={cardMix.length === 1 ? `${cardMix[0].name}: ${cardMix[0].util}% utilised` : `Outstanding by card: ${cardMix.map((c) => `${c.name} ${((c.value / cardMixTotal) * 100).toFixed(1)}%`).join(', ')}`}
                   className="mt-1.5 flex h-2.5 gap-px overflow-hidden rounded-full border border-white/10 light:border-black/10 bg-white/[.12] light:bg-black/[.09]"
                 >
-                  {cardMix.map((c) => <div key={c.id} className="ring-1 ring-inset ring-white/25 light:ring-black/20" style={{ width: `${cardMix.length === 1 ? c.util : (c.value / cardMixTotal) * 100}%`, background: c.color }} />)}
+                  {cardMix.length === 1 ? (
+                    // Single card: same flat severity color the dashboard's own Liabilities bar
+                    // uses (bg-rose-400 etc, no ring) — the card's arbitrary decorative color and
+                    // the ring meant to keep that visible against a near-black/near-white swatch
+                    // only apply once there's more than one color sharing the track below.
+                    <div className={overallSeverity.bar} style={{ width: `${cardMix[0].util}%` }} />
+                  ) : (
+                    cardMix.map((c) => <div key={c.id} className="ring-1 ring-inset ring-white/25 light:ring-black/20" style={{ width: `${(c.value / cardMixTotal) * 100}%`, background: c.color }} />)
+                  )}
                 </div>
                 <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-400 light:text-slate-500">
                   {cardMix.map((c) => (

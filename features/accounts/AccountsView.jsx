@@ -1,14 +1,14 @@
 'use client'
 
-import { useState } from 'react'
-import { Landmark, Pencil, Plus, Wallet } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Eye, EyeOff, Landmark, Pencil, Plus, Wallet } from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { HeroStatTile } from '@/components/shared/HeroStatTile'
 import { StatCard } from '@/components/shared/StatCard'
 import { money } from '@/lib/format'
 import { AccountDetailView } from '@/features/accounts/AccountDetailView'
 
-export function AccountsView({ data, onAdd, onEdit, onDelete, onDeleteTx, onDeleteTxBulk, onAddTransaction, onSyncBalance, showMoney, onToggleMoney }) {
+export function AccountsView({ data, onAdd, onEdit, onDelete, onDeleteTx, onDeleteTxBulk, onAddTransaction, onSyncBalance, showMoney, onToggleMoney, onDetailChange }) {
   const { accounts, transactions, categories } = data
   // Debit cards aren't a separate balance — they draw from their linked bank account, so they
   // never get their own tile here; the account they're linked to is where their card face shows.
@@ -16,6 +16,7 @@ export function AccountsView({ data, onAdd, onEdit, onDelete, onDeleteTx, onDele
   const debitCardFor = (accountId) => accounts.find((d) => d.type === 'debit_card' && d.linked_account_id === accountId)
   const [selectedAccountId, setSelectedAccountId] = useState(null)
   const selectedAccount = visibleAccounts.find((a) => a.id === selectedAccountId)
+  useEffect(() => { onDetailChange?.(selectedAccountId) }, [selectedAccountId])
 
   if (selectedAccount) {
     return (
@@ -55,7 +56,10 @@ export function AccountsView({ data, onAdd, onEdit, onDelete, onDeleteTx, onDele
           <h1 className="text-3xl font-semibold tracking-tight text-white light:text-slate-900">Accounts</h1>
         </div>
         <div className="flex justify-end gap-2">
-          <button onClick={onAdd} className="flex items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-4 py-2.5 text-sm font-semibold text-[#07101c]"><Plus size={15} /><span className="sm:hidden">Add</span><span className="hidden sm:inline">Add account</span></button>
+          <button onClick={onAdd} className="hidden items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-4 py-2.5 text-sm font-semibold text-[#07101c] lg:flex"><Plus size={15} /><span className="sm:hidden">Add</span><span className="hidden sm:inline">Add account</span></button>
+          <button onClick={onToggleMoney} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
+            {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
+          </button>
         </div>
       </div>
 

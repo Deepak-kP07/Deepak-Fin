@@ -1,14 +1,15 @@
 'use client'
 
-import { PiggyBank, Sparkles, Tag, TrendingDown, TrendingUp } from 'lucide-react'
+import { Eye, EyeOff, PiggyBank, Sparkles, Tag, TrendingDown, TrendingUp } from 'lucide-react'
 import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
 import { StatCard } from '@/components/shared/StatCard'
 import { HeroStatTile } from '@/components/shared/HeroStatTile'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { money } from '@/lib/format'
 
-export function InsightsView({ data }) {
+export function InsightsView({ data, showMoney, onToggleMoney }) {
   const { transactions, categories } = data
+  const fmt = (v) => (showMoney ? money(v) : '••••')
   const now = new Date()
   const monthKey = `${now.getFullYear()}-${now.getMonth()}`
   const monthTx = transactions.filter((t) => {
@@ -37,34 +38,39 @@ export function InsightsView({ data }) {
     else if (rate >= 0) insights.push({ tone: 'warn', text: `Only ${rate}% saved so far this month. Try to trim one variable expense category.` })
     else insights.push({ tone: 'warn', text: `You've spent more than you earned this month. Review your top category below.` })
   }
-  if (topCats[0]) insights.push({ tone: 'info', text: `Biggest expense category: ${topCats[0].name} at ${money(topCats[0].value)}.` })
+  if (topCats[0]) insights.push({ tone: 'info', text: `Biggest expense category: ${topCats[0].name} at ${fmt(topCats[0].value)}.` })
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
   const daysPassed = now.getDate()
-  if (expense > 0) insights.push({ tone: 'info', text: `Daily burn: ${money(Math.round(expense / daysPassed))} · projected month ${money(Math.round((expense / daysPassed) * daysInMonth))}.` })
+  if (expense > 0) insights.push({ tone: 'info', text: `Daily burn: ${fmt(Math.round(expense / daysPassed))} · projected month ${fmt(Math.round((expense / daysPassed) * daysInMonth))}.` })
 
   return (
     <div className="space-y-6">
-      <div>
-        <div className="mb-2 text-xs uppercase tracking-widest text-accent-200/70 light:text-accent-700">Smart spending</div>
-        <h1 className="text-3xl font-semibold tracking-tight text-white light:text-slate-900">Insights · {now.toLocaleString('en-IN', { month: 'long' })}</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <div className="mb-2 text-xs uppercase tracking-widest text-accent-200/70 light:text-accent-700">Smart spending</div>
+          <h1 className="text-3xl font-semibold tracking-tight text-white light:text-slate-900">Insights · {now.toLocaleString('en-IN', { month: 'long' })}</h1>
+        </div>
+        <button onClick={onToggleMoney} className="self-end rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
+          {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
+        </button>
       </div>
 
       <div className="rounded-3xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-black/[.025] glassy:glass-card p-6">
         <div className="text-xs uppercase tracking-widest text-slate-500">Savings</div>
-        <div className={`mt-1 text-[clamp(2rem,6vw,3rem)] font-semibold leading-[1.1] tracking-[-0.01em] ${rate >= 20 ? 'text-emerald-300 light:text-emerald-700' : 'text-amber-300 light:text-amber-700'}`}>{money(savings)}</div>
+        <div className={`mt-1 text-[clamp(2rem,6vw,3rem)] font-semibold leading-[1.1] tracking-[-0.01em] ${rate >= 20 ? 'text-emerald-300 light:text-emerald-700' : 'text-amber-300 light:text-amber-700'}`}>{fmt(savings)}</div>
         <div className={`mt-1 text-sm ${rate >= 20 ? 'text-emerald-300 light:text-emerald-700' : 'text-amber-300 light:text-amber-700'}`}>{rate}% of income</div>
         <div className="mt-5 grid grid-cols-2 gap-3">
           <HeroStatTile
             icon={TrendingUp}
             label="Income this month"
-            value={money(income)}
+            value={fmt(income)}
             valueTone="text-emerald-300 light:text-emerald-700"
             sub={`${monthTx.filter((t) => t.type === 'income').length} entries`}
           />
           <HeroStatTile
             icon={TrendingDown}
             label="Expenses this month"
-            value={money(expense)}
+            value={fmt(expense)}
             valueTone="text-rose-300 light:text-rose-700"
             sub={`${monthTx.filter((t) => t.type === 'expense').length} entries`}
           />
@@ -83,7 +89,7 @@ export function InsightsView({ data }) {
                   <Pie data={topCats} dataKey="value" nameKey="name" innerRadius={55} outerRadius={95} stroke="none">
                     {topCats.map((c, i) => <Cell key={i} fill={c.color} />)}
                   </Pie>
-                  <Tooltip contentStyle={{ background: '#0f1420', border: '1px solid #ffffff22', borderRadius: 12, color: '#fff' }} formatter={(v) => money(v)} />
+                  <Tooltip contentStyle={{ background: '#0f1420', border: '1px solid #ffffff22', borderRadius: 12, color: '#fff' }} formatter={(v) => fmt(v)} />
                   <Legend iconType="circle" wrapperStyle={{ color: '#94a3b8', fontSize: 12 }} />
                 </PieChart>
               </ResponsiveContainer>
@@ -113,7 +119,7 @@ export function InsightsView({ data }) {
               return (
                 <div key={c.name}>
                   <div className="flex items-center justify-between text-xs text-slate-400 light:text-slate-500">
-                    <span>{c.name}</span><span className="text-white light:text-slate-900">{money(c.value)} · {pct}%</span>
+                    <span>{c.name}</span><span className="text-white light:text-slate-900">{fmt(c.value)} · {pct}%</span>
                   </div>
                   <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white/5">
                     <div className="h-full rounded-full ring-1 ring-inset ring-white/15 light:ring-black/10" style={{ width: `${pct}%`, background: c.color }} />

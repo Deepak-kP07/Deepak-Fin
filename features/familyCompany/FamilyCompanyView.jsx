@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { Link2, Plus, Upload, Users } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Eye, EyeOff, Link2, Plus, Upload, Users } from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { profileTotals, categoriesFor } from '@/lib/moneyProfiles'
 import { downloadFamilyCompanyExport } from '@/lib/exportFamilyCompany'
@@ -10,11 +10,13 @@ import { MoneyProfileDetailView } from '@/features/familyCompany/MoneyProfileDet
 
 export function FamilyCompanyView({
   data, onAddProfile, onEditProfile, onDeleteProfile,
-  onAddEntry, onEditEntry, onDeleteEntry, onBulkImport, onToggleStatus, onManageAccess,
+  onAddEntry, onEditEntry, onDeleteEntry, onBulkImport, onToggleStatus, onManageAccess, onDetailChange,
+  showMoney, onToggleMoney,
 }) {
   const { money_profiles: profiles = [], money_profile_entries: entries = [], accounts = [], categories = [] } = data
   const [selectedProfileId, setSelectedProfileId] = useState(null)
   const selectedProfile = profiles.find((p) => p.id === selectedProfileId)
+  useEffect(() => { onDetailChange?.(selectedProfileId) }, [selectedProfileId])
 
   if (selectedProfile) {
     return (
@@ -32,6 +34,8 @@ export function FamilyCompanyView({
         onBulkImport={onBulkImport}
         onToggleStatus={onToggleStatus}
         onManageAccess={onManageAccess}
+        showMoney={showMoney}
+        onToggleMoney={onToggleMoney}
       />
     )
   }
@@ -50,16 +54,19 @@ export function FamilyCompanyView({
             onClick={() => downloadFamilyCompanyExport({ profiles, entries, categories }, 'family-company', new Date().toISOString().slice(0, 10))}
             disabled={profiles.length === 0}
             title="Export every profile's entries as one CSV"
-            className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-white/10 light:border-black/10 px-4 py-2.5 text-sm font-medium text-slate-300 light:text-slate-700 hover:bg-white/5 disabled:opacity-50 sm:flex-none"
-          ><Upload size={14} />Export</button>
-          <button onClick={onAddProfile} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-4 py-2.5 text-sm font-semibold text-[#07101c] sm:flex-none"><Plus size={15} />New profile</button>
+            className="flex items-center justify-center gap-2 rounded-xl border border-white/10 light:border-black/10 px-4 py-2.5 text-sm font-medium text-slate-300 light:text-slate-700 hover:bg-white/5 disabled:opacity-50"
+          ><Upload size={14} /><span className="hidden sm:inline">Export</span></button>
+          <button onClick={onAddProfile} className="hidden items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-4 py-2.5 text-sm font-semibold text-[#07101c] lg:flex"><Plus size={15} />New profile</button>
+          <button onClick={onToggleMoney} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
+            {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
+          </button>
         </div>
       </div>
 
       {profiles.length > 0 && (
         <div className="rounded-3xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-black/[.025] glassy:glass-card p-6">
           <div className="text-xs uppercase tracking-widest text-slate-500">Total held for others</div>
-          <div className="mt-1 text-[clamp(2rem,6vw,3rem)] font-semibold leading-[1.1] tracking-[-0.01em] text-white light:text-slate-900">{money(totalBalance)}</div>
+          <div className="mt-1 text-[clamp(2rem,6vw,3rem)] font-semibold leading-[1.1] tracking-[-0.01em] text-white light:text-slate-900">{showMoney ? money(totalBalance) : '••••••'}</div>
           <div className="mt-1 text-sm text-slate-500">{profiles.length} profile{profiles.length === 1 ? '' : 's'}</div>
         </div>
       )}
@@ -92,14 +99,14 @@ export function FamilyCompanyView({
                 <div className="mt-4 flex items-baseline justify-between">
                   <div>
                     <div className="text-xs text-slate-500">Balance</div>
-                    <div className={`text-xl font-semibold ${isClosed ? 'text-slate-300 light:text-slate-700' : 'text-white light:text-slate-900'}`}>{money(balance)}</div>
+                    <div className={`text-xl font-semibold ${isClosed ? 'text-slate-300 light:text-slate-700' : 'text-white light:text-slate-900'}`}>{showMoney ? money(balance) : '••••'}</div>
                   </div>
                   <div className={`text-right ${isClosed ? 'text-slate-500' : 'text-emerald-300 light:text-emerald-700'}`}>
                     <div className="text-xs opacity-70">Income</div>
-                    <div className="text-sm font-semibold">+{money(income)}</div>
+                    <div className="text-sm font-semibold">{showMoney ? `+${money(income)}` : '••••'}</div>
                   </div>
                 </div>
-                <div className="mt-2 text-[11px] text-slate-500">Expenses {money(expense)}</div>
+                <div className="mt-2 text-[11px] text-slate-500">Expenses {showMoney ? money(expense) : '••••'}</div>
               </div>
             )
           })}

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { ArrowDownRight, ArrowUpRight, Layers, Link2, MoreVertical, PiggyBank, Pencil, Plus, RefreshCw, Sparkles, Target, Trash2, TrendingUp, Upload, Wallet } from 'lucide-react'
+import { ArrowDownRight, ArrowUpRight, Eye, EyeOff, Layers, Link2, MoreVertical, PiggyBank, Pencil, Plus, RefreshCw, Sparkles, Target, Trash2, TrendingUp, Upload, Wallet } from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { HeroStatTile } from '@/components/shared/HeroStatTile'
 import { StatCard } from '@/components/shared/StatCard'
@@ -18,10 +18,11 @@ export function InvestmentsView({
   onLinkKite, onUnlinkKite, onSyncKite, kiteSyncBusy,
   onAddSip, onEditSip, onDeleteSip, onSyncSipsKite,
   onAddOtherInvestment, onEditOtherInvestment, onDeleteOtherInvestment,
-  showMoney, onToggleMoney,
+  showMoney, onToggleMoney, onDetailChange,
 }) {
   const { portfolios, holdings, sips = [], other_investments: otherInvestments = [], transactions, kite_orders = [], profile } = data
   const [selectedPortfolioId, setSelectedPortfolioId] = useState(null)
+  useEffect(() => { onDetailChange?.(selectedPortfolioId) }, [selectedPortfolioId])
   const [linkChoice, setLinkChoice] = useState('')
   // Below xl:, New portfolio/Refresh prices/Export collapse into this one menu instead of
   // scattering across an inline header button, a full-width row, and a below-hero row (three
@@ -192,7 +193,11 @@ export function InvestmentsView({
           ><Upload size={14} />Export</button>
           <button onClick={onAddPortfolio} className="hidden rounded-xl border border-white/10 light:border-black/10 px-4 py-2.5 text-sm text-slate-300 light:text-slate-700 hover:bg-white/5 xl:block">New portfolio</button>
 
-          <button onClick={() => onAddHolding()} disabled={portfolios.length === 0} title={portfolios.length === 0 ? 'Create a portfolio first' : undefined} className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-4 py-2.5 text-sm font-semibold text-[#07101c] disabled:opacity-50"><Plus size={15} /><span className="sm:hidden">Add</span><span className="hidden sm:inline">Add holding</span></button>
+          <button onClick={() => onAddHolding()} disabled={portfolios.length === 0} title={portfolios.length === 0 ? 'Create a portfolio first' : undefined} className="hidden items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-4 py-2.5 text-sm font-semibold text-[#07101c] disabled:opacity-50 lg:flex"><Plus size={15} /><span className="sm:hidden">Add</span><span className="hidden sm:inline">Add holding</span></button>
+
+          <button onClick={onToggleMoney} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
+            {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
+          </button>
 
           <div ref={moreRef} className="relative xl:hidden">
             <button type="button" onClick={() => setMoreOpen((o) => !o)} className={`rounded-xl border p-2.5 transition ${moreOpen ? 'border-accent-300/40 bg-accent-400/10 text-accent-200 light:text-accent-700' : 'border-white/10 light:border-black/10 text-slate-400 light:text-slate-500 hover:bg-white/5'}`} title="More options">

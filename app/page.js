@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { MotionConfig } from 'framer-motion'
+import { AnimatePresence, motion, MotionConfig } from 'framer-motion'
 import { createClient } from '@/lib/supabase/browser'
 import { removeAttachment, uploadAttachment } from '@/lib/attachments'
 import { calcEmi, daysBetween, projectSchedule, totalInterest } from '@/lib/amortization'
@@ -1003,7 +1003,18 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
       )}
 
       {widgets.net_worth?.enabled && (
-        <div className="shrink-0 rounded-3xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-black/[.025] p-6 lg:grid lg:grid-cols-[minmax(300px,1.05fr)_minmax(0,1.5fr)] lg:items-center lg:gap-8 xl:grid-cols-[minmax(300px,1fr)_minmax(0,1.5fr)_minmax(0,0.75fr)] glassy:glass-hero">
+        <div className="relative shrink-0 rounded-3xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-black/[.025] p-6 lg:grid lg:grid-cols-[minmax(300px,1.05fr)_minmax(0,1.5fr)] lg:items-center lg:gap-8 xl:grid-cols-[minmax(300px,1fr)_minmax(0,1.5fr)_minmax(0,0.75fr)] glassy:glass-hero">
+          {/* Mobile-only — desktop keeps the header's own toggle, which has room to spare */}
+          <button
+            type="button"
+            onClick={onToggleMoney}
+            aria-label={showMoney ? 'Hide amounts' : 'Show amounts'}
+            aria-pressed={!showMoney}
+            title={showMoney ? 'Hide amounts' : 'Show amounts'}
+            className="absolute right-4 top-4 rounded-lg border border-white/10 light:border-black/10 p-1.5 text-slate-400 light:text-slate-500 hover:bg-white/5 lg:hidden"
+          >
+            {showMoney ? <Eye size={14} /> : <EyeOff size={14} />}
+          </button>
           <div>
             <div className="flex items-center gap-1.5">
               <h2 className="text-xs uppercase tracking-widest text-slate-400 light:text-slate-500">Net worth</h2>
@@ -1492,6 +1503,26 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTx
   const activeFilterCount = [type !== 'all', accountId !== 'all', categoryId !== 'all'].filter(Boolean).length
   const rangeRef = useRef(null)
   const settingsRef = useRef(null)
+  // Mobile: swipe left/right on the list-vs-chart area to switch, carousel-style, in addition to
+  // the explicit toggles (desktop icon pair, mobile Filters sheet switch). Threshold-based on
+  // touchend rather than a drag-follow — simpler, and avoids fighting the list's vertical scroll.
+  // swipeDirection also drives which way the crossfade slides, so it reads as one view sliding
+  // out while the other slides in, not just a cut.
+  const swipeStartRef = useRef(null)
+  const [swipeDirection, setSwipeDirection] = useState(1)
+  const SWIPE_THRESHOLD = 48
+  const onSwipeTouchStart = (e) => { const t = e.touches[0]; swipeStartRef.current = { x: t.clientX, y: t.clientY } }
+  const onSwipeTouchEnd = (e) => {
+    const start = swipeStartRef.current
+    swipeStartRef.current = null
+    if (!start) return
+    const t = e.changedTouches[0]
+    const dx = t.clientX - start.x
+    const dy = t.clientY - start.y
+    if (Math.abs(dx) < SWIPE_THRESHOLD || Math.abs(dx) < Math.abs(dy)) return
+    if (dx < 0 && !chartView) { e.preventDefault(); setSwipeDirection(1); setChartView(true) }
+    else if (dx > 0 && chartView) { e.preventDefault(); setSwipeDirection(-1); setChartView(false) }
+  }
   useEffect(() => {
     const onDocClick = (e) => {
       if (rangeRef.current && !rangeRef.current.contains(e.target)) setRangeOpen(false)
@@ -1659,10 +1690,12 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTx
               </div>
             )}
           </div>
-          <div className="flex items-center overflow-hidden rounded-xl border border-white/10 light:border-black/10">
-            <button type="button" onClick={() => setChartView(false)} title="Table view" className={`flex items-center px-3 py-2.5 transition ${!chartView ? 'bg-accent-400/15 text-accent-200 light:text-accent-700' : 'text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900'}`}><ListChecks size={16} /></button>
+          {/* Already reachable on mobile as a "Chart view" switch inside the Filters sheet below —
+              this icon-pair form is desktop-only to avoid showing the same control twice. */}
+          <div className="hidden items-center overflow-hidden rounded-xl border border-white/10 light:border-black/10 lg:flex">
+            <button type="button" onClick={() => { setSwipeDirection(-1); setChartView(false) }} title="Table view" className={`flex items-center px-3 py-2.5 transition ${!chartView ? 'bg-accent-400/15 text-accent-200 light:text-accent-700' : 'text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900'}`}><ListChecks size={16} /></button>
             <div className="h-5 w-px shrink-0 bg-white/10" />
-            <button type="button" onClick={() => setChartView(true)} title="Chart view" className={`flex items-center px-3 py-2.5 transition ${chartView ? 'bg-accent-400/15 text-accent-200 light:text-accent-700' : 'text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900'}`}><PieChartIcon size={16} /></button>
+            <button type="button" onClick={() => { setSwipeDirection(1); setChartView(true) }} title="Chart view" className={`flex items-center px-3 py-2.5 transition ${chartView ? 'bg-accent-400/15 text-accent-200 light:text-accent-700' : 'text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900'}`}><PieChartIcon size={16} /></button>
           </div>
           <button onClick={onToggleMoney} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
             {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
@@ -1746,9 +1779,9 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTx
               {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </Select>
           </label>
-          <div onClick={() => setChartView((v) => !v)} className="flex w-full items-center justify-between rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-4 py-3 text-sm text-slate-300 light:text-slate-700">
+          <div onClick={() => { setSwipeDirection(chartView ? -1 : 1); setChartView((v) => !v) }} className="flex w-full items-center justify-between rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-4 py-3 text-sm text-slate-300 light:text-slate-700">
             <span className="flex items-center gap-2"><PieChartIcon size={15} />Chart view</span>
-            <ToggleSwitch checked={chartView} onChange={() => setChartView((v) => !v)} />
+            <ToggleSwitch checked={chartView} onChange={() => { setSwipeDirection(chartView ? -1 : 1); setChartView((v) => !v) }} />
           </div>
           <div className="border-t border-white/10 light:border-black/10 pt-2">
             <button type="button" onClick={() => { setMobileFiltersOpen(false); onImport() }} className="block w-full rounded-lg px-1 py-2.5 text-left text-sm text-slate-300 light:text-slate-700 hover:bg-white/5">Import CSV</button>
@@ -1759,6 +1792,15 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTx
         </div>
       </BottomSheet>
 
+      <div onTouchStart={onSwipeTouchStart} onTouchEnd={onSwipeTouchEnd} className="touch-pan-y overflow-hidden">
+      <AnimatePresence mode="wait" initial={false} custom={swipeDirection}>
+      <motion.div
+        key={chartView ? 'chart' : 'list'}
+        initial={{ opacity: 0, x: swipeDirection * 36 }}
+        animate={{ opacity: 1, x: 0 }}
+        exit={{ opacity: 0, x: swipeDirection * -36 }}
+        transition={{ duration: 0.26, ease: 'easeInOut' }}
+      >
       {chartView ? (
         categoryBreakdown.length === 0 ? (
           <div className="rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card">
@@ -1908,6 +1950,9 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTx
         )}
       </section>
       )}
+      </motion.div>
+      </AnimatePresence>
+      </div>
       <AttachmentViewer open={!!viewingAttachment} onClose={() => setViewingAttachment(null)} transaction={viewingAttachment} />
     </div>
   )
@@ -1918,6 +1963,22 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTx
 function Shell({ user, onLogout }) {
   const [view, setView] = useState('dashboard')
   const [showMoney, setShowMoney] = useState(true)
+  // "Welcome back, X" shows on open, then crossfades to just "X" a couple seconds later — a
+  // timer, not a nav-triggered flip, so the transition is actually visible on the dashboard
+  // instead of happening invisibly while the header's unmounted on some other view. Stays "X"
+  // for the rest of the session once it's fired; a real reload resets it.
+  const [hasGreetedOnce, setHasGreetedOnce] = useState(false)
+  useEffect(() => {
+    if (hasGreetedOnce) return
+    const t = setTimeout(() => setHasGreetedOnce(true), 2200)
+    return () => clearTimeout(t)
+  }, [hasGreetedOnce])
+  // Which item (account/card/loan/...) the active view has drilled into, if any — reported up by
+  // the view itself via onDetailChange so the mobile FAB knows whether to open a "list" add form
+  // (e.g. Add loan) or a "detail" one (e.g. Log payment). Cleared on every view switch so a stale
+  // id from the previous module can't leak into the new one before it reports its own state.
+  const [activeDetailId, setActiveDetailId] = useState(null)
+  useEffect(() => { setActiveDetailId(null) }, [view])
   const [data, setData] = useState({ accounts: [], categories: [], transactions: [], budgets: [], portfolios: [], holdings: [], sips: [], other_investments: [], kite_orders: [], loans: [], loan_payments: [], bucket_list: [], lend_borrow: [], lend_repayments: [], credit_cards: [], credit_card_transactions: [], scholarships: [], scholarship_payments: [], money_rules: [], recurring_transactions: [], money_profiles: [], money_profile_entries: [], budget_months: [], budget_month_categories: [], vault_items: [], profile: null })
   const [loading, setLoading] = useState(true)
   const [pendingCount, setPendingCount] = useState(0)
@@ -2522,6 +2583,47 @@ function Shell({ user, onLogout }) {
   }
   const openSettings = (section) => { setSettingsSection(section); setView('profile') }
 
+  // Mobile-only: which "add" action the floating + button performs depends on the active module
+  // and, for modules with a list/detail split, whether the user has drilled into a single item
+  // (activeDetailId, reported up by the view itself — see its useEffect). Desktop keeps each
+  // module's own "+ Add" button instead of relying on this FAB.
+  const runFabAction = () => {
+    switch (view) {
+      case 'accounts':
+        return activeDetailId ? openTxForm(null, activeDetailId) : openAccForm()
+      case 'budgets': {
+        const nextMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1)
+        return openBudgetMonthForm(nextMonth.getFullYear(), nextMonth.getMonth())
+      }
+      case 'investments':
+        return openHoldingForm(activeDetailId || '')
+      case 'cards': {
+        const card = data.credit_cards.find((c) => c.id === activeDetailId)
+        return card ? openCardSpend(card) : openCardForm()
+      }
+      case 'scholarships': {
+        const s = data.scholarships.find((s) => s.id === activeDetailId)
+        return s ? openScholarshipPay(s) : openScholarshipForm()
+      }
+      case 'loans': {
+        const loan = data.loans.find((l) => l.id === activeDetailId)
+        return loan ? openLoanPay(loan) : openLoanForm()
+      }
+      case 'lend': {
+        const record = data.lend_borrow.find((l) => l.id === activeDetailId)
+        return record
+          ? openTxForm(null, '', { value: `lend:${record.id}`, type: record.type === 'lent' ? 'income' : 'expense' })
+          : openLendForm()
+      }
+      case 'family_company':
+        return activeDetailId ? openMoneyProfileEntryForm(activeDetailId) : openMoneyProfileForm()
+      case 'bucket':
+        return openBucketForm()
+      default:
+        return openTxForm()
+    }
+  }
+
   const firstName = data.profile?.full_name?.split(' ')?.[0] || user?.user_metadata?.full_name?.split(' ')?.[0] || user?.email?.split('@')?.[0] || 'Deepak'
 
   const moduleSettings = resolveModuleSettings(data.profile)
@@ -2532,6 +2634,23 @@ function Shell({ user, onLogout }) {
     ...orderedEnabledKeys(moduleSettings).filter((k) => NAV_META[k]).map((k) => NAV_META[k]),
   ]
   const avatarUrl = data.profile?.avatar_url || user?.user_metadata?.avatar_url || user?.user_metadata?.picture || ''
+  const netWorthWidgetEnabled = resolveDashboardWidgets(data.profile).net_worth?.enabled
+  // Crossfades rather than swapping instantly — matches DESIGN.md's "settle, don't announce"
+  // motion language elsewhere (the loading pulse, etc.) instead of a jarring text pop.
+  const greetingNode = (
+    <AnimatePresence mode="wait" initial={false}>
+      <motion.span
+        key={hasGreetedOnce ? 'name-only' : 'welcome-back'}
+        initial={{ opacity: 0, y: 4 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -4 }}
+        transition={{ duration: 0.45, ease: 'easeInOut' }}
+        className="inline-block"
+      >
+        {hasGreetedOnce ? <>{firstName} 👋</> : <><span className="font-normal text-slate-400 light:text-slate-500">Welcome back,</span> {firstName} 👋</>}
+      </motion.span>
+    </AnimatePresence>
+  )
   // Dashboard used to be pinned to `lg:h-screen` with its own internal `overflow-y-auto` region
   // (a separate scrollbar floating mid-page) so its content never had to compete for space with
   // the rest of the page. That's no longer needed now that its cards size themselves rather than
@@ -2596,16 +2715,22 @@ function Shell({ user, onLogout }) {
         <main className={`min-w-0 flex-1 px-5 pb-24 pt-6 lg:px-10 lg:pb-10 ${fitScreen ? 'flex flex-col lg:h-screen' : ''}`}>
           {view === 'dashboard' && (
             <header className={`flex shrink-0 items-center justify-between ${fitScreen ? 'mb-3' : 'mb-6'}`}>
-              <h1 className="text-lg font-semibold text-white light:text-slate-900">
-                <span className="font-normal text-slate-400 light:text-slate-500">Welcome back,</span> {firstName} 👋
-              </h1>
+              {/* Mobile: tappable avatar + name → Settings > Profile (desktop already has this via the sidebar profile button below) */}
+              <button type="button" onClick={() => openSettings('profile')} className="-m-1 flex min-w-0 items-center gap-2.5 rounded-xl p-1 text-left transition hover:bg-white/5 lg:hidden">
+                <Avatar src={avatarUrl} name={firstName} email={user?.email} size={38} />
+                <h1 className="min-w-0 truncate text-lg font-semibold text-white light:text-slate-900">{greetingNode}</h1>
+              </button>
+              <h1 className="hidden text-lg font-semibold text-white light:text-slate-900 lg:block">{greetingNode}</h1>
               <div className="flex shrink-0 items-center gap-2">
                 {pendingCount > 0 && (
                   <button onClick={() => setView('profile')} className="flex items-center gap-1.5 rounded-full border border-amber-300/30 bg-amber-300/10 px-2.5 py-1.5 text-[11px] font-medium text-amber-200 light:text-amber-700 lg:hidden">
                     <span className="h-1.5 w-1.5 rounded-full bg-amber-300" />{pendingCount} pending
                   </button>
                 )}
-                <button type="button" onClick={() => setShowMoney((v) => !v)} aria-label="Hide amounts" aria-pressed={!showMoney} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
+                {/* On mobile this toggle now lives inside the Net Worth card itself — kept here
+                    only as a fallback for when that widget is disabled, so hiding amounts stays
+                    reachable either way. Always shown on desktop. */}
+                <button type="button" onClick={() => setShowMoney((v) => !v)} aria-label="Hide amounts" aria-pressed={!showMoney} className={`rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5 lg:flex ${netWorthWidgetEnabled ? 'hidden' : 'flex'}`} title={showMoney ? 'Hide amounts' : 'Show amounts'}>
                   {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
                 </button>
               </div>
@@ -2621,16 +2746,16 @@ function Shell({ user, onLogout }) {
             <div className={fitScreen ? 'min-h-0 flex-1 lg:overflow-y-auto' : ''}>
               {view === 'dashboard' && <DashboardView data={data} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onOpenTxForm={() => openTxForm()} setView={setView} onManageMoneyRules={() => openSettings('money_rules')} onPayCardBill={openCardPay} />}
               {view === 'transactions' && <TransactionsView data={data} onOpenTxForm={() => openTxForm()} onEditTx={openTxForm} onDeleteTx={deleteTx} onDeleteTxBulk={deleteTxBulk} onImport={() => setCsvOpen(true)} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onOpenRecurring={openRecurringManager} onPayCardBill={openCardPay} />}
-              {view === 'accounts' && <AccountsView data={data} onAdd={() => openAccForm()} onEdit={openAccForm} onDelete={deleteAccount} onDeleteTx={deleteTx} onAddTransaction={(accountId) => openTxForm(null, accountId)} onSyncBalance={syncAccountBalance} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
+              {view === 'accounts' && <AccountsView data={data} onAdd={() => openAccForm()} onEdit={openAccForm} onDelete={deleteAccount} onDeleteTx={deleteTx} onAddTransaction={(accountId) => openTxForm(null, accountId)} onSyncBalance={syncAccountBalance} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onDetailChange={setActiveDetailId} />}
               {view === 'budgets' && <BudgetsView data={data} onSetMonth={openBudgetMonthForm} onCloseMonth={closeBudgetMonth} onReopenMonth={reopenBudgetMonth} onDeleteMonth={deleteBudgetMonth} onAddYearly={() => openBudgetForm()} onEditYearly={openBudgetForm} onDeleteYearly={deleteBudget} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
-              {view === 'investments' && <InvestmentsView data={data} onAddPortfolio={() => openPortfolioForm()} onEditPortfolio={openPortfolioForm} onDeletePortfolio={deletePortfolio} onAddHolding={openHoldingForm} onBulkImport={openBulkImport} onEditHolding={openHoldingEdit} onDeleteHolding={deleteHolding} onRefreshRowPrice={onRefreshRowPrice} onManualPriceEntry={onManualPriceEntry} onRefreshAll={refreshAllPrices} pricesLoading={pricesLoading} onAddFunds={openFundsForm} onWithdrawFunds={openWithdrawForm} onConnectKite={connectKite} onLinkKite={linkPortfolioKite} onUnlinkKite={unlinkPortfolioKite} onSyncKite={syncPortfolioKite} kiteSyncBusy={kiteSyncBusy} onAddSip={openSipForm} onEditSip={openSipForm} onDeleteSip={deleteSip} onSyncSipsKite={syncSipsKite} onAddOtherInvestment={openOtherInvestmentForm} onEditOtherInvestment={openOtherInvestmentEdit} onDeleteOtherInvestment={deleteOtherInvestment} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
-              {view === 'cards' && <CreditCardsView data={data} onAdd={() => openCardForm()} onEdit={openCardForm} onDelete={deleteCard} onSpend={openCardSpend} onPay={openCardPay} onDeleteSpend={deleteCardSpend} onDeleteTx={deleteTx} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
-              {view === 'scholarships' && <ScholarshipsView data={data} onAdd={() => openScholarshipForm()} onEdit={openScholarshipForm} onDelete={deleteScholarship} onPay={openScholarshipPay} onRefresh={refresh} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} toast={toast} />}
-              {view === 'loans' && <LoansView data={data} onAdd={() => openLoanForm()} onEdit={openLoanForm} onDelete={deleteLoan} onPay={openLoanPay} onDeletePayment={deleteLoanPayment} onSync={syncLoanOutstanding} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
-              {view === 'lend' && <LendBorrowView data={data} onAdd={() => openLendForm()} onEdit={openLendForm} onDelete={deleteLend} onDeleteTx={deleteTx} onLogRepayment={(record) => openTxForm(null, '', { value: `lend:${record.id}`, type: record.type === 'lent' ? 'income' : 'expense' })} onManageAccess={openManageLendAccess} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} toast={toast} />}
-              {view === 'family_company' && <FamilyCompanyView data={data} onAddProfile={() => openMoneyProfileForm()} onEditProfile={openMoneyProfileForm} onDeleteProfile={deleteMoneyProfile} onAddEntry={openMoneyProfileEntryForm} onEditEntry={openMoneyProfileEntryEdit} onDeleteEntry={deleteMoneyProfileEntry} onBulkImport={openMoneyProfileBulkImport} onToggleStatus={toggleMoneyProfileStatus} onManageAccess={openManageAccess} />}
+              {view === 'investments' && <InvestmentsView data={data} onAddPortfolio={() => openPortfolioForm()} onEditPortfolio={openPortfolioForm} onDeletePortfolio={deletePortfolio} onAddHolding={openHoldingForm} onBulkImport={openBulkImport} onEditHolding={openHoldingEdit} onDeleteHolding={deleteHolding} onRefreshRowPrice={onRefreshRowPrice} onManualPriceEntry={onManualPriceEntry} onRefreshAll={refreshAllPrices} pricesLoading={pricesLoading} onAddFunds={openFundsForm} onWithdrawFunds={openWithdrawForm} onConnectKite={connectKite} onLinkKite={linkPortfolioKite} onUnlinkKite={unlinkPortfolioKite} onSyncKite={syncPortfolioKite} kiteSyncBusy={kiteSyncBusy} onAddSip={openSipForm} onEditSip={openSipForm} onDeleteSip={deleteSip} onSyncSipsKite={syncSipsKite} onAddOtherInvestment={openOtherInvestmentForm} onEditOtherInvestment={openOtherInvestmentEdit} onDeleteOtherInvestment={deleteOtherInvestment} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onDetailChange={setActiveDetailId} />}
+              {view === 'cards' && <CreditCardsView data={data} onAdd={() => openCardForm()} onEdit={openCardForm} onDelete={deleteCard} onSpend={openCardSpend} onPay={openCardPay} onDeleteSpend={deleteCardSpend} onDeleteTx={deleteTx} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onDetailChange={setActiveDetailId} />}
+              {view === 'scholarships' && <ScholarshipsView data={data} onAdd={() => openScholarshipForm()} onEdit={openScholarshipForm} onDelete={deleteScholarship} onPay={openScholarshipPay} onRefresh={refresh} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} toast={toast} onDetailChange={setActiveDetailId} />}
+              {view === 'loans' && <LoansView data={data} onAdd={() => openLoanForm()} onEdit={openLoanForm} onDelete={deleteLoan} onPay={openLoanPay} onDeletePayment={deleteLoanPayment} onSync={syncLoanOutstanding} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onDetailChange={setActiveDetailId} />}
+              {view === 'lend' && <LendBorrowView data={data} onAdd={() => openLendForm()} onEdit={openLendForm} onDelete={deleteLend} onDeleteTx={deleteTx} onLogRepayment={(record) => openTxForm(null, '', { value: `lend:${record.id}`, type: record.type === 'lent' ? 'income' : 'expense' })} onManageAccess={openManageLendAccess} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} toast={toast} onDetailChange={setActiveDetailId} />}
+              {view === 'family_company' && <FamilyCompanyView data={data} onAddProfile={() => openMoneyProfileForm()} onEditProfile={openMoneyProfileForm} onDeleteProfile={deleteMoneyProfile} onAddEntry={openMoneyProfileEntryForm} onEditEntry={openMoneyProfileEntryEdit} onDeleteEntry={deleteMoneyProfileEntry} onBulkImport={openMoneyProfileBulkImport} onToggleStatus={toggleMoneyProfileStatus} onManageAccess={openManageAccess} onDetailChange={setActiveDetailId} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'bucket' && <BucketListView data={data} onAdd={() => openBucketForm()} onEdit={openBucketForm} onDelete={deleteBucket} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
-              {view === 'insights' && <InsightsView data={data} />}
+              {view === 'insights' && <InsightsView data={data} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'profile' && (
                 <SettingsShell
                   activeSection={settingsSection} onSectionChange={setSettingsSection}
@@ -2651,8 +2776,9 @@ function Shell({ user, onLogout }) {
         </main>
       </div>
 
-      {/* Floating quick add */}
-      <button onClick={() => openTxForm()} className="fixed bottom-24 right-5 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-accent-300 to-accent-600 text-[#07101c] shadow-2xl shadow-accent-500/30 transition hover:scale-105 lg:bottom-8 lg:right-8 glassy:glass-btn-primary" title="Quick add transaction">
+      {/* Floating quick add — dynamic per module on mobile, see runFabAction; desktop keeps the
+          per-module "+ Add" buttons so this is deliberately unaffected there. */}
+      <button onClick={runFabAction} className="fixed bottom-24 right-5 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-accent-300 to-accent-600 text-[#07101c] shadow-2xl shadow-accent-500/30 transition hover:scale-105 lg:bottom-8 lg:right-8 glassy:glass-btn-primary" title="Quick add">
         <Plus size={24} />
       </button>
 

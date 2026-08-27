@@ -78,9 +78,9 @@ export function BudgetsView({ data, onSetMonth, onCloseMonth, onReopenMonth, onD
             onClick={() => downloadBudgetsExport({ budgetMonths: budget_months, budgetMonthCategories: budget_month_categories, yearlyBudgets, categories, transactions }, new Date().toISOString().slice(0, 10))}
             disabled={budget_months.length === 0 && yearlyBudgets.length === 0}
             title="Export"
-            className="flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-400 light:text-slate-500 transition hover:bg-white/5 hover:text-slate-200 hover:light:text-slate-700 disabled:opacity-50"
+            className="flex items-center justify-center gap-2 rounded-xl border border-white/10 light:border-black/10 px-4 py-2.5 text-sm font-medium text-slate-300 light:text-slate-700 hover:bg-white/5 disabled:opacity-50"
           ><Upload size={14} /><span className="hidden sm:inline">Export</span></button>
-          <button onClick={() => onSetMonth(nextMonth.getFullYear(), nextMonth.getMonth())} className="flex items-center justify-center gap-2 rounded-xl bg-white/[.06] light:bg-black/[.04] px-4 py-2.5 text-sm font-semibold text-white light:text-slate-900 transition hover:bg-white/[.1] hover:light:bg-black/[.06]"><Plus size={14} />Plan a month</button>
+          <button onClick={() => onSetMonth(nextMonth.getFullYear(), nextMonth.getMonth())} className="hidden items-center justify-center gap-2 rounded-xl bg-white/[.06] light:bg-black/[.04] px-4 py-2.5 text-sm font-semibold text-white light:text-slate-900 transition hover:bg-white/[.1] hover:light:bg-black/[.06] lg:flex"><Plus size={14} />Plan a month</button>
           <button onClick={onToggleMoney} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
             {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
           </button>
