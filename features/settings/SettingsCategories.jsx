@@ -17,7 +17,7 @@ export function SettingsCategories({ data, onAddCategory, onEditCategory, onDele
   const rows = categories.filter((c) => c.type === type).sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0))
 
   return (
-    <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] p-5">
+    <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-5">
       <div className="flex items-center justify-between">
         <div>
           <div className="text-sm font-semibold text-white light:text-slate-900">Categories</div>

@@ -8,7 +8,7 @@ import { StatCard } from '@/components/shared/StatCard'
 import { money } from '@/lib/format'
 import { AccountDetailView } from '@/features/accounts/AccountDetailView'
 
-export function AccountsView({ data, onAdd, onEdit, onDelete, onDeleteTx, onDeleteTxBulk, onAddTransaction, showMoney, onToggleMoney }) {
+export function AccountsView({ data, onAdd, onEdit, onDelete, onDeleteTx, onDeleteTxBulk, onAddTransaction, onSyncBalance, showMoney, onToggleMoney }) {
   const { accounts, transactions, categories } = data
   // Debit cards aren't a separate balance — they draw from their linked bank account, so they
   // never get their own tile here; the account they're linked to is where their card face shows.
@@ -31,6 +31,7 @@ export function AccountsView({ data, onAdd, onEdit, onDelete, onDeleteTx, onDele
         onDeleteTx={onDeleteTx}
         onDeleteTxBulk={onDeleteTxBulk}
         onAddTransaction={onAddTransaction}
+        onSyncBalance={onSyncBalance}
         showMoney={showMoney}
         onToggleMoney={onToggleMoney}
       />
@@ -59,7 +60,7 @@ export function AccountsView({ data, onAdd, onEdit, onDelete, onDeleteTx, onDele
       </div>
 
       {visibleAccounts.length > 0 && (
-        <div className="rounded-3xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] p-6">
+        <div className="rounded-3xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-6">
           <div className="text-xs uppercase tracking-widest text-slate-500">Total balance</div>
           <div className="mt-1 text-[clamp(2rem,6vw,3rem)] font-semibold leading-[1.1] tracking-[-0.01em] text-white light:text-slate-900">
             {showMoney ? money(totalBalance) : '••••••••'}
@@ -73,7 +74,7 @@ export function AccountsView({ data, onAdd, onEdit, onDelete, onDeleteTx, onDele
       )}
 
       {visibleAccounts.length === 0 ? (
-        <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025]">
+        <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card">
           <EmptyState icon={Landmark} title="No accounts yet" message="Add a bank account or cash to start tracking balances." cta="Add account" onCta={onAdd} />
         </div>
       ) : (
@@ -91,7 +92,7 @@ export function AccountsView({ data, onAdd, onEdit, onDelete, onDeleteTx, onDele
                   key={a.id}
                   type="button"
                   onClick={() => setSelectedAccountId(a.id)}
-                  className="flex items-center gap-3 rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] px-4 py-3.5 text-left transition active:bg-white/[.05] active:light:bg-black/[.035]"
+                  className="flex items-center gap-3 rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card px-4 py-3.5 text-left transition active:bg-white/[.05] active:light:bg-black/[.035]"
                 >
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full" style={{ background: `${a.color || '#22d3ee'}22`, color: a.color || '#22d3ee' }}>
                     {a.type === 'cash' ? <Wallet size={18} /> : <Landmark size={18} />}
@@ -112,7 +113,7 @@ export function AccountsView({ data, onAdd, onEdit, onDelete, onDeleteTx, onDele
             {visibleAccounts.map((a) => {
               const debitCard = a.type === 'bank' ? debitCardFor(a.id) : null
               return (
-                <div key={a.id} onClick={() => setSelectedAccountId(a.id)} className="group min-w-0 cursor-pointer rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] p-5 transition hover:border-accent-300/30 hover:bg-white/[.05] hover:light:bg-black/[.035]">
+                <div key={a.id} onClick={() => setSelectedAccountId(a.id)} className="group min-w-0 cursor-pointer rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-5 transition hover:border-accent-300/30 hover:bg-white/[.05] hover:light:bg-black/[.035]">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl" style={{ background: `${a.color || '#22d3ee'}22`, color: a.color || '#22d3ee' }}>
                       {a.type === 'cash' ? <Wallet size={18} /> : <Landmark size={18} />}

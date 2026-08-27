@@ -81,11 +81,11 @@ import { NetWorthDetailView } from '@/features/dashboard/NetWorthDetailView'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import {
-  Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend,
+  Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend,
 } from 'recharts'
 import {
   ArrowDownRight, ArrowLeftRight, ArrowUpDown, ArrowUpRight, BarChart3, Briefcase, Calculator, Calendar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock, CreditCard,
-  Download, Eye, EyeOff, FileText, Heart, History, Landmark, LayoutDashboard, LineChart, ListChecks, LogOut, Menu, MoreHorizontal, MoreVertical, Mountain, Paperclip, PieChart as PieChartIcon, Plus,
+  Download, Eye, EyeOff, FileText, Heart, History, Info, Landmark, LayoutDashboard, LineChart, ListChecks, LogOut, Menu, MoreHorizontal, MoreVertical, Mountain, Paperclip, PieChart as PieChartIcon, Plus,
   RefreshCw, Repeat, Search, Settings, ShieldCheck, Star, Tag, Target, TrendingDown, TrendingUp, Trash2, Pencil, Users,
   Wallet, X, Zap,
 } from 'lucide-react'
@@ -585,7 +585,7 @@ function TransactionRow({ t, categories, accounts, creditCards = [], showMoney }
   )
 }
 
-function TransactionTicker({ items, categories, accounts, creditCards = [], showMoney }) {
+function TransactionTicker({ items, categories, accounts, creditCards = [], showMoney, maxHeightPx = 352 }) {
   const boxRef = useRef(null)
   const trackRef = useRef(null)
   const [scroll, setScroll] = useState(false)
@@ -602,19 +602,18 @@ function TransactionTicker({ items, categories, accounts, creditCards = [], show
   const duration = Math.max(8, items.length * 3)
 
   return (
-    // `max-h`, not a fixed `h` — a hard height reserved the full ~6 rows even for an account with
-    // only 1-2 real transactions, leaving a large dead black gap below the last real row instead
-    // of just showing a short, snug box. `max-h` caps at ~6 rows and auto-scrolls past that (same
-    // as before) while shrinking to fit shorter lists exactly. The parent card is still `flex-1`
-    // and reaches the Balances card's baseline on its own — that no longer depends on this box
-    // itself being any particular height.
-    // `scroll-fade` + the mask give this a visible scrollbar and a soft bottom fade instead of a
-    // hard mid-row cut whenever the last row lands right at the box edge — normally invisible
-    // under the ticker's own continuous motion, but the only cue at all once `prefers-reduced-
-    // motion` (globals.css) turns this into a plain manually-scrollable box with no animation.
+    // `maxHeightPx` (from DashboardView, floor 352px ~6 rows, otherwise Balances' own measured
+    // natural height) as an explicit style height — a pure-CSS flex-1/min-h combination can't
+    // express this: a `flex-1` box's contribution to an ANCESTOR grid's natural-height comparison
+    // (before any stretch is applied) falls back to its actual CONTENT height when nothing
+    // upstream has a definite size yet, and `overflow-hidden`/`min-h` don't change that — with a
+    // long enough transaction list, that content height is unbounded, which grew this whole card
+    // to fit every row instead of staying matched to Balances. A real pixel height sidesteps the
+    // ambiguity entirely: it IS this box's natural size, no measurement pass required.
     <div
       ref={boxRef}
-      className={`ticker-box scroll-fade max-h-[352px] overflow-hidden border-t border-white/10 light:border-black/10${scroll ? ' [mask-image:linear-gradient(to_bottom,black_calc(100%-24px),transparent)]' : ''}`}
+      style={{ height: maxHeightPx }}
+      className={`ticker-box scroll-fade overflow-hidden border-t border-white/10 light:border-black/10${scroll ? ' [mask-image:linear-gradient(to_bottom,black_calc(100%-24px),transparent)]' : ''}`}
       {...(scroll ? { tabIndex: 0, role: 'group', 'aria-label': 'Recent transactions, auto-scrolling — focus to pause' } : {})}
     >
       <div ref={trackRef} className={scroll ? 'ticker-track' : ''} style={scroll ? { animationDuration: `${duration}s` } : undefined}>
@@ -628,9 +627,53 @@ function TransactionTicker({ items, categories, accounts, creditCards = [], show
   )
 }
 
+// Glassy theme's cash-flow chart trades the bar chart's gridlines/axis for a glowing, floating-pill
+// look (soft vertical beam + a white tooltip pill) — these two are its custom Tooltip pieces, kept
+// out of DashboardView since they're plain render-prop components, not part of its own state/logic.
+function GlassyCashflowCursor({ points, height }) {
+  if (!points || !points.length) return null
+  const x = points[0].x
+  // `points[i].y` is each series' actual pixel y for this month (smaller y = higher value, since
+  // SVG y grows downward) — the beam should run from the tallest of the two lines down to the
+  // baseline, not the fixed full plot height, so its length actually reflects that month's data.
+  const topY = Math.min(...points.map((p) => p.y))
+  const beamHeight = Math.max(0, height - topY)
+  return (
+    <g>
+      <defs>
+        <linearGradient id="cashflowCursorBeam" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#c4b5fd" stopOpacity={0.4} />
+          <stop offset="100%" stopColor="#c4b5fd" stopOpacity={0} />
+        </linearGradient>
+      </defs>
+      <rect x={x - 15} y={topY} width={30} height={beamHeight} rx={15} fill="url(#cashflowCursorBeam)" />
+    </g>
+  )
+}
+function GlassyCashflowTooltip({ active, payload, showMoney }) {
+  if (!active || !payload || !payload.length) return null
+  // The Bar and Line for the same field (e.g. "income") both report a payload entry — only one
+  // combo chart's tooltip should end up per field, so keep just the first (the values agree).
+  const seen = new Set()
+  const deduped = payload.filter((p) => (seen.has(p.dataKey) ? false : (seen.add(p.dataKey), true)))
+  return (
+    <div className="flex items-center gap-3 rounded-2xl bg-white px-3.5 py-2 shadow-xl">
+      {deduped.map((p) => (
+        <div key={p.dataKey} className="flex items-center gap-1.5 text-xs font-semibold text-slate-900">
+          <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: p.color }} />
+          {showMoney ? money(p.value) : '••••'}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 /* ---------------- Views ---------------- */
 function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, onManageMoneyRules, onPayCardBill }) {
   const { profile, accounts, transactions, categories, holdings = [], loans = [], loan_payments = [], bucket_list = [], money_rules = [], credit_cards = [], portfolios = [], budget_months = [] } = data
+  // Only the glassy theme gets the glowing area-chart treatment below — dark/light keep the plain
+  // bar chart, so this doesn't touch either of their look.
+  const { theme } = useTheme()
   const moduleSettings = resolveModuleSettings(profile)
   const widgets = resolveDashboardWidgets(profile)
   const totalBalance = accounts.reduce((s, a) => s + Number(a.current_balance || 0), 0)
@@ -695,6 +738,8 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
   // conditional `return` (that's exactly what broke when showNetWorthDetail's early return was
   // first added below the balances-overflow hooks — "fewer hooks than expected" at runtime).
   const [drilldown, setDrilldown] = useState(null)
+  const [showDebtLoadInfo, setShowDebtLoadInfo] = useState(false)
+  const [showRunwayInfo, setShowRunwayInfo] = useState(false)
 
   // Consolidated balances: bank accounts, credit cards (as debt), investment portfolios.
   // Debit cards are excluded — they share their linked account's balance, already listed here.
@@ -718,11 +763,23 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
   // Detects real overflow (rather than always masking) so the fade only appears when there's
   // actually more content below — a short balance list's last row should stay fully opaque.
   const balancesRef = useRef(null)
+  const balancesListInnerRef = useRef(null)
   const [balancesOverflow, setBalancesOverflow] = useState(false)
+  // Recent Transactions' ticker box targets this height (floor 352px, ~6 rows) so the two cards
+  // share a common bottom edge instead of whichever one has less real content leaving a gap next
+  // to the other. Measured from `balancesListInnerRef` — an unconstrained, non-overflow-clipped
+  // wrapper around just the balance rows — rather than from `balancesRef` (the scrollable box
+  // itself): that box already has a height applied (natural or previously-stretched), so reading
+  // its own size back would just echo whatever it was last given instead of Balances' true
+  // natural content height, and this value would never shrink back down once something else had
+  // stretched it. The inner wrapper has no height of its own to echo, so it always reports the
+  // real thing.
+  const [recentTxMaxHeight, setRecentTxMaxHeight] = useState(352)
   useLayoutEffect(() => {
     const el = balancesRef.current
-    if (!el) return setBalancesOverflow(false)
+    if (!el) { setBalancesOverflow(false); return }
     setBalancesOverflow(el.scrollHeight > el.clientHeight + 2)
+    setRecentTxMaxHeight(Math.max(352, balancesListInnerRef.current?.offsetHeight || 0))
   }, [balanceItems.length])
 
   if (showNetWorthDetail) {
@@ -910,7 +967,7 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
       )}
 
       {widgets.net_worth?.enabled && (
-        <div className="shrink-0 rounded-3xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] p-6 lg:grid lg:grid-cols-[minmax(300px,1.05fr)_minmax(0,1.5fr)] lg:items-center lg:gap-8 xl:grid-cols-[minmax(300px,1fr)_minmax(0,1.5fr)_minmax(0,0.75fr)]">
+        <div className="shrink-0 rounded-3xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] p-6 lg:grid lg:grid-cols-[minmax(300px,1.05fr)_minmax(0,1.5fr)] lg:items-center lg:gap-8 xl:grid-cols-[minmax(300px,1fr)_minmax(0,1.5fr)_minmax(0,0.75fr)] glassy:glass-hero">
           <div>
             <div className="flex items-center gap-1.5">
               <h2 className="text-xs uppercase tracking-widest text-slate-400 light:text-slate-500">Net worth</h2>
@@ -946,7 +1003,7 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
                 <button
                   key={item.key}
                   onClick={() => (item.key === 'add' ? onOpenTxForm() : setView(item.key))}
-                  className="flex flex-col items-center gap-1.5 rounded-2xl bg-white/[.04] light:bg-black/[.03] py-3 text-xs text-slate-300 light:text-slate-700 transition hover:bg-white/[.08] hover:light:bg-black/[.05] active:scale-[.97]"
+                  className="flex flex-col items-center gap-1.5 rounded-2xl bg-white/[.04] light:bg-black/[.03] py-3 text-xs text-slate-300 light:text-slate-700 transition hover:bg-white/[.08] hover:light:bg-black/[.05] active:scale-[.97] glassy:glass-pill"
                 >
                   <div className={`flex h-10 w-10 items-center justify-center rounded-full ${item.key === 'add' ? 'bg-accent-400/15 text-accent-200 light:text-accent-700' : 'bg-white/[.06] light:bg-black/[.04] text-slate-200 light:text-slate-600'}`}><item.icon size={18} /></div>
                   {item.label}
@@ -1006,13 +1063,35 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
 
           <div className="hidden border-white/[.07] light:border-black/[.07] xl:flex xl:flex-col xl:justify-center xl:gap-3 xl:border-l xl:pl-8">
             <div>
-              <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-400 light:text-slate-500">Cash runway</div>
+              <div className="flex items-center gap-1">
+                <span className="text-[11px] font-semibold uppercase tracking-widest text-slate-400 light:text-slate-500">Cash runway</span>
+                <button
+                  type="button"
+                  onClick={() => setShowRunwayInfo(true)}
+                  title="What does this mean?"
+                  aria-label="What does Cash runway mean?"
+                  className="rounded-full p-0.5 text-slate-500 transition hover:bg-white/5 hover:text-white hover:light:bg-black/5 hover:light:text-slate-900"
+                >
+                  <Info size={12} />
+                </button>
+              </div>
               <div className="mt-0.5 text-xl font-semibold leading-tight text-white light:text-slate-900">
                 {runwayMonths === null ? '—' : <>{runwayMonths > 99 ? '99+' : runwayMonths.toFixed(1)}<span className="ml-1 text-sm font-medium text-slate-400 light:text-slate-500">mo of avg. spend</span></>}
               </div>
             </div>
             <div>
-              <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-400 light:text-slate-500">Debt load</div>
+              <div className="flex items-center gap-1">
+                <span className="text-[11px] font-semibold uppercase tracking-widest text-slate-400 light:text-slate-500">Debt load</span>
+                <button
+                  type="button"
+                  onClick={() => setShowDebtLoadInfo(true)}
+                  title="What does this mean?"
+                  aria-label="What does Debt load mean?"
+                  className="rounded-full p-0.5 text-slate-500 transition hover:bg-white/5 hover:text-white hover:light:bg-black/5 hover:light:text-slate-900"
+                >
+                  <Info size={12} />
+                </button>
+              </div>
               <div className={`mt-0.5 text-xl font-semibold leading-tight ${debtLoadPct >= 100 ? 'text-rose-300 light:text-rose-700' : debtLoadPct >= 60 ? 'text-amber-300 light:text-amber-700' : 'text-emerald-300 light:text-emerald-700'}`}>
                 {debtLoadPct >= 999 ? '100+' : debtLoadPct}<span className="ml-1 text-sm font-medium text-slate-400 light:text-slate-500">% of assets owed</span>
               </div>
@@ -1044,7 +1123,7 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
       <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[1.4fr_1fr]">
         <div className="flex min-h-0 flex-col gap-3">
           {widgets.cashflow_chart.enabled && (
-            <div className="shrink-0 rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] p-3.5">
+            <div className="shrink-0 rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-3.5">
               <div className="mb-1 flex items-center justify-between">
                 <div>
                   <h2 className="text-sm font-semibold text-white light:text-slate-900">Cash flow · last 6 months</h2>
@@ -1054,36 +1133,76 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
               </div>
               <div className="h-40">
                 <ResponsiveContainer width="100%" height="100%">
-                  {/* With showMoney off the axis ticks and tooltip mask to '••••', but the bars keep
-                      their real relative heights — the shape of the month-over-month trend is a
+                  {/* With showMoney off the axis ticks and tooltip mask to '••••', but the bars/lines
+                      keep their real relative heights — the shape of the month-over-month trend is a
                       known, accepted residual leak. Masking it would mean either faking the user's
                       own data or hiding the chart outright, neither of which matches how every
                       other masked figure on this dashboard behaves. */}
-                  <BarChart data={months}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff11" />
-                    <XAxis dataKey="label" tick={{ fill: '#94a3b8', fontSize: 12 }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fill: '#94a3b8', fontSize: 12 }} axisLine={false} tickLine={false} tickFormatter={(v) => (showMoney ? `₹${(v / 1000).toFixed(0)}k` : '••••')} />
-                    <Tooltip cursor={{ fill: '#ffffff08' }} contentStyle={{ background: '#0f1420', border: '1px solid #ffffff22', borderRadius: 12, color: '#fff' }} formatter={(v) => (showMoney ? money(v) : '••••')} />
-                    <Legend iconType="circle" wrapperStyle={{ color: '#94a3b8', fontSize: 12 }} />
-                    <Bar dataKey="income" fill="#34d399" radius={[8, 8, 0, 0]} />
-                    <Bar dataKey="expense" fill="#fb7185" radius={[8, 8, 0, 0]} />
-                  </BarChart>
+                  {theme === 'glassy' ? (
+                    // Bars gave each month a hover highlight that's the same fixed width for every
+                    // category slot regardless of that month's own value — reads as "generic",
+                    // not tied to the specific month. A pure area/line keeps the highlight (the
+                    // beam below) anchored to the hovered point's real x position instead.
+                    <AreaChart data={months}>
+                      <defs>
+                        <linearGradient id="cashflowIncomeGlow" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#34d399" stopOpacity={0.45} />
+                          <stop offset="100%" stopColor="#34d399" stopOpacity={0} />
+                        </linearGradient>
+                        <linearGradient id="cashflowExpenseGlow" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#fb7185" stopOpacity={0.4} />
+                          <stop offset="100%" stopColor="#fb7185" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <XAxis dataKey="label" tick={{ fill: '#94a3b8', fontSize: 12 }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fill: '#94a3b8', fontSize: 12 }} axisLine={false} tickLine={false} tickFormatter={(v) => (showMoney ? `₹${(v / 1000).toFixed(0)}k` : '••••')} />
+                      <Tooltip content={<GlassyCashflowTooltip showMoney={showMoney} />} cursor={<GlassyCashflowCursor />} />
+                      <Area
+                        type="monotone" dataKey="income" stroke="#34d399" strokeWidth={2.5} fill="url(#cashflowIncomeGlow)"
+                        dot={false} activeDot={{ r: 5, fill: '#0b0f17', stroke: '#34d399', strokeWidth: 2 }}
+                        style={{ filter: 'drop-shadow(0 0 6px rgba(52,211,153,.5))' }}
+                      />
+                      <Area
+                        type="monotone" dataKey="expense" stroke="#fb7185" strokeWidth={2.5} fill="url(#cashflowExpenseGlow)"
+                        dot={false} activeDot={{ r: 5, fill: '#0b0f17', stroke: '#fb7185', strokeWidth: 2 }}
+                        style={{ filter: 'drop-shadow(0 0 6px rgba(251,113,133,.5))' }}
+                      />
+                    </AreaChart>
+                  ) : (
+                    <BarChart data={months}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#ffffff11" />
+                      <XAxis dataKey="label" tick={{ fill: '#94a3b8', fontSize: 12 }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fill: '#94a3b8', fontSize: 12 }} axisLine={false} tickLine={false} tickFormatter={(v) => (showMoney ? `₹${(v / 1000).toFixed(0)}k` : '••••')} />
+                      <Tooltip cursor={{ fill: '#ffffff08' }} contentStyle={{ background: '#0f1420', border: '1px solid #ffffff22', borderRadius: 12, color: '#fff' }} formatter={(v) => (showMoney ? money(v) : '••••')} />
+                      <Legend iconType="circle" wrapperStyle={{ color: '#94a3b8', fontSize: 12 }} />
+                      <Bar dataKey="income" fill="#34d399" radius={[8, 8, 0, 0]} />
+                      <Bar dataKey="expense" fill="#fb7185" radius={[8, 8, 0, 0]} />
+                    </BarChart>
+                  )}
                 </ResponsiveContainer>
               </div>
+              {theme === 'glassy' && (
+                <div className="mt-1 flex items-center justify-center gap-4">
+                  <span className="flex items-center gap-1.5 text-xs text-slate-400"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />Income</span>
+                  <span className="flex items-center gap-1.5 text-xs text-slate-400"><span className="h-1.5 w-1.5 rounded-full bg-rose-400" />Expense</span>
+                </div>
+              )}
             </div>
           )}
 
           {/* Desktop-only — mobile has its own bottom-nav "Ledger" tab for browsing transactions,
               so this doesn't need to also live on the dashboard there. */}
           {widgets.recent_transactions.enabled && (
-            // Natural height — NOT `flex-1`. `flex-1` made this card stretch to match whatever the
-            // Balances column happened to need, which left dead black space below the ticker
-            // (itself capped at ~6 rows via `max-h-[352px]`, see TransactionTicker) on any account
-            // that didn't have enough transactions to fill that stretched height. This card is now
-            // the row's real reference height instead: it sizes to its own header + ticker only,
-            // and Balances (`lg:flex-1`, in the right column) fills the grid's stretched height to
-            // match THIS card's bottom edge — see the Balances card below for the other half.
-            <div className="hidden rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] lg:flex lg:flex-col">
+            // `lg:flex-1` — an account with few balance items made this the row's reference height
+            // (per the old comment here), but an account with MANY balance items flips that: the
+            // Balances column (right) grows past this card's natural header+ticker height, and the
+            // grid still stretches this column to match, so the extra space landed below this
+            // card's border instead of inside it — a bare gap between two differently-tall cards.
+            // `flex-1` grows this card's own background/border down to that same stretched height
+            // instead, so any leftover space reads as part of this card, not a gap next to it. The
+            // ticker itself (`max-h-[352px]`, see TransactionTicker) still caps at ~6 rows and
+            // doesn't stretch — only the card around it grows to reach the common baseline.
+            <div className="hidden rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card lg:flex lg:flex-col lg:flex-1">
               <div className="flex shrink-0 items-center justify-between px-3.5 py-2.5">
                 <div>
                   <h2 className="text-sm font-semibold text-white light:text-slate-900">Recent transactions</h2>
@@ -1094,7 +1213,7 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
               {recent.length === 0 ? (
                 <EmptyState compact icon={Wallet} title="No transactions yet" message="Log your first income or expense to see it here." cta="Add transaction" onCta={onOpenTxForm} />
               ) : (
-                <TransactionTicker items={recent} categories={categories} accounts={accounts} creditCards={credit_cards} showMoney={showMoney} />
+                <TransactionTicker items={recent} categories={categories} accounts={accounts} creditCards={credit_cards} showMoney={showMoney} maxHeightPx={recentTxMaxHeight} />
               )}
             </div>
           )}
@@ -1110,7 +1229,7 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
             // rules grows and grows (up to Recent Transactions' height) as Money rules shrinks —
             // always landing on the same bottom edge, with its own list already scrollable
             // (min-h-[160px] floor + overflow-y-auto below) for whatever doesn't fit.
-            <div className="flex min-h-[160px] min-w-0 flex-col rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] p-3.5 lg:flex-1">
+            <div className="flex min-h-[160px] min-w-0 flex-col rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-3.5 lg:flex-1">
               <div className="mb-2 flex shrink-0 items-center justify-between">
                 <div>
                   <h2 className="text-sm font-semibold text-white light:text-slate-900">Balances</h2>
@@ -1123,22 +1242,24 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
               ) : (
                 <div
                   ref={balancesRef}
-                  className={`scroll-fade min-h-0 flex-1 space-y-2 overflow-y-auto${balancesOverflow ? ' [mask-image:linear-gradient(to_bottom,black_calc(100%-28px),transparent)]' : ''}`}
+                  className={`scroll-fade min-h-0 flex-1 overflow-y-auto${balancesOverflow ? ' [mask-image:linear-gradient(to_bottom,black_calc(100%-28px),transparent)]' : ''}`}
                 >
-                  {balanceItems.map((it) => (
-                    <div key={it.id} className="flex items-center justify-between rounded-xl border border-white/5 light:border-black/5 bg-white/[.07] light:bg-black/[.07] px-3 py-2">
-                      <div className="flex min-w-0 items-center gap-2.5">
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style={{ background: `${it.color}22`, color: it.color }}>
-                          <it.icon size={14} />
+                  <div ref={balancesListInnerRef} className="space-y-2">
+                    {balanceItems.map((it) => (
+                      <div key={it.id} className="flex items-center justify-between rounded-xl border border-white/5 light:border-black/5 bg-white/[.07] light:bg-black/[.07] px-3 py-2">
+                        <div className="flex min-w-0 items-center gap-2.5">
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style={{ background: `${it.color}22`, color: it.color }}>
+                            <it.icon size={14} />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-medium text-white light:text-slate-900">{it.name}</div>
+                            <div className="truncate text-[11px] capitalize text-slate-400 light:text-slate-500">{it.sub}</div>
+                          </div>
                         </div>
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-medium text-white light:text-slate-900">{it.name}</div>
-                          <div className="truncate text-[11px] capitalize text-slate-400 light:text-slate-500">{it.sub}</div>
-                        </div>
+                        <div className={`shrink-0 text-sm font-semibold ${it.debt ? 'text-rose-300 light:text-rose-700' : 'text-white light:text-slate-900'}`}>{showMoney ? `${it.debt ? '−' : ''}${money(it.amount).replace('-', '')}` : '••••'}</div>
                       </div>
-                      <div className={`shrink-0 text-sm font-semibold ${it.debt ? 'text-rose-300 light:text-rose-700' : 'text-white light:text-slate-900'}`}>{showMoney ? `${it.debt ? '−' : ''}${money(it.amount).replace('-', '')}` : '••••'}</div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -1191,6 +1312,38 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
         { label: 'All-time saved + invested', value: showMoney ? money(allTimeSaved) : '••••' },
       ]}
       note="Savings rate now counts what you invested this month as saved, not spent — investing no longer drags the rate down."
+    />
+    <StatDrilldown
+      open={showDebtLoadInfo}
+      onClose={() => setShowDebtLoadInfo(false)}
+      title="Debt load"
+      icon={Info}
+      accent="bg-rose-400/15 text-rose-200 light:text-rose-700"
+      body="What percentage of everything you own is owed to someone else — your total debt (loans + credit cards) divided by your total assets (cash + investments)."
+      rows={[
+        { label: 'Total liabilities', value: showMoney ? money(totalLiabilities) : '••••' },
+        { label: 'Total assets', value: showMoney ? money(totalAssets) : '••••' },
+        { label: 'Debt load', value: debtLoadPct >= 999 ? '100+%' : `${debtLoadPct}%`, tone: debtLoadPct >= 100 ? 'text-rose-300 light:text-rose-700' : debtLoadPct >= 60 ? 'text-amber-300 light:text-amber-700' : 'text-emerald-300 light:text-emerald-700' },
+      ]}
+      note={totalAssets <= 0 && totalLiabilities > 0
+        ? '"100+%" here specifically means you currently have ~₹0 or less in assets while still carrying real debt — not a display error, your liabilities genuinely outweigh everything you own right now.'
+        : 'Above 100% means your debts are worth more than everything you own — a negative net worth. That\'s a real, correct read of your numbers, not a bug.'}
+    />
+    <StatDrilldown
+      open={showRunwayInfo}
+      onClose={() => setShowRunwayInfo(false)}
+      title="Cash runway"
+      icon={Info}
+      accent="bg-accent-400/15 text-accent-200 light:text-accent-700"
+      body="How many months your current cash & bank balance would last, purely at your average monthly spending pace over the last 6 months. It's not a prediction — it doesn't account for income still coming in, so it reads more pessimistic than reality if you have regular income."
+      rows={[
+        { label: 'Cash & bank balance', value: showMoney ? money(totalBalance) : '••••' },
+        { label: 'Avg. monthly spend', sub: 'Last 6 months', value: showMoney ? money(avgMonthlySpend) : '••••' },
+        { label: 'Runway', value: runwayMonths === null ? '—' : `${runwayMonths > 99 ? '99+' : runwayMonths.toFixed(1)} months` },
+      ]}
+      note={runwayMonths === null
+        ? 'Shows "—" because no expenses were recorded in the last 6 months — there\'s no spending pace yet to divide your balance by.'
+        : null}
     />
     </>
   )
@@ -1582,11 +1735,11 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTx
 
       {chartView ? (
         categoryBreakdown.length === 0 ? (
-          <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025]">
+          <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card">
             <EmptyState icon={Tag} title="No category data" message="Nothing categorised in the current filters yet." />
           </div>
         ) : (
-          <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] p-4 sm:p-6">
+          <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-4 sm:p-6">
             <div className="mb-5 text-sm font-semibold text-white light:text-slate-900">By category · {customRange ? `${formatDate(customRange.start)} – ${formatDate(customRange.end)}` : `${MONTH_NAMES[monthCursor.month]} ${monthCursor.year}`}</div>
             <div className="grid gap-6 lg:grid-cols-[1.3fr_1fr] lg:gap-8">
               <div className="h-72 lg:h-[28rem]">
@@ -1620,7 +1773,7 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTx
           </div>
         )
       ) : (
-      <section className="overflow-hidden rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025]">
+      <section className="overflow-hidden rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card">
         <div className="hidden grid-cols-[1.4fr_.9fr_.6fr_.6fr_auto] gap-4 border-b border-white/10 light:border-black/10 px-5 py-3 text-[10px] uppercase tracking-widest text-slate-600 sm:grid">
           <button type="button" onClick={() => toggleSort('description')} className="flex items-center gap-1 text-left hover:text-slate-300 hover:light:text-slate-700">Description{sortIcon('description')}</button>
           <span>Category / Account</span>
@@ -1831,7 +1984,9 @@ function Shell({ user, onLogout }) {
       return
     }
     try {
-      const response = await fetch('/api/finance/summary')
+      // Same hung-request guard as the auth check above — a request that never settles would
+      // otherwise leave `loading` true forever, since `finally` only runs once it does.
+      const response = await fetch('/api/finance/summary', { signal: AbortSignal.timeout(20000) })
       if (!response.ok) throw new Error('Failed to load')
       const result = await response.json()
       const snapshot = {
@@ -2289,6 +2444,11 @@ function Shell({ user, onLogout }) {
     const { queued } = await mutate({ table: 'accounts', method: 'DELETE', id: a.id })
     toast.push(queued ? 'Account deleted — will sync when back online' : 'Account deleted')
   }
+  const syncAccountBalance = async (account, targetBalance) => {
+    const response = await fetch(`/api/finance/accounts/${account.id}/sync_balance`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ target_balance: targetBalance }) })
+    const data = await response.json()
+    if (response.ok) { toast.push('Balance synced'); await refresh() } else { toast.push(data.error || 'Sync failed', 'error') }
+  }
   const deleteCategory = async (c) => {
     if (!(await confirm.ask(`Delete category "${c.name}"?`))) return
     const { queued } = await mutate({ table: 'categories', method: 'DELETE', id: c.id })
@@ -2373,7 +2533,7 @@ function Shell({ user, onLogout }) {
       <SpotlightTour steps={TOUR_STEPS} open={tourOpen} context={tourContext} onSkip={closeTour} onFinish={closeTour} />
       <div className="mx-auto flex min-h-screen max-w-[1480px]">
         {/* Sidebar */}
-        <aside className="hidden w-64 shrink-0 flex-col border-r border-white/5 light:border-black/5 px-5 py-6 lg:flex lg:sticky lg:top-0 lg:h-screen lg:self-start lg:overflow-y-auto">
+        <aside className="hidden w-64 shrink-0 flex-col border-r border-white/5 light:border-black/5 px-5 py-6 lg:flex lg:sticky lg:top-0 lg:h-screen lg:self-start lg:overflow-y-auto glassy:z-10 glassy:glass-nav glassy:border-r-0">
           <div className="flex items-center gap-3 text-sm font-semibold text-white light:text-slate-900">
             <img src="/logo.png" alt="" className="h-10 w-10 rounded-2xl object-cover" />Personal Finance
           </div>
@@ -2384,7 +2544,7 @@ function Shell({ user, onLogout }) {
               </button>
             ))}
           </nav>
-          <div className="mt-auto flex w-full items-center gap-1 rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] p-2.5">
+          <div className="mt-auto flex w-full items-center gap-1 rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] p-2.5 glassy:glass-pill">
             <button data-tour="nav-profile" onClick={() => setView('profile')} className={`flex min-w-0 flex-1 items-center gap-3 rounded-xl px-1.5 py-1 text-left transition hover:bg-white/[.06] hover:light:bg-black/[.04] ${view === 'profile' ? 'bg-white/[.06] light:bg-black/[.04]' : ''}`}>
               <div className="relative shrink-0">
                 <Avatar src={avatarUrl} name={firstName} email={user?.email} size={36} />
@@ -2428,7 +2588,7 @@ function Shell({ user, onLogout }) {
             <div className={fitScreen ? 'min-h-0 flex-1 lg:overflow-y-auto' : ''}>
               {view === 'dashboard' && <DashboardView data={data} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onOpenTxForm={() => openTxForm()} setView={setView} onManageMoneyRules={() => openSettings('money_rules')} onPayCardBill={openCardPay} />}
               {view === 'transactions' && <TransactionsView data={data} onOpenTxForm={() => openTxForm()} onEditTx={openTxForm} onDeleteTx={deleteTx} onDeleteTxBulk={deleteTxBulk} onImport={() => setCsvOpen(true)} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onOpenRecurring={openRecurringManager} onPayCardBill={openCardPay} />}
-              {view === 'accounts' && <AccountsView data={data} onAdd={() => openAccForm()} onEdit={openAccForm} onDelete={deleteAccount} onDeleteTx={deleteTx} onAddTransaction={(accountId) => openTxForm(null, accountId)} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
+              {view === 'accounts' && <AccountsView data={data} onAdd={() => openAccForm()} onEdit={openAccForm} onDelete={deleteAccount} onDeleteTx={deleteTx} onAddTransaction={(accountId) => openTxForm(null, accountId)} onSyncBalance={syncAccountBalance} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'budgets' && <BudgetsView data={data} onSetMonth={openBudgetMonthForm} onCloseMonth={closeBudgetMonth} onReopenMonth={reopenBudgetMonth} onDeleteMonth={deleteBudgetMonth} onAddYearly={() => openBudgetForm()} onEditYearly={openBudgetForm} onDeleteYearly={deleteBudget} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'investments' && <InvestmentsView data={data} onAddPortfolio={() => openPortfolioForm()} onEditPortfolio={openPortfolioForm} onDeletePortfolio={deletePortfolio} onAddHolding={openHoldingForm} onBulkImport={openBulkImport} onEditHolding={openHoldingEdit} onDeleteHolding={deleteHolding} onRefreshRowPrice={onRefreshRowPrice} onManualPriceEntry={onManualPriceEntry} onRefreshAll={refreshAllPrices} pricesLoading={pricesLoading} onAddFunds={openFundsForm} onWithdrawFunds={openWithdrawForm} onConnectKite={connectKite} onLinkKite={linkPortfolioKite} onUnlinkKite={unlinkPortfolioKite} onSyncKite={syncPortfolioKite} kiteSyncBusy={kiteSyncBusy} onAddSip={openSipForm} onEditSip={openSipForm} onDeleteSip={deleteSip} onSyncSipsKite={syncSipsKite} onAddOtherInvestment={openOtherInvestmentForm} onEditOtherInvestment={openOtherInvestmentEdit} onDeleteOtherInvestment={deleteOtherInvestment} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'cards' && <CreditCardsView data={data} onAdd={() => openCardForm()} onEdit={openCardForm} onDelete={deleteCard} onSpend={openCardSpend} onPay={openCardPay} onDeleteSpend={deleteCardSpend} onDeleteTx={deleteTx} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
@@ -2459,14 +2619,14 @@ function Shell({ user, onLogout }) {
       </div>
 
       {/* Floating quick add */}
-      <button onClick={() => openTxForm()} className="fixed bottom-24 right-5 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-accent-300 to-accent-600 text-[#07101c] shadow-2xl shadow-accent-500/30 transition hover:scale-105 lg:bottom-8 lg:right-8" title="Quick add transaction">
+      <button onClick={() => openTxForm()} className="fixed bottom-24 right-5 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-accent-300 to-accent-600 text-[#07101c] shadow-2xl shadow-accent-500/30 transition hover:scale-105 lg:bottom-8 lg:right-8 glassy:glass-btn-primary" title="Quick add transaction">
         <Plus size={24} />
       </button>
 
       <InstallPrompt />
 
       {/* Mobile bottom nav */}
-      <nav className="fixed bottom-0 left-0 right-0 z-20 border-t border-white/10 light:border-black/10 bg-[#0b0f18]/95 light:bg-white/90 backdrop-blur-xl lg:hidden" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+      <nav className="fixed bottom-0 left-0 right-0 z-20 border-t border-white/10 light:border-black/10 bg-[#0b0f18]/95 light:bg-white/90 backdrop-blur-xl lg:hidden glassy:glass-nav" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         <div className="mx-auto grid max-w-md grid-cols-4">
           {primaryMobileNav.map((n) => (
             <button key={n.key} data-tour={`nav-${n.key}`} onClick={() => setView(n.key)} className={`flex flex-col items-center gap-1 py-3 text-[11px] ${view === n.key ? 'text-accent-300 light:text-accent-700' : 'text-slate-500'}`}>
@@ -2486,7 +2646,7 @@ function Shell({ user, onLogout }) {
               key={n.key}
               data-tour={`nav-${n.key}`}
               onClick={() => { setView(n.key); setMoreOpen(false) }}
-              className={`flex flex-col items-center gap-2 rounded-xl border p-4 text-center text-xs transition ${view === n.key ? 'border-accent-300/30 bg-accent-400/10 text-accent-200 light:text-accent-700' : 'border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] text-slate-300 light:text-slate-700 hover:bg-white/[.06] hover:light:bg-black/[.04]'}`}
+              className={`flex flex-col items-center gap-2 rounded-xl border p-4 text-center text-xs transition glassy:glass-pill ${view === n.key ? 'border-accent-300/30 bg-accent-400/10 text-accent-200 light:text-accent-700' : 'border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] text-slate-300 light:text-slate-700 hover:bg-white/[.06] hover:light:bg-black/[.04]'}`}
             >
               <n.icon size={20} />
               <span>{n.label}</span>
@@ -2560,15 +2720,19 @@ function AppInner() {
       const qs = params.toString()
       window.history.replaceState({}, '', window.location.pathname + (qs ? `?${qs}` : ''))
     }
-    fetch('/api/auth/me')
+    // AbortSignal.timeout guards against a hung request (server down, a deadlocked query) —
+    // without it, a request that never settles leaves `user` at `undefined` forever and
+    // <LoadingScreen /> spins with no way out. A timeout rejects the fetch, which lands in the
+    // same offline/network-failure `.catch()` below rather than needing its own fallback path.
+    fetch('/api/auth/me', { signal: AbortSignal.timeout(15000) })
       .then((r) => r.ok ? r.json() : { user: null })
       .catch(async () => {
-        // The request itself failed (offline, DNS, etc.) rather than the server explicitly
-        // saying "not authenticated" — those are different things. A real 401 here means "log
-        // this browser out"; a network failure with no server opinion at all shouldn't bounce a
-        // previously-signed-in user to the landing page when there's cached data from their last
-        // session sitting right there in Dexie, ready to paint. Only fall back to a minimal user
-        // reconstructed from that cache in this network-failure case — an actual 401 still wins.
+        // The request itself failed (offline, DNS, a timeout, etc.) rather than the server
+        // explicitly saying "not authenticated" — those are different things. A real 401 here
+        // means "log this browser out"; a network failure with no server opinion at all
+        // shouldn't bounce a previously-signed-in user to the landing page when there's cached
+        // data from their last session sitting right there in Dexie, ready to paint. Only fall
+        // back to a minimal user reconstructed from that cache here — an actual 401 still wins.
         const cached = await loadSnapshot().catch(() => null)
         return { user: cached?.profile?.id ? { id: cached.profile.id } : null }
       })

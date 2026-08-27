@@ -93,7 +93,7 @@ export function ScholarshipDetailView({
         {linkedAccount ? <>Linked to <b>{linkedAccount.name}</b> — marking this received/paid posts a transaction there, kept in sync as you edit.</> : 'Not linked to a bank account — stays only in this module.'}
       </DismissibleBanner>
 
-      <div className="rounded-3xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] p-6">
+      <div className="rounded-3xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-6">
         <div className="text-xs uppercase tracking-widest text-slate-500">Pending</div>
         <div className={`mt-1 text-[clamp(2rem,6vw,3rem)] font-semibold leading-[1.1] tracking-[-0.01em] ${pending > 0 ? 'text-amber-300 light:text-amber-700' : 'text-emerald-300 light:text-emerald-700'}`}>{showMoney ? money(pending) : '••••'}</div>
         <div className="mt-1 text-sm text-slate-500">of {money(total)} total</div>
@@ -113,7 +113,7 @@ export function ScholarshipDetailView({
         )}
       </div>
 
-      <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025]">
+      <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card">
         <div className="border-b border-white/10 light:border-black/10 px-5 py-3 text-xs uppercase tracking-widest text-slate-500">Payments to college · {paymentsForThis.length}</div>
         {paymentsForThis.length === 0 ? (
           <EmptyState compact icon={ArrowUpRight} title="No payments yet" message="Pay to college once the scholarship money has arrived." cta={pending > 0 ? 'Pay to college' : undefined} onCta={pending > 0 ? () => onPay(s) : undefined} />

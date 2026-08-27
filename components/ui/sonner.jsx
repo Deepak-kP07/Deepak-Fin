@@ -6,10 +6,13 @@ const Toaster = ({
   ...props
 }) => {
   const { theme = "system" } = useTheme()
+  // Sonner only understands light/dark/system — Glass is a dark-based theme, so map it through
+  // rather than letting it fall back to a mismatched "system" read.
+  const sonnerTheme = theme === "glassy" ? "dark" : theme
 
   return (
     <Sonner
-      theme={theme}
+      theme={sonnerTheme}
       className="toaster group"
       toastOptions={{
         classNames: {

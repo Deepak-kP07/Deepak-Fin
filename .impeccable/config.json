@@ -195,6 +195,26 @@
         ],
         "createdAt": "2026-08-26T17:14:51.991Z",
         "reason": "box-shadow spread can't reference a Tailwind class, so this is the same bg-black/60 overlay convention already used in BottomSheet.jsx, just expressed as a literal rgba for the CSS box-shadow property"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#07101c",
+        "createdAt": "2026-08-26T17:50:27.674Z"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "rgba(0, 0, 0, .35)",
+        "createdAt": "2026-08-26T18:22:50.679Z"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "rgba(0, 0, 0, .4)",
+        "createdAt": "2026-08-26T18:22:50.709Z"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "rgba(0, 0, 0, .45)",
+        "createdAt": "2026-08-27T01:58:17.112Z"
       }
     ]
   }

@@ -102,7 +102,7 @@ export function LendBorrowView({ data, onAdd, onEdit, onDelete, onDeleteTx, onLo
       </div>
 
       {lend_borrow.length > 0 && (
-        <div className="rounded-3xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] p-6">
+        <div className="rounded-3xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-6">
           <div className="text-xs uppercase tracking-widest text-slate-500">{net >= 0 ? 'Net owed to you' : 'Net you owe'}</div>
           <div className="mt-1 text-[clamp(2rem,6vw,3rem)] font-semibold leading-[1.1] tracking-[-0.01em] text-white light:text-slate-900">{showMoney ? money(Math.abs(net)) : '••••••'}</div>
           <div className="mt-5 grid grid-cols-2 gap-3">
@@ -113,11 +113,11 @@ export function LendBorrowView({ data, onAdd, onEdit, onDelete, onDeleteTx, onLo
       )}
 
       {lend_borrow.length === 0 ? (
-        <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025]">
+        <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card">
           <EmptyState icon={Heart} title="Nothing to track" message="Log money you've lent to friends or borrowed from someone." cta="Add first record" onCta={onAdd} />
         </div>
       ) : visible.length === 0 ? (
-        <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025]">
+        <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card">
           <EmptyState icon={Heart} title="All settled" message={`${closedCount} record${closedCount === 1 ? '' : 's'} fully repaid. Tap "View all history" to see them.`} />
         </div>
       ) : (

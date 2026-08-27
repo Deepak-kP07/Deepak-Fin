@@ -135,7 +135,7 @@ export function SettingsMobileNav({ data, onSaveProfile }) {
   const actionSlotEls = actionSlots.map((key, i) => <Slot key={i} id={`qa-slot-${i}`} item={findActionItem(key)} activeId={activeId} kind="action" />)
 
   return (
-    <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] p-5">
+    <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-5">
       <div className="text-sm font-semibold text-white light:text-slate-900">Mobile nav</div>
       <div className="mt-1 text-[11px] text-slate-500">
         This is your phone screen. Drag anything from "Available" onto a highlighted spot, or drag two spots onto each other to swap them. Home always stays in the bottom nav, but you can move it to any of the 3 positions.

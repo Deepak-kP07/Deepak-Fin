@@ -19,7 +19,7 @@ export function SettingsProfile({ data, user, onSaveProfile }) {
   const avatarUrl = profile?.avatar_url || user?.user_metadata?.avatar_url || user?.user_metadata?.picture || ''
 
   return (
-    <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] p-5 sm:p-8">
+    <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-5 sm:p-8">
       <div className="text-sm font-semibold text-white light:text-slate-900">Profile</div>
       <div className="mt-1 text-[11px] text-slate-500">Your name and photo, as they appear across the app.</div>
 

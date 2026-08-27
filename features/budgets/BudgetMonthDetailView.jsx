@@ -28,7 +28,7 @@ export function BudgetMonthDetailView({ plan, lines, categories, transactions, o
         </div>
       </div>
 
-      <div className="rounded-3xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] p-6">
+      <div className="rounded-3xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-6">
         <div className="text-xs uppercase tracking-widest text-slate-500">{remaining >= 0 ? 'Came in under by' : 'Went over by'}</div>
         <div className={`mt-1 text-[clamp(2rem,6vw,3rem)] font-semibold leading-[1.1] tracking-[-0.01em] ${remaining >= 0 ? 'text-emerald-300 light:text-emerald-700' : 'text-rose-300 light:text-rose-700'}`}>{money(Math.abs(remaining))}</div>
         <div className="mt-5 grid grid-cols-2 gap-3">
@@ -37,7 +37,7 @@ export function BudgetMonthDetailView({ plan, lines, categories, transactions, o
         </div>
       </div>
 
-      <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025]">
+      <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card">
         <div className="border-b border-white/10 light:border-black/10 px-5 py-3 text-xs uppercase tracking-widest text-slate-500">Category breakdown · {breakdown.length}</div>
         {breakdown.length === 0 ? (
           <EmptyState compact icon={Target} title="No categories set" message="This month's budget had no category breakdown." />

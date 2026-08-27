@@ -6,7 +6,7 @@
 // its label and sub-line too) — label and sub stay neutral slate, same as every other instance.
 export function HeroStatTile({ icon: Icon, label, value, valueTone = 'text-white light:text-slate-900', sub }) {
   return (
-    <div className="rounded-2xl bg-white/[.04] light:bg-black/[.03] p-3.5">
+    <div className="rounded-2xl bg-white/[.04] light:bg-black/[.03] p-3.5 glassy:glass-pill">
       <div className="flex items-center gap-1.5 text-xs text-slate-400 light:text-slate-500">
         {Icon && <Icon size={13} />}{label}
       </div>

@@ -14,7 +14,7 @@ export function useConfirm() {
   const close = (result) => { state?.resolve(result); setState(null) }
   const view = state && (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={() => close(false)}>
-      <div onClick={(e) => e.stopPropagation()} className="w-full max-w-sm rounded-3xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-6 shadow-2xl">
+      <div onClick={(e) => e.stopPropagation()} className="w-full max-w-sm rounded-3xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-6 shadow-2xl glassy:glass-card">
         <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-rose-400/15 text-rose-300 light:text-rose-700">{state.okOnly ? <Ban size={18} /> : <Trash2 size={18} />}</div>
         <p className="mt-4 text-sm text-slate-200 light:text-slate-700">{state.message}</p>
         <div className="mt-6 flex justify-end gap-2">

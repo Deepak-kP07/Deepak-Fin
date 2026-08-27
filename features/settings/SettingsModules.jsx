@@ -32,7 +32,7 @@ export function SettingsModules({ data, onSaveProfile }) {
   }
 
   return (
-    <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] p-5">
+    <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-5">
       <div className="text-sm font-semibold text-white light:text-slate-900">Modules</div>
       <div className="text-xs text-slate-500">Turn modules on or off, and reorder them in the sidebar. Dashboard, Transactions, and Accounts are always on and always come first.</div>
       <div className="mt-3 space-y-2">

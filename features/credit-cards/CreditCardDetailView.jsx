@@ -86,7 +86,7 @@ export function CreditCardDetailView({ card, cardTransactions, allTransactions, 
         </div>
       </div>
 
-      <div className={`rounded-xl border px-4 py-3 text-sm ${nd.days <= 4 ? 'border-amber-300/30 bg-amber-300/5 text-amber-200 light:text-amber-700' : 'border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] text-slate-300 light:text-slate-700'}`}>
+      <div className={`rounded-xl border px-4 py-3 text-sm ${nd.days <= 4 ? 'border-amber-300/30 bg-amber-300/5 text-amber-200 light:text-amber-700' : 'border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card text-slate-300 light:text-slate-700'}`}>
         Bill on the {ordinal(card.billing_date)} · Due {nd.days > 0 ? `in ${nd.days} day${nd.days === 1 ? '' : 's'}` : nd.days === 0 ? 'today' : 'overdue'} ({formatDate(nd.due.toISOString().slice(0, 10))})
       </div>
 
@@ -96,7 +96,7 @@ export function CreditCardDetailView({ card, cardTransactions, allTransactions, 
         <StatCard label="Total repaid" value={showMoney ? money(totalRepaid) : '••••'} icon={ArrowUpRight} accent="bg-emerald-400/15 text-emerald-200 light:text-emerald-700" sub={<span>{repayments.length} payment{repayments.length === 1 ? '' : 's'}</span>} />
       </div>
 
-      <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] p-5">
+      <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-5">
         <div className="text-sm font-semibold text-white light:text-slate-900">Net spend by month · last 6 months</div>
         <div className="mt-4 h-40">
           <ResponsiveContainer width="100%" height="100%">
@@ -120,7 +120,7 @@ export function CreditCardDetailView({ card, cardTransactions, allTransactions, 
         </div>
       </div>
 
-      <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025]">
+      <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card">
         <div className="flex items-center justify-between gap-3 border-b border-white/10 light:border-black/10 px-5 py-3">
           <div className="text-xs uppercase tracking-widest text-slate-500">Card activity · {monthActivity.length}</div>
           <MonthCursor cursor={monthCursor} onShift={shiftMonth} showAll={showAllMonths} onToggleAll={() => setShowAllMonths((v) => !v)} />
@@ -140,24 +140,41 @@ export function CreditCardDetailView({ card, cardTransactions, allTransactions, 
             {monthActivity.map((a) => {
               const cat = categories.find((c) => c.id === a.categoryId)
               const isDebit = a.direction === 'debit'
+              const color = isDebit ? 'text-rose-300 light:text-rose-700' : 'text-emerald-300 light:text-emerald-700'
               return (
-                <div key={`${a.source}-${a.id}`} className="grid grid-cols-1 gap-2 px-5 py-4 sm:grid-cols-[1.4fr_.9fr_.6fr_.6fr_auto] sm:items-center sm:gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/[.05] light:bg-black/[.035]" style={{ color: cat?.color || '#94a3b8' }}>
+                <div key={`${a.source}-${a.id}`} className="px-5 py-3 sm:py-4">
+                  {/* Mobile: one compact row — same icon-bubble + name/subtitle + trailing amount
+                      pattern as Accounts/Transactions, no per-row delete icon on mobile either. */}
+                  <div className="flex items-center gap-3 sm:hidden">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/[.05] light:bg-black/[.035]" style={{ color: cat?.color || '#94a3b8' }}>
                       {isDebit ? <ArrowDownRight size={16} /> : <ArrowUpRight size={16} />}
                     </div>
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <div className="truncate text-sm font-medium text-white light:text-slate-900">{a.description}</div>
-                      {a.status && <div className="text-[11px] uppercase tracking-widest text-slate-500">{a.status}</div>}
+                      <div className="truncate text-[11px] text-slate-500">{cat?.name || 'Uncategorised'} · {formatDateTime(a.date, a.time)}{a.status ? ` · ${a.status}` : ''}</div>
                     </div>
+                    <div className={`shrink-0 text-sm font-semibold ${color}`}>{isDebit ? '-' : '+'}{showMoney ? money(a.amount) : '••••'}</div>
                   </div>
-                  <div className="text-xs text-slate-400 light:text-slate-500">
-                    <span className="inline-block rounded-md bg-white/[.05] light:bg-black/[.035] px-2 py-0.5" style={{ color: cat?.color || '#94a3b8' }}>{cat?.name || 'Uncategorised'}</span>
-                  </div>
-                  <div className="text-xs text-slate-500">{formatDateTime(a.date, a.time)}</div>
-                  <div className={`text-sm font-semibold sm:text-right ${isDebit ? 'text-rose-300 light:text-rose-700' : 'text-emerald-300 light:text-emerald-700'}`}>{isDebit ? '-' : '+'}{showMoney ? money(a.amount) : '••••'}</div>
-                  <div className="flex justify-end">
-                    <button onClick={() => deleteActivity(a)} className="rounded-lg p-1.5 text-rose-300/70 light:text-rose-700 hover:bg-rose-300/10"><Trash2 size={13} /></button>
+
+                  {/* Desktop: unchanged full row */}
+                  <div className="hidden sm:grid sm:grid-cols-[1.4fr_.9fr_.6fr_.6fr_auto] sm:items-center sm:gap-4">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/[.05] light:bg-black/[.035]" style={{ color: cat?.color || '#94a3b8' }}>
+                        {isDebit ? <ArrowDownRight size={16} /> : <ArrowUpRight size={16} />}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-medium text-white light:text-slate-900">{a.description}</div>
+                        {a.status && <div className="text-[11px] uppercase tracking-widest text-slate-500">{a.status}</div>}
+                      </div>
+                    </div>
+                    <div className="text-xs text-slate-400 light:text-slate-500">
+                      <span className="inline-block rounded-md bg-white/[.05] light:bg-black/[.035] px-2 py-0.5" style={{ color: cat?.color || '#94a3b8' }}>{cat?.name || 'Uncategorised'}</span>
+                    </div>
+                    <div className="text-xs text-slate-500">{formatDateTime(a.date, a.time)}</div>
+                    <div className={`text-sm font-semibold sm:text-right ${color}`}>{isDebit ? '-' : '+'}{showMoney ? money(a.amount) : '••••'}</div>
+                    <div className="flex justify-end">
+                      <button onClick={() => deleteActivity(a)} className="rounded-lg p-1.5 text-rose-300/70 light:text-rose-700 hover:bg-rose-300/10"><Trash2 size={13} /></button>
+                    </div>
                   </div>
                 </div>
               )
@@ -167,7 +184,7 @@ export function CreditCardDetailView({ card, cardTransactions, allTransactions, 
         )}
       </div>
 
-      <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025]">
+      <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card">
         <div className="border-b border-white/10 light:border-black/10 px-5 py-3 text-xs uppercase tracking-widest text-slate-500">Repayment history · {repayments.length}</div>
         {repayments.length === 0 ? (
           <div className="px-5 py-6 text-sm text-slate-500">No payments logged yet.</div>

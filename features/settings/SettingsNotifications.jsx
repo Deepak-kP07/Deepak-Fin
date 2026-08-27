@@ -74,7 +74,7 @@ export function SettingsNotifications({ data, onSaveProfile, toast }) {
 
   return (
     <div className="space-y-4">
-    <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] p-5">
+    <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-5">
       <div className="text-sm font-semibold text-white light:text-slate-900">Push notifications</div>
       {!supported ? (
         <div className="mt-3 flex items-center gap-3 rounded-xl bg-black/20 light:bg-black/[.06] px-4 py-3 text-xs text-slate-500">
@@ -94,7 +94,7 @@ export function SettingsNotifications({ data, onSaveProfile, toast }) {
       )}
     </div>
 
-    <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] p-5">
+    <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-5">
       <div className="text-sm font-semibold text-white light:text-slate-900">Email reports</div>
       <div className="mt-3 flex items-center justify-between gap-4 rounded-xl bg-black/20 light:bg-black/[.06] px-4 py-3">
         <div>

@@ -18,7 +18,7 @@ export function RecurringManager({ open, onClose, rules, onAdd, onEdit, onToggle
           {rules.length === 0 ? (
             <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.02] light:bg-black/[.02] py-8 text-center text-sm text-slate-500">No recurring rules yet.</div>
           ) : rules.map((r) => (
-            <div key={r.id} className={`rounded-2xl border p-4 ${r.is_active ? 'border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025]' : 'border-white/5 light:border-black/5 bg-white/[.015] light:bg-black/[.01] opacity-60'}`}>
+            <div key={r.id} className={`rounded-2xl border p-4 ${r.is_active ? 'border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card' : 'border-white/5 light:border-black/5 bg-white/[.015] light:bg-black/[.01] opacity-60'}`}>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="truncate text-sm font-medium text-white light:text-slate-900">{r.description}</div>

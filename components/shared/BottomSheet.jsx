@@ -12,7 +12,7 @@ export function BottomSheet({ open, onOpenChange, title, children }) {
     <Drawer.Root open={open} onOpenChange={onOpenChange}>
       <Drawer.Portal>
         <Drawer.Overlay className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm" />
-        <Drawer.Content className="fixed inset-x-0 bottom-0 z-40 flex max-h-[85vh] flex-col rounded-t-3xl border-t border-white/10 light:border-black/10 bg-[#141a28] light:bg-white shadow-2xl outline-none">
+        <Drawer.Content className="fixed inset-x-0 bottom-0 z-40 flex max-h-[85vh] flex-col rounded-t-3xl border-t border-white/10 light:border-black/10 bg-[#141a28] light:bg-white shadow-2xl outline-none glassy:glass-card">
           <div className="mx-auto mt-3 h-1 w-10 shrink-0 rounded-full bg-white/20" />
           <div className="flex items-center justify-between px-5 pt-3">
             <Drawer.Title className="text-base font-semibold text-white light:text-slate-900">{title}</Drawer.Title>

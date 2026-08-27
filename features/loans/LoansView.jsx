@@ -48,7 +48,7 @@ export function LoansView({ data, onAdd, onEdit, onDelete, onPay, onDeletePaymen
       </div>
 
       {loans.length > 0 && (
-        <div className="rounded-3xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] p-6">
+        <div className="rounded-3xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-6">
           <div className="text-xs uppercase tracking-widest text-slate-500">Total outstanding</div>
           <div className="mt-1 text-[clamp(2rem,6vw,3rem)] font-semibold leading-[1.1] tracking-[-0.01em] text-white light:text-slate-900">
             {showMoney ? money(totalOutstanding) : '••••••••'}
@@ -64,7 +64,7 @@ export function LoansView({ data, onAdd, onEdit, onDelete, onPay, onDeletePaymen
       )}
 
       {loans.length === 0 ? (
-        <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025]">
+        <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card">
           <EmptyState icon={Landmark} title="No loans yet" message="Log home, car or personal loans and track EMIs + prepayments." cta="Add loan" onCta={onAdd} />
         </div>
       ) : (
@@ -78,7 +78,7 @@ export function LoansView({ data, onAdd, onEdit, onDelete, onPay, onDeletePaymen
             const cleared = principal > 0 ? Math.max(0, Math.min(100, Math.round(((principal - outstanding) / principal) * 100))) : 0
             const account = accounts.find((a) => a.id === loan.paid_from_account_id)
             return (
-              <div key={loan.id} className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025]">
+              <div key={loan.id} className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card">
                 {/* Deliberately stays one loan per row on desktop (not a card grid) — a loan
                     carries 4 substantial fields (name+status, outstanding+progress bar, total
                     paid, action) that read better as a wide row than a cramped card. The row

@@ -33,7 +33,7 @@ export function VaultView({ data, onAdd, onEdit, onDelete }) {
       </div>
 
       {rows.length === 0 ? (
-        <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025]">
+        <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card">
           <EmptyState icon={KeyRound} title="Nothing here yet" message="Store this account or card's details securely — nothing is shown until you tap to reveal it." cta="Add to vault" onCta={() => onAdd(tab)} />
         </div>
       ) : (

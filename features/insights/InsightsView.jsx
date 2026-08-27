@@ -49,7 +49,7 @@ export function InsightsView({ data }) {
         <h1 className="text-3xl font-semibold tracking-tight text-white light:text-slate-900">Insights · {now.toLocaleString('en-IN', { month: 'long' })}</h1>
       </div>
 
-      <div className="rounded-3xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] p-6">
+      <div className="rounded-3xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-6">
         <div className="text-xs uppercase tracking-widest text-slate-500">Savings</div>
         <div className={`mt-1 text-[clamp(2rem,6vw,3rem)] font-semibold leading-[1.1] tracking-[-0.01em] ${rate >= 20 ? 'text-emerald-300 light:text-emerald-700' : 'text-amber-300 light:text-amber-700'}`}>{money(savings)}</div>
         <div className={`mt-1 text-sm ${rate >= 20 ? 'text-emerald-300 light:text-emerald-700' : 'text-amber-300 light:text-amber-700'}`}>{rate}% of income</div>
@@ -72,7 +72,7 @@ export function InsightsView({ data }) {
       </div>
 
       <div className="grid min-w-0 gap-6 lg:grid-cols-[1fr_1.2fr]">
-        <div className="min-w-0 rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] p-5">
+        <div className="min-w-0 rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-5">
           <div className="mb-4 text-sm font-semibold text-white light:text-slate-900">Where money goes</div>
           {topCats.length === 0 ? (
             <EmptyState icon={Tag} title="No expense data" message="Log a few expenses to see your top categories." />
@@ -91,7 +91,7 @@ export function InsightsView({ data }) {
           )}
         </div>
 
-        <div className="min-w-0 rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] p-5">
+        <div className="min-w-0 rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-5">
           <div className="mb-4 text-sm font-semibold text-white light:text-slate-900">Smart insights</div>
           {insights.length === 0 ? (
             <EmptyState icon={Sparkles} title="Nothing to analyse yet" message="Log a few transactions this month and we'll surface patterns." />

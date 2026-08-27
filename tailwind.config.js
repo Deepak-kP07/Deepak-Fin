@@ -132,6 +132,9 @@ module.exports = {
       // is untouched and keeps meaning ".dark ancestor".
       plugin(({ addVariant }) => {
         addVariant('light', ':is(.light &)')
+        // Glass theme — same mechanism as `light:`, so until a surface gets a `glassy:` class
+        // added, <html class="glassy"> renders identically to Dark (nothing to break).
+        addVariant('glassy', ':is(.glassy &)')
       }),
     ],
   }

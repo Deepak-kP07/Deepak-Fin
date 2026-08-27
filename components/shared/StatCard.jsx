@@ -7,7 +7,7 @@ export function StatCard({ label, value, sub, icon: Icon, accent = 'bg-accent-30
   return (
     <Tag
       {...(onClick ? { type: 'button', onClick } : {})}
-      className={`min-w-0 rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] p-3.5${onClick ? ' w-full text-left transition hover:bg-white/[.06] hover:light:bg-black/[.04]' : ''}`}
+      className={`min-w-0 rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] p-3.5 glassy:glass-card${onClick ? ' w-full text-left transition hover:bg-white/[.06] hover:light:bg-black/[.04]' : ''}`}
     >
       <div className="flex items-center justify-between gap-2">
         <span className="truncate text-xs text-slate-400 light:text-slate-500">{label}</span>

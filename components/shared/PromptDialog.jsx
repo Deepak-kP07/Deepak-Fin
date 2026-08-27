@@ -16,7 +16,7 @@ export function usePrompt() {
   const close = (result) => { state?.resolve(result); setState(null) }
   const view = state && (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={() => close(null)}>
-      <form onSubmit={(e) => { e.preventDefault(); close(value) }} onClick={(e) => e.stopPropagation()} className="w-full max-w-sm rounded-3xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-6 shadow-2xl">
+      <form onSubmit={(e) => { e.preventDefault(); close(value) }} onClick={(e) => e.stopPropagation()} className="w-full max-w-sm rounded-3xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-6 shadow-2xl glassy:glass-card">
         <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-accent-400/15 text-accent-200 light:text-accent-700"><Pencil size={18} /></div>
         <p className="mt-4 text-sm text-slate-200 light:text-slate-700">{state.message}</p>
         <input

@@ -6,7 +6,7 @@ export function SettingsAccounts({ data, onReorderAccount }) {
   const accounts = [...data.accounts].sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0))
 
   return (
-    <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] p-5">
+    <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-5">
       <div className="text-sm font-semibold text-white light:text-slate-900">Accounts</div>
       <div className="text-xs text-slate-500">Reorder how accounts appear in every dropdown across the app.</div>
       <div className="mt-3 space-y-1.5">

@@ -165,3 +165,73 @@ body {
 .light .scroll-fade::-webkit-scrollbar-thumb {
   background: rgba(0, 0, 0, .15);
 }
+
+/* Glass theme — third peer theme alongside Dark/Light (tailwind.config.js's `glassy:` variant
+   turns any of these into e.g. `glassy:glass-card`). Defined here as plain component classes,
+   never referenced unprefixed, so Dark/Light are completely unaffected. Accent-tinted surfaces
+   reuse --accent-h/--accent-s (lib/color.js) so the glass look recolors with the user's chosen
+   accent instead of a hardcoded hue. */
+@layer components {
+  .glass-card {
+    background: linear-gradient(155deg, rgba(255, 255, 255, .08), rgba(255, 255, 255, .03));
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    border-color: rgba(255, 255, 255, .1) !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, .35), inset 0 1px 0 rgba(255, 255, 255, .06);
+  }
+  .glass-nav {
+    /* Deliberately more opaque than .glass-card — a nav bar needs to read as a solid capsule,
+       not tinted by whatever ambient glow is behind it (that read as a muddy wash in practice). */
+    background: rgba(12, 15, 24, .78);
+    backdrop-filter: blur(28px) saturate(150%);
+    -webkit-backdrop-filter: blur(28px) saturate(150%);
+    border-color: rgba(255, 255, 255, .09) !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, .45);
+  }
+  .glass-pill {
+    background: rgba(255, 255, 255, .07);
+    backdrop-filter: blur(14px) saturate(140%);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+    border-color: rgba(255, 255, 255, .11) !important;
+  }
+  .glass-hero {
+    background: linear-gradient(135deg, hsl(var(--accent-h) var(--accent-s) 50% / .18), hsl(var(--accent-h) var(--accent-s) 30% / .08) 55%, rgba(255, 255, 255, .04));
+    backdrop-filter: blur(24px) saturate(150%);
+    -webkit-backdrop-filter: blur(24px) saturate(150%);
+    border-color: hsl(var(--accent-h) var(--accent-s) 60% / .22) !important;
+    box-shadow: 0 12px 40px hsl(var(--accent-h) var(--accent-s) 30% / .18), inset 0 1px 0 rgba(255, 255, 255, .08);
+  }
+  .glass-btn-primary {
+    box-shadow: 0 8px 24px hsl(var(--accent-h) var(--accent-s) 45% / .45);
+  }
+}
+
+/* Ambient glow blobs behind everything — pure CSS, no JS, no per-file edits. Kept small, faint,
+   and pushed further off-screen than a first pass: at higher opacity/size these bled through every
+   backdrop-blur surface on the page (including nested badges and the nav), reading as a muddy wash
+   instead of a soft peripheral halo like the reference mockups. Center content stays near-black;
+   only the far corners carry a hint of accent-tinted light. */
+.glassy body::before,
+.glassy body::after {
+  content: '';
+  position: fixed;
+  z-index: 0;
+  border-radius: 9999px;
+  filter: blur(140px);
+  pointer-events: none;
+  opacity: .16;
+}
+.glassy body::before {
+  top: -20%;
+  left: -18%;
+  width: 42vw;
+  height: 42vw;
+  background: hsl(var(--accent-h) var(--accent-s) 55%);
+}
+.glassy body::after {
+  bottom: -22%;
+  right: -18%;
+  width: 38vw;
+  height: 38vw;
+  background: hsl(var(--accent-h) var(--accent-s) 38%);
+}

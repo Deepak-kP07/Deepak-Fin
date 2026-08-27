@@ -61,7 +61,7 @@ export function CreditCardsView({ data, onAdd, onEdit, onDelete, onSpend, onPay,
         // lg:+ splits into two regions, same recipe as Investments' hero: the figure stays the
         // left column, and a per-card outstanding breakdown fills the right column instead of
         // the two HeroStatTiles just stretching wider with nothing beside them.
-        <div className="rounded-3xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] p-6 lg:grid lg:grid-cols-[minmax(300px,1.05fr)_minmax(0,1fr)] lg:items-center lg:gap-8">
+        <div className="rounded-3xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-6 lg:grid lg:grid-cols-[minmax(300px,1.05fr)_minmax(0,1fr)] lg:items-center lg:gap-8">
           <div>
             <div className="text-xs uppercase tracking-widest text-slate-500">Total outstanding</div>
             <div className="mt-1 text-[clamp(2rem,6vw,3rem)] font-semibold leading-[1.1] tracking-[-0.01em] text-white light:text-slate-900">
@@ -105,7 +105,7 @@ export function CreditCardsView({ data, onAdd, onEdit, onDelete, onSpend, onPay,
       )}
 
       {credit_cards.length === 0 ? (
-        <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025]">
+        <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card">
           <EmptyState icon={CreditCard} title="No credit cards yet" message="Track credit card spends, utilisation and pay bills without leaving the app." cta="Add first card" onCta={onAdd} />
         </div>
       ) : (

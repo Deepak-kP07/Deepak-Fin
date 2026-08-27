@@ -49,12 +49,12 @@ export function SettingsDashboard({ data, onSaveProfile }) {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] p-5">
+      <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-5">
         <div className="text-sm font-semibold text-white light:text-slate-900">Stat cards</div>
         <div className="text-xs text-slate-500">Choose which numbers show in the top row. Position is fixed — only visibility is configurable.</div>
         <ToggleList keys={DASHBOARD_STAT_KEYS} info={STAT_INFO} resolved={resolved} onToggle={toggle} />
       </div>
-      <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] p-5">
+      <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-5">
         <div className="text-sm font-semibold text-white light:text-slate-900">Sections</div>
         <div className="text-xs text-slate-500">Show or hide whole sections of the dashboard.</div>
         <ToggleList keys={DASHBOARD_SECTION_KEYS} info={SECTION_INFO} resolved={resolved} onToggle={toggle} />

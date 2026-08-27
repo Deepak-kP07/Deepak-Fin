@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { ArrowDownRight, ArrowLeftRight, ArrowUpRight, CheckCircle2, ChevronRight, Eye, EyeOff, Landmark, Pencil, Plus, Trash2, Wallet, X } from 'lucide-react'
+import { ArrowDownRight, ArrowLeftRight, ArrowUpRight, CheckCircle2, ChevronRight, Eye, EyeOff, Landmark, Pencil, Plus, RefreshCw, Trash2, Wallet, X } from 'lucide-react'
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { BankCardFace } from '@/components/shared/BankCardFace'
 import { StatCard } from '@/components/shared/StatCard'
@@ -10,7 +10,10 @@ import { NetBar } from '@/components/shared/NetBar'
 import { MonthCursor } from '@/components/shared/MonthCursor'
 import { formatDateTime, money, monthName } from '@/lib/format'
 
-export function AccountDetailView({ account, debitCard, transactions, categories, onBack, onEdit, onDelete, onEditCard, onDeleteTx, onDeleteTxBulk, onAddTransaction, showMoney, onToggleMoney }) {
+export function AccountDetailView({ account, debitCard, transactions, categories, onBack, onEdit, onDelete, onEditCard, onDeleteTx, onDeleteTxBulk, onAddTransaction, onSyncBalance, showMoney, onToggleMoney }) {
+  const [syncOpen, setSyncOpen] = useState(false)
+  const [syncValue, setSyncValue] = useState('')
+  const [syncBusy, setSyncBusy] = useState(false)
   const activity = transactions
     .filter((t) => t.account_id === account.id)
     .sort((a, b) => new Date(b.date) - new Date(a.date) || String(b.time || '').localeCompare(String(a.time || '')))
@@ -87,6 +90,7 @@ export function AccountDetailView({ account, debitCard, transactions, categories
         )}
         <div className="flex flex-wrap gap-2">
           <button onClick={() => onAddTransaction(account.id)} className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-4 py-2.5 text-sm font-semibold text-[#07101c]"><Plus size={15} />Add transaction</button>
+          <button onClick={() => setSyncOpen((o) => !o)} className={`flex items-center gap-1.5 rounded-xl border px-3 py-2.5 text-sm font-medium transition ${syncOpen ? 'border-accent-300/40 bg-accent-400/10 text-accent-200 light:text-accent-700' : 'border-white/10 light:border-black/10 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900'}`}><RefreshCw size={15} /><span className="hidden sm:inline">Sync</span></button>
           <button onClick={() => onEdit(account)} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900"><Pencil size={15} /></button>
           <button onClick={() => onDelete(account)} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-rose-300/70 light:text-rose-700 hover:bg-rose-300/10"><Trash2 size={15} /></button>
           <button onClick={onToggleMoney} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
@@ -95,8 +99,33 @@ export function AccountDetailView({ account, debitCard, transactions, categories
         </div>
       </div>
 
+      {syncOpen && (
+        <div className="rounded-xl border border-accent-300/20 bg-accent-400/[.03] p-4">
+          <div className="text-sm text-slate-300 light:text-slate-700">Sync with your bank's real balance</div>
+          <div className="mt-1 text-[11px] text-slate-500">If your bank's app shows a different number — a fee, interest credit, or a transaction you never logged here — enter the real balance and it'll be reconciled with a labeled adjustment entry.</div>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <input type="number" step="0.01" value={syncValue} onChange={(e) => setSyncValue(e.target.value)} placeholder={String(Math.round(account.current_balance))} className="w-40 rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-2 text-sm text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
+            <button
+              type="button"
+              disabled={syncBusy || !syncValue}
+              onClick={async () => {
+                setSyncBusy(true)
+                await onSyncBalance(account, Number(syncValue))
+                setSyncBusy(false); setSyncOpen(false); setSyncValue('')
+              }}
+              className="rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-4 py-2 text-sm font-semibold text-[#07101c] disabled:opacity-50"
+            >{syncBusy ? 'Syncing…' : 'Sync'}</button>
+            {syncValue && (
+              <span className="text-[11px] text-slate-500">
+                {Number(syncValue) < Number(account.current_balance) ? `${money(Number(account.current_balance) - Number(syncValue))} lower than tracked` : Number(syncValue) > Number(account.current_balance) ? `${money(Number(syncValue) - Number(account.current_balance))} higher than tracked` : 'Matches already'}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
       {debitCard && (
-        <div className="flex items-center justify-between rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] px-5 py-3">
+        <div className="flex items-center justify-between rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card px-5 py-3">
           <div className="text-sm text-white light:text-slate-900">{account.name}</div>
           <button onClick={() => onEditCard(debitCard)} className="text-xs text-accent-300 light:text-accent-700 hover:underline">Edit card</button>
         </div>
@@ -108,7 +137,7 @@ export function AccountDetailView({ account, debitCard, transactions, categories
         <StatCard label="Money out" value={showMoney ? money(outflow) : '••••'} icon={ArrowDownRight} accent="bg-rose-400/15 text-rose-200 light:text-rose-700" tone="text-rose-300 light:text-rose-700" sub={<span>All time</span>} />
       </div>
 
-      <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] p-5">
+      <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-5">
         <div className="text-sm font-semibold text-white light:text-slate-900">Net cash flow by month · last 6 months</div>
         <div className="mt-4 h-40">
           <ResponsiveContainer width="100%" height="100%">
@@ -123,7 +152,7 @@ export function AccountDetailView({ account, debitCard, transactions, categories
         </div>
       </div>
 
-      <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025]">
+      <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card">
         {selectMode ? (
           <div className="flex items-center gap-2 border-b border-white/10 light:border-black/10 px-5 py-3 sm:hidden">
             <button type="button" onClick={exitSelectMode} className="shrink-0 rounded-xl border border-white/10 light:border-black/10 p-2 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900" title="Cancel selection"><X size={15} /></button>

@@ -1,6 +1,6 @@
 'use client'
 
-import { Moon, Sun } from 'lucide-react'
+import { Moon, Sparkles, Sun } from 'lucide-react'
 import { ACCENT_PRESETS, DEFAULT_ACCENT } from '@/lib/color'
 
 export function SettingsAppearance({ theme, onThemeChange, accentColor, onAccentChange }) {
@@ -9,7 +9,7 @@ export function SettingsAppearance({ theme, onThemeChange, accentColor, onAccent
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] p-5">
+      <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-5">
         <div className="text-sm font-semibold text-white light:text-slate-900">Accent color</div>
         <div className="mt-1 text-[11px] text-slate-500">The one signature color used across every screen — buttons, active tabs, highlights.</div>
         <div className="mt-3 flex flex-wrap gap-3">
@@ -41,13 +41,17 @@ export function SettingsAppearance({ theme, onThemeChange, accentColor, onAccent
         </div>
       </div>
 
-      <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] p-5">
+      <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-5">
         <div className="text-sm font-semibold text-white light:text-slate-900">Theme</div>
-        <div className="mt-3 grid grid-cols-2 gap-3">
-          {[{ v: 'dark', l: 'Dark', Icon: Moon, c: 'from-slate-900 to-slate-700' }, { v: 'light', l: 'Light', Icon: Sun, c: 'from-slate-100 to-white' }].map((t) => (
+        <div className="mt-3 grid grid-cols-3 gap-3">
+          {[
+            { v: 'dark', l: 'Dark', Icon: Moon, c: 'from-slate-900 to-slate-700' },
+            { v: 'light', l: 'Light', Icon: Sun, c: 'from-slate-100 to-white' },
+            { v: 'glassy', l: 'Glass', Icon: Sparkles, c: 'from-slate-900/60 to-accent-500/40 backdrop-blur' },
+          ].map((t) => (
             <button key={t.v} onClick={() => onThemeChange(t.v)} className={`rounded-xl border p-3 text-left transition ${theme === t.v ? 'border-accent-300/50 light:border-accent-500/50 bg-accent-400/10' : 'border-white/10 light:border-black/10 hover:bg-white/[.04] light:hover:bg-black/[.03]'}`}>
               <div className={`flex h-10 items-center justify-center rounded-lg bg-gradient-to-br ${t.c} border border-white/10 light:border-black/10`}>
-                <t.Icon size={16} className={t.v === 'dark' ? 'text-slate-300' : 'text-slate-500'} />
+                <t.Icon size={16} className={t.v === 'light' ? 'text-slate-500' : 'text-slate-300'} />
               </div>
               <div className="mt-2 text-sm font-medium text-white light:text-slate-900">{t.l}</div>
               {theme === t.v && <div className="text-[11px] text-accent-300 light:text-accent-600">Active</div>}
