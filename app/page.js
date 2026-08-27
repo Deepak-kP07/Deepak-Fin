@@ -1642,7 +1642,7 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTx
     const doc = new jsPDF()
     const rangeLabel = customRange ? `${formatDate(customRange.start)} - ${formatDate(customRange.end)}` : `${MONTH_NAMES[monthCursor.month]} ${monthCursor.year}`
     doc.setFontSize(14)
-    doc.text('Personal Finance - Transaction Statement', 14, 16)
+    doc.text('Personal Fin - Transaction Statement', 14, 16)
     doc.setFontSize(10)
     doc.text(rangeLabel, 14, 23)
     autoTable(doc, {
@@ -2723,7 +2723,7 @@ function Shell({ user, onLogout }) {
         {/* Sidebar */}
         <aside className="hidden w-64 shrink-0 flex-col border-r border-white/5 light:border-black/5 px-5 py-6 lg:flex lg:sticky lg:top-0 lg:h-screen lg:self-start lg:overflow-y-auto glassy:z-10 glassy:glass-nav glassy:border-r-0">
           <div className="flex items-center gap-3 text-sm font-semibold text-white light:text-slate-900">
-            <img src="/logo.png" alt="" className="h-10 w-10 rounded-2xl object-cover" />Personal Finance
+            <img src="/logo.png" alt="" className="h-10 w-10 rounded-2xl object-cover" />Personal Fin
           </div>
           <nav className="mt-10 space-y-1">
             {nav.map((n) => (

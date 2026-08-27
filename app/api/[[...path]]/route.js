@@ -22,7 +22,7 @@ import { sendWelcomeEmail } from '@/lib/email'
 // redirect, or window.location from the app), so they render a small standalone page rather than
 // JSON.
 function kitePageHtml(title, bodyHtml) {
-  return `<!doctype html><html><head><meta charset="utf-8"><title>Kite login</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{background:#080b12;color:#e2e8f0;font-family:system-ui;padding:40px;text-align:center;max-width:640px;margin:0 auto}code{background:#1e293b;padding:6px 10px;border-radius:6px;color:#67e8f9;word-break:break-all}h1{margin-bottom:4px}p{color:#94a3b8;font-size:14px;line-height:1.6}a{display:inline-block;margin-top:24px;background:linear-gradient(90deg,#67e8f9,#3b82f6);color:#07101c;padding:12px 24px;border-radius:12px;font-weight:600;text-decoration:none}</style></head><body><h1>${title}</h1><p>${bodyHtml}</p><a href="/">Back to Personal Finance</a></body></html>`
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Kite login</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{background:#080b12;color:#e2e8f0;font-family:system-ui;padding:40px;text-align:center;max-width:640px;margin:0 auto}code{background:#1e293b;padding:6px 10px;border-radius:6px;color:#67e8f9;word-break:break-all}h1{margin-bottom:4px}p{color:#94a3b8;font-size:14px;line-height:1.6}a{display:inline-block;margin-top:24px;background:linear-gradient(90deg,#67e8f9,#3b82f6);color:#07101c;padding:12px 24px;border-radius:12px;font-weight:600;text-decoration:none}</style></head><body><h1>${title}</h1><p>${bodyHtml}</p><a href="/">Back to Personal Fin</a></body></html>`
 }
 
 // A bearer-like live token and an encrypted secret respectively — neither has any reason to ever
@@ -278,7 +278,7 @@ async function handleRoute(request, { params }) {
       if (!user || !kiteKey) {
         const html = kitePageHtml(
           !user ? '⚠️ Sign in first' : '⚠️ Kite isn’t set up',
-          !user ? 'Please sign in to Personal Finance, then click <b>Connect Kite</b> from Investments and try again.' : 'No Kite Connect app is configured yet. Add one in <b>Settings &gt; Kite Connect</b>, or ask the app owner to set KITE_API_KEY.'
+          !user ? 'Please sign in to Personal Fin, then click <b>Connect Kite</b> from Investments and try again.' : 'No Kite Connect app is configured yet. Add one in <b>Settings &gt; Kite Connect</b>, or ask the app owner to set KITE_API_KEY.'
         )
         return cors(new NextResponse(html, { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } }))
       }
@@ -336,7 +336,7 @@ async function handleRoute(request, { params }) {
       const body = ok
         ? `Live NSE/BSE prices are now active for your account. You&#39;ll need to reconnect tomorrow after 6 AM IST when Zerodha rotates the token.`
         : !user_id
-        ? `Please sign in to Personal Finance, then click <b>Connect Kite</b> from Investments and try again.`
+        ? `Please sign in to Personal Fin, then click <b>Connect Kite</b> from Investments and try again.`
         : notConfigured
         ? `No Kite Connect app is configured yet. Add one in <b>Settings &gt; Kite Connect</b>, or ask the app owner to set KITE_API_KEY/KITE_API_SECRET.`
         : `${exchangeError ? 'Kite said: <code>' + exchangeError.slice(0, 300) + '</code>' : 'No request_token received.'}`

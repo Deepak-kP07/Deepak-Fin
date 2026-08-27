@@ -2,7 +2,7 @@ import './globals.css'
 import { ThemeProvider } from '@/components/ThemeProvider'
 
 export const metadata = {
-  title: 'Personal Finance',
+  title: 'Personal Fin',
   description: 'A calm, clear command centre for your money',
   manifest: '/manifest.webmanifest',
   icons: {

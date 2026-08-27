@@ -34,7 +34,7 @@ self.addEventListener('sync', (event) => {
 // Phase 4: display a push sent by POST /api/cron/notifications (title/body/url JSON payload —
 // see that route for exactly what it sends and why).
 self.addEventListener('push', (event) => {
-  let payload = { title: 'Personal Finance', body: '' }
+  let payload = { title: 'Personal Fin', body: '' }
   try { payload = { ...payload, ...event.data.json() } } catch (e) { /* no/invalid payload — show the fallback above */ }
   event.waitUntil(
     self.registration.showNotification(payload.title, {

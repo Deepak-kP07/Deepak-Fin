@@ -375,7 +375,7 @@ export function AuthScreen({ onAuth, initialError, initialMode = 'landing', init
             <div className="relative flex shrink-0 items-center justify-between">
               <div className="flex items-center gap-2.5 text-sm font-semibold">
                 <img src="/logo.png" alt="" className="h-9 w-9 rounded-xl object-cover" />
-                <span>Personal Finance</span>
+                <span>Personal Fin</span>
               </div>
               <button onClick={() => goToAuth('login')} className="rounded-xl border border-white/10 bg-white/[.04] px-4 py-2 text-sm font-medium text-white transition hover:bg-white/[.08]">
                 Sign in
