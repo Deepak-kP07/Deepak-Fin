@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { ChevronDown, ChevronUp, Pencil, Plus, Trash2 } from 'lucide-react'
+import { CheckCircle2, ChevronDown, ChevronUp, Circle, Pencil, Plus, Trash2 } from 'lucide-react'
 
 const MODULE_OPTIONS = [
   { key: 'transactions', label: 'Transactions' },
@@ -63,7 +63,15 @@ export function SettingsCategories({ data, onAddCategory, onEditCategory, onDele
                   const hidden = (c.hidden_in_modules || []).includes(m.key)
                   return (
                     <td key={m.key} className="px-2 py-2 text-center">
-                      <input type="checkbox" checked={!hidden} onChange={() => onToggleCategoryModule(c, m.key)} className="h-4 w-4 rounded border-white/20 light:border-black/15 bg-transparent accent-accent-400" />
+                      <button
+                        type="button"
+                        onClick={() => onToggleCategoryModule(c, m.key)}
+                        aria-pressed={!hidden}
+                        aria-label={`${hidden ? 'Show' : 'Hide'} in ${m.label}`}
+                        className={`rounded-full p-0.5 transition ${hidden ? 'text-slate-600 hover:text-slate-400 hover:light:text-slate-500' : 'text-accent-300 light:text-accent-700'}`}
+                      >
+                        {hidden ? <Circle size={16} /> : <CheckCircle2 size={16} />}
+                      </button>
                     </td>
                   )
                 })}
@@ -96,14 +104,20 @@ export function SettingsCategories({ data, onAddCategory, onEditCategory, onDele
                 <button onClick={() => onDeleteCategory(c)} className="rounded-lg p-1.5 text-rose-300/70 light:text-rose-700 hover:bg-rose-300/10"><Trash2 size={13} /></button>
               </div>
             </div>
-            <div className="mt-3 flex flex-wrap gap-1.5">
+            <div className="mt-3 grid grid-cols-2 gap-1.5">
               {MODULE_OPTIONS.map((m) => {
                 const hidden = (c.hidden_in_modules || []).includes(m.key)
                 return (
-                  <label key={m.key} className={`flex items-center gap-1.5 rounded-lg border px-2 py-1 text-xs ${hidden ? 'border-white/10 light:border-black/10 text-slate-500' : 'border-accent-400/30 bg-accent-400/10 text-accent-200 light:text-accent-700'}`}>
-                    <input type="checkbox" checked={!hidden} onChange={() => onToggleCategoryModule(c, m.key)} className="h-3.5 w-3.5 rounded border-white/20 light:border-black/15 bg-transparent accent-accent-400" />
-                    {m.label}
-                  </label>
+                  <button
+                    key={m.key}
+                    type="button"
+                    onClick={() => onToggleCategoryModule(c, m.key)}
+                    aria-pressed={!hidden}
+                    className={`flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-left text-xs font-medium transition ${hidden ? 'text-slate-500 hover:text-slate-300 hover:light:text-slate-700' : 'bg-accent-400/10 text-accent-200 light:text-accent-700'}`}
+                  >
+                    {hidden ? <Circle size={14} className="shrink-0 text-slate-600" /> : <CheckCircle2 size={14} className="shrink-0" />}
+                    <span className="truncate">{m.label}</span>
+                  </button>
                 )
               })}
             </div>
