@@ -377,14 +377,16 @@ async function handleRoute(request, { params }) {
       const body = await request.json()
       const cardId = body.credit_card_id, amount = Number(body.amount)
       if (!cardId || !(amount > 0)) return cors(NextResponse.json({ error: 'credit_card_id and amount required' }, { status: 400 }))
-      const { data: card } = await supabase.from('credit_cards').select('*').eq('id', cardId).eq('user_id', user.id).maybeSingle()
+      const { data: card } = await supabase.from('credit_cards').select('id').eq('id', cardId).eq('user_id', user.id).maybeSingle()
       if (!card) return cors(NextResponse.json({ error: 'Card not found' }, { status: 404 }))
       const payload = { ...pickFields('credit_card_transactions', body), user_id: user.id }
       if (!payload.time) payload.time = new Date().toTimeString().slice(0, 5)
       if (!payload.date) payload.date = new Date().toISOString().slice(0, 10)
       const { data: created, error } = await supabase.from('credit_card_transactions').insert(payload).select().single()
       if (error) return cors(NextResponse.json({ error: error.message }, { status: 400 }))
-      await supabase.from('credit_cards').update({ current_outstanding: Number(card.current_outstanding || 0) + amount }).eq('id', cardId).eq('user_id', user.id)
+      // Atomic UPDATE (drizzle/0043_credit_card_outstanding_atomic.sql) instead of a read-then-
+      // write — a concurrent update to this card can no longer silently overwrite this one.
+      await supabase.rpc('adjust_credit_card_outstanding', { p_card_id: cardId, p_delta: amount })
       return cors(NextResponse.json(created))
     }
     if (route.startsWith('/finance/credit_card_transactions/') && method === 'DELETE') {
@@ -392,11 +394,8 @@ async function handleRoute(request, { params }) {
       if (!user) return cors(NextResponse.json({ error: 'Not authenticated' }, { status: 401 }))
       const id = route.split('/').pop()
       const { data: cct } = await supabase.from('credit_card_transactions').select('*').eq('id', id).eq('user_id', user.id).maybeSingle()
-      if (cct) {
-        const { data: card } = await supabase.from('credit_cards').select('*').eq('id', cct.credit_card_id).eq('user_id', user.id).maybeSingle()
-        if (card && cct.status !== 'paid') {
-          await supabase.from('credit_cards').update({ current_outstanding: Math.max(0, Number(card.current_outstanding || 0) - Number(cct.amount)) }).eq('id', card.id).eq('user_id', user.id)
-        }
+      if (cct && cct.status !== 'paid') {
+        await supabase.rpc('adjust_credit_card_outstanding', { p_card_id: cct.credit_card_id, p_delta: -Number(cct.amount) })
       }
       const { error } = await supabase.from('credit_card_transactions').delete().eq('id', id).eq('user_id', user.id)
       return cors(NextResponse.json({ ok: !error }))
@@ -459,14 +458,15 @@ async function handleRoute(request, { params }) {
       const body = await request.json()
       const amount = Number(body.amount)
       if (!body.account_id || !(amount > 0)) return cors(NextResponse.json({ error: 'account_id and amount required' }, { status: 400 }))
-      const { data: card } = await supabase.from('credit_cards').select('*').eq('id', cardId).eq('user_id', user.id).maybeSingle()
+      const { data: card } = await supabase.from('credit_cards').select('name').eq('id', cardId).eq('user_id', user.id).maybeSingle()
       if (!card) return cors(NextResponse.json({ error: 'Card not found' }, { status: 404 }))
       const now = new Date()
       const billCategoryId = await ensureCategory(supabase, user.id, 'Credit card bill', 'expense')
       const txPayload = { user_id: user.id, account_id: body.account_id, amount, type: 'expense', description: `Credit card bill · ${card.name}`, category_id: billCategoryId, date: body.date || now.toISOString().slice(0, 10), time: now.toTimeString().slice(0, 5), notes: body.notes || null }
       const { data: tx } = await supabase.from('transactions').insert(txPayload).select().single()
-      const newOutstanding = Math.max(0, Number(card.current_outstanding || 0) - amount)
-      await supabase.from('credit_cards').update({ current_outstanding: newOutstanding }).eq('id', cardId).eq('user_id', user.id)
+      // Atomic UPDATE (drizzle/0043_credit_card_outstanding_atomic.sql) — new_outstanding below
+      // is the DB's own post-update value, not a locally-recomputed guess.
+      const { data: newOutstanding } = await supabase.rpc('adjust_credit_card_outstanding', { p_card_id: cardId, p_delta: -amount })
       await supabase.from('credit_card_transactions').update({ status: 'paid' }).eq('credit_card_id', cardId).eq('user_id', user.id).eq('status', 'pending')
       return cors(NextResponse.json({ new_outstanding: newOutstanding, transaction_id: tx?.id }))
     }
@@ -650,8 +650,7 @@ async function handleRoute(request, { params }) {
         const { data: tx } = await supabase.from('transactions').insert(txPayload).select().single()
         if (tx?.id) linkedTxId = tx.id
         if (payingCardId) {
-          const { data: card } = await supabase.from('credit_cards').select('current_outstanding').eq('id', payingCardId).eq('user_id', user.id).maybeSingle()
-          if (card) await supabase.from('credit_cards').update({ current_outstanding: Number(card.current_outstanding || 0) + amount }).eq('id', payingCardId).eq('user_id', user.id)
+          await supabase.rpc('adjust_credit_card_outstanding', { p_card_id: payingCardId, p_delta: amount })
         }
       }
 
@@ -679,8 +678,7 @@ async function handleRoute(request, { params }) {
       if (payment.linked_transaction_id) {
         const { data: linkedTx } = await supabase.from('transactions').select('linked_module, linked_module_id, amount').eq('id', payment.linked_transaction_id).eq('user_id', user.id).maybeSingle()
         if (linkedTx?.linked_module === 'credit_card' && linkedTx.linked_module_id) {
-          const { data: card } = await supabase.from('credit_cards').select('current_outstanding').eq('id', linkedTx.linked_module_id).eq('user_id', user.id).maybeSingle()
-          if (card) await supabase.from('credit_cards').update({ current_outstanding: Math.max(0, Number(card.current_outstanding || 0) - Number(linkedTx.amount)) }).eq('id', linkedTx.linked_module_id).eq('user_id', user.id)
+          await supabase.rpc('adjust_credit_card_outstanding', { p_card_id: linkedTx.linked_module_id, p_delta: -Number(linkedTx.amount) })
         }
         await supabase.from('transactions').delete().eq('id', payment.linked_transaction_id).eq('user_id', user.id)
       }
@@ -757,12 +755,8 @@ async function handleRoute(request, { params }) {
         // (expense increases debt, income/refund reduces it) — no separate
         // credit_card_transactions row needed, this transaction is the record of it.
         if (table === 'transactions' && created?.id && body.linked_module === 'credit_card' && body.linked_module_id) {
-          const { data: card } = await supabase.from('credit_cards').select('current_outstanding').eq('id', body.linked_module_id).eq('user_id', user.id).maybeSingle()
-          if (card) {
-            const delta = body.type === 'income' ? -Number(created.amount) : Number(created.amount)
-            const newOutstanding = Math.max(0, Number(card.current_outstanding || 0) + delta)
-            await supabase.from('credit_cards').update({ current_outstanding: newOutstanding }).eq('id', body.linked_module_id).eq('user_id', user.id)
-          }
+          const delta = body.type === 'income' ? -Number(created.amount) : Number(created.amount)
+          await supabase.rpc('adjust_credit_card_outstanding', { p_card_id: body.linked_module_id, p_delta: delta })
         }
 
         return cors(NextResponse.json(created))
@@ -806,20 +800,12 @@ async function handleRoute(request, { params }) {
             await applyLendRepayment(supabase, user.id, updated.id, updated.linked_module_id, updated.amount, { date: updated.date, account_id: updated.account_id, notes: updated.notes || null })
           }
           if (oldRow?.linked_module === 'credit_card' && oldRow.linked_module_id) {
-            const { data: card } = await supabase.from('credit_cards').select('current_outstanding').eq('id', oldRow.linked_module_id).eq('user_id', user.id).maybeSingle()
-            if (card) {
-              const delta = oldRow.type === 'income' ? Number(oldRow.amount) : -Number(oldRow.amount)
-              const newOutstanding = Math.max(0, Number(card.current_outstanding || 0) + delta)
-              await supabase.from('credit_cards').update({ current_outstanding: newOutstanding }).eq('id', oldRow.linked_module_id).eq('user_id', user.id)
-            }
+            const delta = oldRow.type === 'income' ? Number(oldRow.amount) : -Number(oldRow.amount)
+            await supabase.rpc('adjust_credit_card_outstanding', { p_card_id: oldRow.linked_module_id, p_delta: delta })
           }
           if (updated.linked_module === 'credit_card' && updated.linked_module_id) {
-            const { data: card } = await supabase.from('credit_cards').select('current_outstanding').eq('id', updated.linked_module_id).eq('user_id', user.id).maybeSingle()
-            if (card) {
-              const delta = updated.type === 'income' ? -Number(updated.amount) : Number(updated.amount)
-              const newOutstanding = Math.max(0, Number(card.current_outstanding || 0) + delta)
-              await supabase.from('credit_cards').update({ current_outstanding: newOutstanding }).eq('id', updated.linked_module_id).eq('user_id', user.id)
-            }
+            const delta = updated.type === 'income' ? -Number(updated.amount) : Number(updated.amount)
+            await supabase.rpc('adjust_credit_card_outstanding', { p_card_id: updated.linked_module_id, p_delta: delta })
           }
         }
         return cors(NextResponse.json(updated))
@@ -837,12 +823,8 @@ async function handleRoute(request, { params }) {
           }
           // Reverse the credit card outstanding this transaction had applied
           if (row?.linked_module === 'credit_card' && row.linked_module_id) {
-            const { data: card } = await supabase.from('credit_cards').select('current_outstanding').eq('id', row.linked_module_id).eq('user_id', user.id).maybeSingle()
-            if (card) {
-              const delta = row.type === 'income' ? Number(row.amount) : -Number(row.amount)
-              const newOutstanding = Math.max(0, Number(card.current_outstanding || 0) + delta)
-              await supabase.from('credit_cards').update({ current_outstanding: newOutstanding }).eq('id', row.linked_module_id).eq('user_id', user.id)
-            }
+            const delta = row.type === 'income' ? Number(row.amount) : -Number(row.amount)
+            await supabase.rpc('adjust_credit_card_outstanding', { p_card_id: row.linked_module_id, p_delta: delta })
           }
           // Reverse the lend/borrow repayment this transaction had recorded
           if (row?.linked_module === 'lend' && row.linked_module_id) {
