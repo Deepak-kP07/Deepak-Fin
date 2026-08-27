@@ -8,7 +8,7 @@ import { StatCard } from '@/components/shared/StatCard'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { NetBar } from '@/components/shared/NetBar'
 import { MonthCursor } from '@/components/shared/MonthCursor'
-import { formatDateTime, money, monthName } from '@/lib/format'
+import { capitalizeFirst, formatDateTime, money, monthName } from '@/lib/format'
 
 export function AccountDetailView({ account, debitCard, transactions, categories, onBack, onEdit, onDelete, onEditCard, onDeleteTx, onDeleteTxBulk, onAddTransaction, onSyncBalance, showMoney, onToggleMoney }) {
   const [syncOpen, setSyncOpen] = useState(false)
@@ -89,7 +89,7 @@ export function AccountDetailView({ account, debitCard, transactions, categories
           </div>
         )}
         <div className="flex flex-wrap gap-2">
-          <button onClick={() => onAddTransaction(account.id)} className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-4 py-2.5 text-sm font-semibold text-[#07101c]"><Plus size={15} />Add transaction</button>
+          <button onClick={() => onAddTransaction(account.id)} className="hidden items-center gap-2 rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-4 py-2.5 text-sm font-semibold text-[#07101c] lg:flex"><Plus size={15} />Add transaction</button>
           <button onClick={() => setSyncOpen((o) => !o)} className={`flex items-center gap-1.5 rounded-xl border px-3 py-2.5 text-sm font-medium transition ${syncOpen ? 'border-accent-300/40 bg-accent-400/10 text-accent-200 light:text-accent-700' : 'border-white/10 light:border-black/10 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900'}`}><RefreshCw size={15} /><span className="hidden sm:inline">Sync</span></button>
           <button onClick={() => onEdit(account)} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900"><Pencil size={15} /></button>
           <button onClick={() => onDelete(account)} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-rose-300/70 light:text-rose-700 hover:bg-rose-300/10"><Trash2 size={15} /></button>
@@ -209,7 +209,7 @@ export function AccountDetailView({ account, debitCard, transactions, categories
                         </div>
                       )}
                       <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm font-medium text-white light:text-slate-900">{t.description}</div>
+                        <div className="truncate text-sm font-medium text-white light:text-slate-900">{capitalizeFirst(t.description)}</div>
                         <div className="truncate text-[11px] text-slate-500">{cat?.name || (isTransfer ? (t.transfer_direction === 'in' ? 'Transfer in' : 'Transfer out') : 'Uncategorised')} · {formatDateTime(t.date, t.time)}</div>
                       </div>
                       <div className={`shrink-0 text-sm font-semibold ${color}`}>{isIn ? '+' : '-'}{showMoney ? money(t.amount) : '••••'}</div>
@@ -222,8 +222,8 @@ export function AccountDetailView({ account, debitCard, transactions, categories
                           {isTransfer ? <ArrowLeftRight size={16} /> : isIn ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}
                         </div>
                         <div className="min-w-0">
-                          <div className="truncate text-sm font-medium text-white light:text-slate-900">{t.description}</div>
-                          {t.notes && <div className="truncate text-[11px] text-slate-500">{t.notes}</div>}
+                          <div className="truncate text-sm font-medium text-white light:text-slate-900">{capitalizeFirst(t.description)}</div>
+                          {t.notes && <div className="truncate text-[11px] text-slate-500">{capitalizeFirst(t.notes)}</div>}
                         </div>
                       </div>
                       <div className="text-xs text-slate-400 light:text-slate-500">
