@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Download, ListChecks, X } from 'lucide-react'
+import { CheckCircle2, Download, ListChecks, X } from 'lucide-react'
+import { InfoTooltip } from '@/components/shared/InfoTooltip'
 import { Select } from '@/components/shared/Select'
 import { parseCsv } from '@/lib/csv'
 import { parseXlsx } from '@/lib/excel'
@@ -9,7 +10,7 @@ import { parseXlsx } from '@/lib/excel'
 // Shared shell for every "upload a CSV, map columns, review, import" flow in the app (currently
 // transactions and investment holdings). This owns the generic parts — file upload, the mapping
 // dropdowns grid, auto-detect-on-upload, per-row include/exclude selection, the scrollable
-// preview table's structure, and the sequential import loop with a toast summary. Everything
+// preview table's structure, and the concurrent import loop with a completion summary. Everything
 // domain-specific (how a row parses, what "duplicate" means here if anything, what the preview
 // columns actually show, any extra required inputs like a default account) is supplied by the
 // caller — a fully generic table would flatten real differences between what transactions and
@@ -28,8 +29,9 @@ export function CsvBulkImport({
   const [mapping, setMapping] = useState(() => Object.fromEntries(fields.map((f) => [f.key, ''])))
   const [busy, setBusy] = useState(false)
   const [excluded, setExcluded] = useState(() => new Set())
+  const [result, setResult] = useState(null)
   useEffect(() => {
-    if (open) { setRows([]); setHeaders([]); setMapping(Object.fromEntries(fields.map((f) => [f.key, '']))); setExcluded(new Set()) }
+    if (open) { setRows([]); setHeaders([]); setMapping(Object.fromEntries(fields.map((f) => [f.key, '']))); setExcluded(new Set()); setResult(null) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
@@ -79,27 +81,47 @@ export function CsvBulkImport({
     if (!readyToImport) { toast.push(notReadyMessage || 'Fill in the required fields first', 'error'); return }
     setBusy(true)
     let ok = 0, fail = 0
-    for (const p of toImport) {
-      const success = await onImportRow(p).catch(() => false)
-      if (success) ok++; else fail++
+    // Rows import independently (each is its own create call, no shared state between them), so
+    // a handful run concurrently instead of one at a time — a sequential loop made an 80+ row
+    // import take as long as 80+ round-trips in series, with nothing to show for it until the end.
+    const queue = [...toImport]
+    const CONCURRENCY = 6
+    const worker = async () => {
+      while (queue.length) {
+        const p = queue.shift()
+        const success = await onImportRow(p).catch(() => false)
+        if (success) ok++; else fail++
+      }
     }
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, queue.length) }, worker))
     setBusy(false)
-    toast.push(`Imported ${ok} ${itemLabel}${ok === 1 ? '' : 's'}${fail ? ` · ${fail} failed` : ''}`, fail ? 'info' : 'success')
-    onImported()
+    setResult({ ok, fail })
   }
 
   return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center" onClick={onClose}>
+    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center" onClick={busy ? undefined : onClose}>
       <div onClick={(e) => e.stopPropagation()} className="max-h-[85vh] w-full max-w-3xl overflow-y-auto rounded-3xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-6">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold text-white light:text-slate-900">{title}</h2>
             <p className="mt-1 text-xs text-slate-500">{subtitle}</p>
           </div>
-          <button onClick={onClose} className="rounded-lg p-2 text-slate-400 light:text-slate-500 hover:bg-white/5"><X size={18} /></button>
+          <button onClick={onClose} disabled={busy} className="rounded-lg p-2 text-slate-400 light:text-slate-500 hover:bg-white/5 disabled:opacity-30"><X size={18} /></button>
         </div>
 
-        {rows.length === 0 ? (
+        {result ? (
+          <div className="mt-6 flex flex-col items-center justify-center gap-3 rounded-2xl border border-white/10 light:border-black/10 bg-white/[.02] light:bg-black/[.02] px-6 py-14 text-center">
+            <CheckCircle2 size={32} className={result.fail ? 'text-amber-300 light:text-amber-600' : 'text-emerald-300 light:text-emerald-600'} />
+            <div className="text-base font-semibold text-white light:text-slate-900">Import complete</div>
+            <div className="text-sm text-slate-500">{result.ok} {itemLabel}{result.ok === 1 ? '' : 's'} imported{result.fail ? ` · ${result.fail} failed` : ''}</div>
+            <button
+              onClick={() => { toast.push(`Imported ${result.ok} ${itemLabel}${result.ok === 1 ? '' : 's'}${result.fail ? ` · ${result.fail} failed` : ''}`, result.fail ? 'info' : 'success'); onImported() }}
+              className="mt-3 w-full rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 py-3.5 text-sm font-semibold text-[#07101c]"
+            >
+              Done
+            </button>
+          </div>
+        ) : rows.length === 0 ? (
           <div className="mt-6">
             <label className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-white/10 light:border-black/10 bg-white/[.02] light:bg-black/[.02] px-6 py-14 text-center hover:border-accent-300/40 hover:bg-accent-300/5">
               <ListChecks size={24} className="text-accent-300 light:text-accent-700" />
@@ -115,12 +137,13 @@ export function CsvBulkImport({
           <>
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
               {fields.map((f) => (
-                <label key={f.key} className="text-sm text-slate-300 light:text-slate-700">{f.label}
+                <div key={f.key} className="text-sm text-slate-300 light:text-slate-700">
+                  <span className="inline-flex items-center gap-1.5">{f.label}{f.hint && <InfoTooltip text={f.hint} />}</span>
                   <Select value={mapping[f.key]} onChange={(e) => setMapping({ ...mapping, [f.key]: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-[#101621] light:bg-white px-3 py-2.5 text-white light:text-slate-900 outline-none">
                     <option value="">— none —</option>
                     {headers.map((h) => <option key={h} value={h}>{h}</option>)}
                   </Select>
-                </label>
+                </div>
               ))}
               {extraFields}
             </div>
