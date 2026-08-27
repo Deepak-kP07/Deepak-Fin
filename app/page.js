@@ -2582,15 +2582,19 @@ function Shell({ user, onLogout }) {
   // Each PATCH response already returns the full updated row, so — same as onSaveProfile — these
   // merge straight into local state instead of paying for a full refresh() (a 19-table re-fetch)
   // on every single click, which is what made the Settings checkboxes/reorder feel sluggish.
-  const reorderCategory = async (a, b) => {
-    if (!b) return
-    const [r1, r2] = await Promise.all([
-      fetch(`/api/finance/categories/${a.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order_index: b.order_index ?? 0 }) }),
-      fetch(`/api/finance/categories/${b.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order_index: a.order_index ?? 0 }) }),
-    ])
-    if (!r1.ok || !r2.ok) { toast.push('Reorder failed', 'error'); return }
-    const [u1, u2] = await Promise.all([r1.json(), r2.json()])
-    setData((d) => ({ ...d, categories: d.categories.map((cat) => (cat.id === u1.id ? u1 : cat.id === u2.id ? u2 : cat)) }))
+  // Drag-and-drop can move a category more than one position in a single drop, unlike the old
+  // arrow buttons (always an adjacent swap) — so this PATCHes every category whose index actually
+  // shifted, not just two, still in parallel and merged straight into local state. `nextOrder` is
+  // already scoped to one type (expense/income) by the caller, matching how order_index is scoped.
+  const reorderCategories = async (nextOrder) => {
+    const changed = nextOrder.map((c, i) => ({ c, i })).filter(({ c, i }) => (c.order_index ?? 0) !== i)
+    if (changed.length === 0) return
+    const results = await Promise.all(changed.map(({ c, i }) =>
+      fetch(`/api/finance/categories/${c.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order_index: i }) }),
+    ))
+    if (results.some((r) => !r.ok)) { toast.push('Reorder failed', 'error'); return }
+    const updated = await Promise.all(results.map((r) => r.json()))
+    setData((d) => ({ ...d, categories: d.categories.map((cat) => updated.find((u) => u.id === cat.id) || cat) }))
   }
   const toggleCategoryModule = async (c, moduleKey) => {
     const hidden = c.hidden_in_modules || []
@@ -2795,7 +2799,7 @@ function Shell({ user, onLogout }) {
                   onSaveKiteCredentials={saveKiteCredentials} onRemoveKiteCredentials={removeKiteCredentials}
                   accentColor={data.profile?.accent_color} onAccentChange={onAccentChange}
                   onAddCategory={(defaultType) => openCatForm(null, defaultType)} onEditCategory={openCatForm} onDeleteCategory={deleteCategory}
-                  onReorderCategory={reorderCategory} onToggleCategoryModule={toggleCategoryModule}
+                  onReorderCategories={reorderCategories} onToggleCategoryModule={toggleCategoryModule}
                   onReorderAccounts={reorderAccounts}
                   onAddVaultItem={(type) => openVaultForm(null, type)} onEditVaultItem={openVaultForm} onDeleteVaultItem={deleteVaultItem}
                   onAddRule={addRule} onToggleRule={toggleRule} onDeleteRule={deleteRule}
