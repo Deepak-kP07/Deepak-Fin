@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { ArrowDownRight, ArrowUpRight, ChevronRight, Download, Eye, EyeOff, Link2, Pencil, PiggyBank, RefreshCw, Target, Trash2, TrendingUp, Unlink, Wallet } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { ArrowDownRight, ArrowUpRight, ChevronRight, Download, Eye, EyeOff, Link2, MoreVertical, Pencil, PiggyBank, RefreshCw, Target, Trash2, TrendingUp, Unlink, Wallet } from 'lucide-react'
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { StatCard } from '@/components/shared/StatCard'
 import { EmptyState } from '@/components/shared/EmptyState'
@@ -9,7 +9,7 @@ import { NetBar } from '@/components/shared/NetBar'
 import { MonthCursor } from '@/components/shared/MonthCursor'
 import { DismissibleBanner } from '@/components/shared/DismissibleBanner'
 import { currentValueOf, CATEGORY_BADGE_STYLE } from '@/lib/otherInvestments'
-import { formatDate, formatDateTime, money, money2, monthName, relativeTime } from '@/lib/format'
+import { capitalizeFirst, formatDate, formatDateTime, money, money2, monthName, relativeTime } from '@/lib/format'
 
 export function PortfolioDetailView({
   portfolio, holdings, sips = [], otherInvestments = [], transactions, onBack, onEdit, onDelete, onAddFunds, onWithdrawFunds,
@@ -41,6 +41,18 @@ export function PortfolioDetailView({
     .filter((t) => t.linked_module === 'investment' && t.linked_module_id === portfolio.id)
     .sort((a, b) => new Date(b.date) - new Date(a.date) || String(b.time || '').localeCompare(String(a.time || '')))
 
+  // Mobile: secondary header actions (Withdraw/Bulk import/Link to Kite/Other investment/Edit/
+  // Delete, or Unlink when Kite-linked) collapse into this "..." menu, same pattern as
+  // MoneyProfileDetailView — this page has the most header buttons of any detail view and was
+  // the worst mobile overflow risk without it. The eye toggle stays outside it, always visible.
+  const [moreOpen, setMoreOpen] = useState(false)
+  const moreRef = useRef(null)
+  useEffect(() => {
+    const onDocClick = (ev) => { if (moreRef.current && !moreRef.current.contains(ev.target)) setMoreOpen(false) }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [])
+
   const [monthCursor, setMonthCursor] = useState(() => { const d = new Date(); return { year: d.getFullYear(), month: d.getMonth() } })
   const [showAllMonths, setShowAllMonths] = useState(false)
   const shiftMonth = (delta) => { setShowAllMonths(false); setMonthCursor((c) => { const d = new Date(c.year, c.month + delta, 1); return { year: d.getFullYear(), month: d.getMonth() } }) }
@@ -68,44 +80,82 @@ export function PortfolioDetailView({
     <div className="space-y-5 pb-8">
       <button onClick={onBack} className="flex items-center gap-1.5 text-sm text-slate-400 light:text-slate-500 hover:text-white hover:light:text-slate-900"><ChevronRight size={14} className="rotate-180" /> Back to investments</button>
 
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl" style={{ background: `${portfolio.color || '#a78bfa'}22`, color: portfolio.color || '#a78bfa' }}>
-            <TrendingUp size={22} />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <div className="text-lg font-semibold text-white light:text-slate-900">{portfolio.name}</div>
-              {kiteLinked && <span className="rounded-full bg-accent-400/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-accent-200 light:text-accent-700">Kite</span>}
+      <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
+        <div className="flex items-start justify-between gap-3 sm:contents">
+          <div className="flex items-center gap-3">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl" style={{ background: `${portfolio.color || '#a78bfa'}22`, color: portfolio.color || '#a78bfa' }}>
+              <TrendingUp size={22} />
             </div>
-            <div className="text-xs capitalize text-slate-500">{portfolio.broker.replace('_', ' ')} · {holdings.length} holding{holdings.length === 1 ? '' : 's'}</div>
+            <div>
+              <div className="flex items-center gap-2">
+                <div className="text-lg font-semibold text-white light:text-slate-900">{portfolio.name}</div>
+                {kiteLinked && <span className="rounded-full bg-accent-400/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-accent-200 light:text-accent-700">Kite</span>}
+              </div>
+              <div className="text-xs capitalize text-slate-500">{portfolio.broker.replace('_', ' ')} · {holdings.length} holding{holdings.length === 1 ? '' : 's'}</div>
+            </div>
+          </div>
+
+          {/* Mobile: secondary actions collapse into this "..." menu; eye toggle stays outside it,
+              always visible, same as every other detail view. */}
+          <div className="flex shrink-0 items-center gap-2 sm:hidden">
+            <button onClick={onToggleMoney} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
+              {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
+            </button>
+            <div ref={moreRef} className="relative">
+              <button type="button" onClick={() => setMoreOpen((o) => !o)} className={`rounded-xl border p-2.5 transition ${moreOpen ? 'border-accent-300/40 bg-accent-400/10 text-accent-200 light:text-accent-700' : 'border-white/10 light:border-black/10 text-slate-400 light:text-slate-500 hover:bg-white/5'}`} title="More options">
+                <MoreVertical size={16} />
+              </button>
+              {moreOpen && (
+                <div className="absolute right-0 z-30 mt-2 w-56 rounded-xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-1 shadow-2xl">
+                  {kiteLinked ? (
+                    <button type="button" onClick={() => { setMoreOpen(false); onUnlinkKite(portfolio) }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-slate-300 light:text-slate-700 hover:bg-white/5"><Unlink size={14} />Unlink</button>
+                  ) : (
+                    <>
+                      <button type="button" disabled={cash <= 0} onClick={() => { setMoreOpen(false); onWithdrawFunds(portfolio) }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-slate-300 light:text-slate-700 hover:bg-white/5 disabled:opacity-50">− Withdraw</button>
+                      <button type="button" onClick={() => { setMoreOpen(false); onBulkImport(portfolio) }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-slate-300 light:text-slate-700 hover:bg-white/5"><Download size={14} />Bulk import</button>
+                      {kiteConnected && canLinkKite && holdings.length === 0 && (
+                        <button type="button" onClick={() => { setMoreOpen(false); onLinkKite(portfolio) }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-accent-200 light:text-accent-700 hover:bg-white/5"><Link2 size={14} />Link to Kite</button>
+                      )}
+                    </>
+                  )}
+                  <button type="button" onClick={() => { setMoreOpen(false); onAddOtherInvestment(portfolio.id) }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-slate-300 light:text-slate-700 hover:bg-white/5">+ Other investment</button>
+                  <button type="button" onClick={() => { setMoreOpen(false); onEdit(portfolio) }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-slate-300 light:text-slate-700 hover:bg-white/5"><Pencil size={14} />Edit portfolio</button>
+                  <button type="button" onClick={() => { setMoreOpen(false); onDelete(portfolio) }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-rose-300/70 light:text-rose-700 hover:bg-rose-300/10"><Trash2 size={14} />Delete portfolio</button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
+
         <div className="flex w-full min-w-0 flex-wrap gap-2 sm:w-auto">
           {kiteLinked ? (
-            <>
-              <button onClick={() => onSyncKite(portfolio)} disabled={kiteSyncBusy} className="flex items-center gap-2 rounded-xl bg-accent-400/15 px-4 py-2.5 text-sm font-semibold text-accent-200 light:text-accent-700 hover:bg-accent-400/25 disabled:opacity-50"><RefreshCw size={14} className={kiteSyncBusy ? 'animate-spin' : ''} />{kiteSyncBusy ? 'Syncing…' : 'Sync now'}</button>
-              <button onClick={() => onUnlinkKite(portfolio)} className="flex items-center gap-2 rounded-xl border border-white/10 light:border-black/10 px-4 py-2.5 text-sm font-medium text-slate-300 light:text-slate-700 hover:bg-white/5"><Unlink size={14} />Unlink</button>
-            </>
+            <button onClick={() => onSyncKite(portfolio)} disabled={kiteSyncBusy} className="flex items-center gap-2 rounded-xl bg-accent-400/15 px-4 py-2.5 text-sm font-semibold text-accent-200 light:text-accent-700 hover:bg-accent-400/25 disabled:opacity-50"><RefreshCw size={14} className={kiteSyncBusy ? 'animate-spin' : ''} />{kiteSyncBusy ? 'Syncing…' : 'Sync now'}</button>
           ) : (
-            <>
-              <button onClick={() => onAddFunds(portfolio)} className="rounded-xl bg-emerald-400/15 px-4 py-2.5 text-sm font-semibold text-emerald-200 light:text-emerald-700 hover:bg-emerald-400/25">+ Funds</button>
-              <button onClick={() => onWithdrawFunds(portfolio)} disabled={cash <= 0} className="rounded-xl border border-white/10 light:border-black/10 px-4 py-2.5 text-sm font-medium text-slate-300 light:text-slate-700 hover:bg-white/5 disabled:opacity-50">− Withdraw</button>
-              <button onClick={() => onAddHolding(portfolio.id)} className="rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-4 py-2.5 text-sm font-semibold text-[#07101c]">+ Holding</button>
-              <button onClick={() => onBulkImport(portfolio)} className="flex items-center gap-2 rounded-xl border border-white/10 light:border-black/10 px-4 py-2.5 text-sm font-medium text-slate-300 light:text-slate-700 hover:bg-white/5"><Download size={14} />Bulk import</button>
-              {kiteConnected && canLinkKite && holdings.length === 0 && (
-                <button onClick={() => onLinkKite(portfolio)} className="flex items-center gap-2 rounded-xl border border-accent-300/30 px-4 py-2.5 text-sm font-medium text-accent-200 light:text-accent-700 hover:bg-accent-400/10"><Link2 size={14} />Link to Kite</button>
-              )}
-            </>
+            <button onClick={() => onAddFunds(portfolio)} className="rounded-xl bg-emerald-400/15 px-4 py-2.5 text-sm font-semibold text-emerald-200 light:text-emerald-700 hover:bg-emerald-400/25">+ Funds</button>
           )}
-          {/* Not exchange-traded, so unrelated to whether this portfolio is Kite-linked —
-              always available regardless of which branch above is showing. */}
-          <button onClick={() => onAddOtherInvestment(portfolio.id)} className="rounded-xl border border-white/10 light:border-black/10 px-4 py-2.5 text-sm font-medium text-slate-300 light:text-slate-700 hover:bg-white/5">+ Other investment</button>
-          <button onClick={() => onEdit(portfolio)} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900"><Pencil size={15} /></button>
-          <button onClick={() => onDelete(portfolio)} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-rose-300/70 light:text-rose-700 hover:bg-rose-300/10"><Trash2 size={15} /></button>
-          <button onClick={onToggleMoney} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
-            {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
-          </button>
+          {/* Desktop: every secondary action stays inline; mobile reaches them via the "..." menu above */}
+          <div className="hidden sm:contents">
+            {kiteLinked ? (
+              <button onClick={() => onUnlinkKite(portfolio)} className="flex items-center gap-2 rounded-xl border border-white/10 light:border-black/10 px-4 py-2.5 text-sm font-medium text-slate-300 light:text-slate-700 hover:bg-white/5"><Unlink size={14} />Unlink</button>
+            ) : (
+              <>
+                <button onClick={() => onWithdrawFunds(portfolio)} disabled={cash <= 0} className="rounded-xl border border-white/10 light:border-black/10 px-4 py-2.5 text-sm font-medium text-slate-300 light:text-slate-700 hover:bg-white/5 disabled:opacity-50">− Withdraw</button>
+                <button onClick={() => onAddHolding(portfolio.id)} className="hidden rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-4 py-2.5 text-sm font-semibold text-[#07101c] lg:inline-block">+ Holding</button>
+                <button onClick={() => onBulkImport(portfolio)} className="flex items-center gap-2 rounded-xl border border-white/10 light:border-black/10 px-4 py-2.5 text-sm font-medium text-slate-300 light:text-slate-700 hover:bg-white/5"><Download size={14} />Bulk import</button>
+                {kiteConnected && canLinkKite && holdings.length === 0 && (
+                  <button onClick={() => onLinkKite(portfolio)} className="flex items-center gap-2 rounded-xl border border-accent-300/30 px-4 py-2.5 text-sm font-medium text-accent-200 light:text-accent-700 hover:bg-accent-400/10"><Link2 size={14} />Link to Kite</button>
+                )}
+              </>
+            )}
+            {/* Not exchange-traded, so unrelated to whether this portfolio is Kite-linked —
+                always available regardless of which branch above is showing. */}
+            <button onClick={() => onAddOtherInvestment(portfolio.id)} className="rounded-xl border border-white/10 light:border-black/10 px-4 py-2.5 text-sm font-medium text-slate-300 light:text-slate-700 hover:bg-white/5">+ Other investment</button>
+            <button onClick={() => onEdit(portfolio)} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900"><Pencil size={15} /></button>
+            <button onClick={() => onDelete(portfolio)} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-rose-300/70 light:text-rose-700 hover:bg-rose-300/10"><Trash2 size={15} /></button>
+            <button onClick={onToggleMoney} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
+              {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -288,7 +338,7 @@ export function PortfolioDetailView({
                       <div className="text-sm text-slate-300 light:text-slate-700">{money2(o.purchase_value)}</div>
                     </div>
                   </div>
-                  {o.notes && <div className="mt-2 truncate text-[11px] text-slate-500">{o.notes}</div>}
+                  {o.notes && <div className="mt-2 truncate text-[11px] text-slate-500">{capitalizeFirst(o.notes)}</div>}
                 </div>
               )
             })}
@@ -322,8 +372,8 @@ export function PortfolioDetailView({
                         {isIn ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}
                       </div>
                       <div className="min-w-0">
-                        <div className="truncate text-sm font-medium text-white light:text-slate-900">{t.description}</div>
-                        {t.notes && <div className="truncate text-[11px] text-slate-500">{t.notes}</div>}
+                        <div className="truncate text-sm font-medium text-white light:text-slate-900">{capitalizeFirst(t.description)}</div>
+                        {t.notes && <div className="truncate text-[11px] text-slate-500">{capitalizeFirst(t.notes)}</div>}
                       </div>
                     </div>
                     <div className="text-xs text-slate-400 light:text-slate-500">
