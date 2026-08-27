@@ -1,6 +1,6 @@
 # Personal Finance
 
-A personal finance tracker — accounts, transactions, budgets, investments (with live NSE/BSE pricing via Zerodha Kite), loans, credit cards, scholarships, lend/borrow tracking, Family/Company money management, an encrypted credential vault, a bucket list, and money rules — built as one installable, offline-first, mobile-first PWA, no separate mobile app.
+A unified, fully customisable personal finance command center — one place to manage everything from daily expenses across multiple bank accounts to investments, loans, credit cards, lending/borrowing, a combined view of family accounts, and budgeting reports. Covers accounts, transactions, budgets, investments (with live NSE/BSE pricing via Zerodha Kite), loans, credit cards, scholarships, lend/borrow tracking, Family/Company money management, an encrypted credential vault, a bucket list, and money rules — built as one installable, offline-first PWA that works the same on mobile and desktop web, no separate mobile app.
 
 ## Stack
 
@@ -49,15 +49,5 @@ Row Level Security is enabled on every table (`auth.uid() = user_id`), and the a
 
 ## Deploying
 
-The app supports two deploy paths:
+Deployed on Vercel — `vercel.json` defines 3 cron schedules (notification checks every 30 minutes, weekly/monthly report emails). Deploy as you would any Next.js app on Vercel and set the environment variables above in the project settings.
 
-**Vercel** — `vercel.json` defines 3 cron schedules (notification checks every 30 minutes, weekly/monthly report emails). This is the intended primary target; deploy as you would any Next.js app on Vercel and set the environment variables above in the project settings.
-
-**Container / self-hosted** — `next.config.js` also sets `output: 'standalone'`:
-
-```bash
-docker build -t personal-finance .
-docker run -p 3000:3000 --env-file .env personal-finance
-```
-
-If self-hosting, you'll need to run the 3 cron jobs under `app/api/cron/` yourself on a schedule (they're plain authenticated routes, gated by `CRON_SECRET`).

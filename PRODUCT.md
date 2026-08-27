@@ -12,7 +12,7 @@ Primary user: Deepak, the app's builder and owner, tracking his own comprehensiv
 
 ## Product Purpose
 
-A comprehensive personal finance command center covering the user's entire real financial life in one place: transactions, accounts, investments (Indian equities via Zerodha Kite + Yahoo Finance fallback), loans (EMI/interest tracking), scholarships/fees, lending and borrowing with people, Family/Company money management, credit cards, savings goals (Bucket List), personal financial principles (Money Rules), budgets, an encrypted credential vault, and cross-module insights. Success means the user can see accurate, live net worth and financial state at a glance and manage every real-world financial domain they actually have, without switching apps.
+A unified, fully customisable view of the user's entire real financial life — from daily expenses across multiple bank accounts to investments, loans, credit cards, lending/borrowing, a combined view of family accounts, and budgeting reports, in mobile and desktop web alike (one PWA, same app on both). Covers: transactions, accounts, investments (Indian equities via Zerodha Kite + Yahoo Finance fallback), loans (EMI/interest tracking), scholarships/fees, lending and borrowing with people, Family/Company money management, credit cards, savings goals (Bucket List), personal financial principles (Money Rules), budgets, an encrypted credential vault, and cross-module insights. Success means the user can see accurate, live net worth and financial state at a glance and manage every real-world financial domain they actually have, without switching apps.
 
 ## Positioning
 
