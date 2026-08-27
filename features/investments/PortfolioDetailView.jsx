@@ -165,7 +165,7 @@ export function PortfolioDetailView({
         </DismissibleBanner>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <StatCard label="Invested" value={showMoney ? money(invested) : '••••'} icon={Target} accent="bg-accent-300/15 text-accent-200 light:text-accent-700" sub={<span>{holdings.length} holding{holdings.length === 1 ? '' : 's'}{sips.length > 0 ? ` · ${sips.length} SIP${sips.length === 1 ? '' : 's'}` : ''}{otherInvestments.length > 0 ? ` · ${otherInvestments.length} other` : ''}</span>} />
         <StatCard label="Current value" value={showMoney ? money(current) : '••••'} icon={TrendingUp} accent="bg-accent-400/15 text-accent-200 light:text-accent-700" sub={<span>Everything except cash</span>} />
         <StatCard label="Cash available" value={showMoney ? money(cash) : '••••'} icon={PiggyBank} accent="bg-emerald-400/15 text-emerald-200 light:text-emerald-700" tone="text-emerald-300 light:text-emerald-700" sub={<span>Un-invested</span>} />

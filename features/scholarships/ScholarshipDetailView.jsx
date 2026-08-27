@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { ArrowUpRight, ChevronRight, Eye, EyeOff, Link2, Paperclip, Pencil, ShieldCheck, Sparkles, Trash2 } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { ArrowUpRight, ChevronRight, Eye, EyeOff, Link2, MoreVertical, Paperclip, Pencil, ShieldCheck, Sparkles, Trash2 } from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { HeroStatTile } from '@/components/shared/HeroStatTile'
 import { DismissibleBanner } from '@/components/shared/DismissibleBanner'
@@ -47,6 +47,16 @@ export function ScholarshipDetailView({
   scholarship, payments, accounts, transactions, onBack, onEdit, onDelete, onPay, onRefresh,
   showMoney, onToggleMoney, toast,
 }) {
+  // Mobile: Edit/Delete collapse into this "..." menu, same pattern as Portfolio/Family-Company
+  // detail views — the eye toggle stays outside it, always visible. Desktop is unchanged.
+  const [moreOpen, setMoreOpen] = useState(false)
+  const moreRef = useRef(null)
+  useEffect(() => {
+    const onDocClick = (e) => { if (moreRef.current && !moreRef.current.contains(e.target)) setMoreOpen(false) }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [])
+
   const s = scholarship
   const paid = Number(s.amount_paid_to_college || 0)
   const total = Number(s.total_amount || 0)
@@ -66,26 +76,51 @@ export function ScholarshipDetailView({
       <button onClick={onBack} className="flex items-center gap-1.5 text-sm text-slate-400 light:text-slate-500 hover:text-white hover:light:text-slate-900"><ChevronRight size={14} className="rotate-180" /> Back to scholarships</button>
 
       <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-accent-400/15 text-accent-200 light:text-accent-700">
-            <ShieldCheck size={22} />
-          </div>
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="text-lg font-semibold text-white light:text-slate-900">{s.name}</div>
-              <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-widest ${displayStatus === 'paid' ? 'bg-emerald-400/15 text-emerald-200 light:text-emerald-700' : displayStatus === 'received' ? 'bg-accent-400/15 text-accent-200 light:text-accent-700' : 'bg-slate-500/15 text-slate-300 light:text-slate-700'}`}>{displayStatus}</span>
-              {linkedAccount && <span className="flex items-center gap-1 rounded-full bg-accent-400/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-accent-200 light:text-accent-700"><Link2 size={10} />Linked</span>}
+        <div className="flex items-start justify-between gap-3 sm:contents">
+          <div className="flex items-center gap-3">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-accent-400/15 text-accent-200 light:text-accent-700">
+              <ShieldCheck size={22} />
             </div>
-            <div className="mt-1 text-xs text-slate-500">{capitalizeFirst(s.source) || '—'} · {s.academic_year || '—'}{linkedAccount ? ` · into ${linkedAccount.name}` : ''}{s.received_date ? ` · received ${formatDate(s.received_date)}` : ''}{s.due_date ? ` · due ${formatDate(s.due_date)}` : ''}</div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="text-lg font-semibold text-white light:text-slate-900">{s.name}</div>
+                <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-widest ${displayStatus === 'paid' ? 'bg-emerald-400/15 text-emerald-200 light:text-emerald-700' : displayStatus === 'received' ? 'bg-accent-400/15 text-accent-200 light:text-accent-700' : 'bg-slate-500/15 text-slate-300 light:text-slate-700'}`}>{displayStatus}</span>
+                {linkedAccount && <span className="flex items-center gap-1 rounded-full bg-accent-400/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-accent-200 light:text-accent-700"><Link2 size={10} />Linked</span>}
+              </div>
+              <div className="mt-1 text-xs text-slate-500">{capitalizeFirst(s.source) || '—'} · {s.academic_year || '—'}{linkedAccount ? ` · into ${linkedAccount.name}` : ''}{s.received_date ? ` · received ${formatDate(s.received_date)}` : ''}{s.due_date ? ` · due ${formatDate(s.due_date)}` : ''}</div>
+            </div>
+          </div>
+
+          {/* Mobile: Edit/Delete collapse into this "..." menu; eye toggle stays outside it,
+              always visible, same as every other detail view. */}
+          <div className="flex shrink-0 items-center gap-2 sm:hidden">
+            <button onClick={onToggleMoney} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
+              {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
+            </button>
+            <div ref={moreRef} className="relative">
+              <button type="button" onClick={() => setMoreOpen((o) => !o)} className={`rounded-xl border p-2.5 transition ${moreOpen ? 'border-accent-300/40 bg-accent-400/10 text-accent-200 light:text-accent-700' : 'border-white/10 light:border-black/10 text-slate-400 light:text-slate-500 hover:bg-white/5'}`} title="More options">
+                <MoreVertical size={16} />
+              </button>
+              {moreOpen && (
+                <div className="absolute right-0 z-30 mt-2 w-48 rounded-xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-1 shadow-2xl">
+                  <button type="button" onClick={() => { setMoreOpen(false); onEdit(s) }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-slate-300 light:text-slate-700 hover:bg-white/5"><Pencil size={14} />Edit scholarship</button>
+                  <button type="button" onClick={() => { setMoreOpen(false); onDelete(s) }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-rose-300/70 light:text-rose-700 hover:bg-rose-300/10"><Trash2 size={14} />Delete scholarship</button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
+
         <div className="flex w-full min-w-0 flex-wrap gap-2 sm:w-auto">
           <button onClick={() => onPay(s)} disabled={pending <= 0} className="hidden rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-4 py-2.5 text-sm font-semibold text-[#07101c] disabled:opacity-40 lg:inline-block">Pay to college</button>
-          <button onClick={() => onEdit(s)} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900"><Pencil size={15} /></button>
-          <button onClick={() => onDelete(s)} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-rose-300/70 light:text-rose-700 hover:bg-rose-300/10"><Trash2 size={15} /></button>
-          <button onClick={onToggleMoney} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
-            {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
-          </button>
+          {/* Desktop: unchanged, everything stays inline */}
+          <div className="hidden sm:contents">
+            <button onClick={() => onEdit(s)} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900"><Pencil size={15} /></button>
+            <button onClick={() => onDelete(s)} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-rose-300/70 light:text-rose-700 hover:bg-rose-300/10"><Trash2 size={15} /></button>
+            <button onClick={onToggleMoney} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
+              {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -122,18 +157,41 @@ export function ScholarshipDetailView({
             {paymentsForThis.map((p) => {
               const acc = accounts.find((a) => a.id === p.account_id)
               return (
-                <div key={p.id} className="grid grid-cols-1 gap-2 px-5 py-4 sm:grid-cols-[1.4fr_.8fr_.6fr_.6fr_auto] sm:items-center sm:gap-4">
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-medium text-white light:text-slate-900">{capitalizeFirst(p.paid_to) || 'College'}</div>
-                    {p.notes && <div className="truncate text-[11px] text-slate-500">{capitalizeFirst(p.notes)}</div>}
+                <div key={p.id} className="px-5 py-3 sm:py-4">
+                  {/* Mobile: single compact row, same icon-bubble pattern as the other detail
+                      views' payment/entry lists — attach-receipt stays a real tappable control
+                      below since it's an action, not a delete, so it doesn't fit those views'
+                      long-press-to-delete pattern. */}
+                  <div className="sm:hidden">
+                    <div className="flex w-full min-w-0 items-center gap-3">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/[.05] light:bg-black/[.035] text-accent-200 light:text-accent-700">
+                        <ArrowUpRight size={16} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-medium text-white light:text-slate-900">{capitalizeFirst(p.paid_to) || 'College'}</div>
+                        <div className="truncate text-[11px] text-slate-500">{acc?.name || 'No account'} · {formatDate(p.payment_date)}</div>
+                      </div>
+                      <div className="shrink-0 text-sm font-semibold text-rose-300 light:text-rose-700">-{showMoney ? money(p.amount) : '••••'}</div>
+                    </div>
+                    <div className="mt-2 flex justify-end">
+                      <AttachmentField record={p} table="scholarship_payments" onChanged={onRefresh} toast={toast} />
+                    </div>
                   </div>
-                  <div className="text-xs text-slate-400 light:text-slate-500">
-                    <span className="inline-block rounded-md bg-white/[.05] light:bg-black/[.035] px-2 py-0.5 text-slate-300 light:text-slate-700">{acc?.name || 'No account'}</span>
-                  </div>
-                  <div className="text-xs text-slate-500">{formatDate(p.payment_date)}</div>
-                  <div className="text-sm font-semibold text-rose-300 light:text-rose-700 sm:text-right">-{showMoney ? money(p.amount) : '••••'}</div>
-                  <div className="flex justify-end">
-                    <AttachmentField record={p} table="scholarship_payments" onChanged={onRefresh} toast={toast} />
+
+                  {/* Desktop: unchanged full row */}
+                  <div className="hidden sm:grid sm:grid-cols-[1.4fr_.8fr_.6fr_.6fr_auto] sm:items-center sm:gap-4">
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-medium text-white light:text-slate-900">{capitalizeFirst(p.paid_to) || 'College'}</div>
+                      {p.notes && <div className="truncate text-[11px] text-slate-500">{capitalizeFirst(p.notes)}</div>}
+                    </div>
+                    <div className="text-xs text-slate-400 light:text-slate-500">
+                      <span className="inline-block rounded-md bg-white/[.05] light:bg-black/[.035] px-2 py-0.5 text-slate-300 light:text-slate-700">{acc?.name || 'No account'}</span>
+                    </div>
+                    <div className="text-xs text-slate-500">{formatDate(p.payment_date)}</div>
+                    <div className="text-sm font-semibold text-rose-300 light:text-rose-700 sm:text-right">-{showMoney ? money(p.amount) : '••••'}</div>
+                    <div className="flex justify-end">
+                      <AttachmentField record={p} table="scholarship_payments" onChanged={onRefresh} toast={toast} />
+                    </div>
                   </div>
                 </div>
               )

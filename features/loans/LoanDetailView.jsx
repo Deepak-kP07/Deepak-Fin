@@ -1,9 +1,9 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowDownRight, ArrowUpRight, CheckCircle2, ChevronDown, ChevronRight, Clock, Eye, EyeOff,
-  Landmark, Pencil, RefreshCw, Sparkles, Target, Trash2,
+  Landmark, MoreVertical, Pencil, RefreshCw, Sparkles, Target, Trash2,
 } from 'lucide-react'
 import { nextLoanDueDate, projectSchedule } from '@/lib/amortization'
 import { formatDate, liveOutstanding, money, monthAbbr, ordinal, paymentTypeLabel, todayISO } from '@/lib/format'
@@ -15,6 +15,15 @@ export function LoanDetailView({ loan, payments, accounts, onBack, onPay, onDele
   const [syncValue, setSyncValue] = useState('')
   const [syncBusy, setSyncBusy] = useState(false)
   const [scheduleOpen, setScheduleOpen] = useState(false)
+  // Mobile: Sync/Edit/Delete collapse into this "..." menu, same pattern as the other detail
+  // views — the eye toggle stays outside it, always visible. Desktop is unchanged.
+  const [moreOpen, setMoreOpen] = useState(false)
+  const moreRef = useRef(null)
+  useEffect(() => {
+    const onDocClick = (e) => { if (moreRef.current && !moreRef.current.contains(e.target)) setMoreOpen(false) }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [])
   const principal = Number(loan.principal || 0)
   const outstanding = Number(loan.outstanding || 0)
   const emi = Number(loan.emi_amount || 0)
@@ -136,21 +145,47 @@ export function LoanDetailView({ loan, payments, accounts, onBack, onPay, onDele
       <button onClick={onBack} className="flex items-center gap-1.5 text-sm text-slate-400 light:text-slate-500 hover:text-white hover:light:text-slate-900"><ChevronRight size={14} className="rotate-180" /> Back to loans</button>
 
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-3xl font-semibold tracking-tight text-white light:text-slate-900">{loan.name}</h1>
-            <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-widest ${loan.status === 'closed' ? 'bg-emerald-400/15 text-emerald-200 light:text-emerald-700' : 'bg-accent-400/15 text-accent-200 light:text-accent-700'}`}>{loan.status}</span>
+        <div className="flex items-start justify-between gap-3 sm:contents">
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-3xl font-semibold tracking-tight text-white light:text-slate-900">{loan.name}</h1>
+              <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-widest ${loan.status === 'closed' ? 'bg-emerald-400/15 text-emerald-200 light:text-emerald-700' : 'bg-accent-400/15 text-accent-200 light:text-accent-700'}`}>{loan.status}</span>
+            </div>
+            <div className="mt-1 text-sm text-slate-500">{loan.lender || 'Lender'}{account ? ` · Paying from ${account.name}` : ''}</div>
           </div>
-          <div className="mt-1 text-sm text-slate-500">{loan.lender || 'Lender'}{account ? ` · Paying from ${account.name}` : ''}</div>
+
+          {/* Mobile: Sync/Edit/Delete collapse into this "..." menu; eye toggle stays outside
+              it, always visible — sits beside the title, same row as every other module. */}
+          <div className="flex shrink-0 items-center gap-2 sm:hidden">
+            <button onClick={onToggleMoney} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
+              {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
+            </button>
+            <div ref={moreRef} className="relative">
+              <button type="button" onClick={() => setMoreOpen((o) => !o)} className={`rounded-xl border p-2.5 transition ${moreOpen ? 'border-accent-300/40 bg-accent-400/10 text-accent-200 light:text-accent-700' : 'border-white/10 light:border-black/10 text-slate-400 light:text-slate-500 hover:bg-white/5'}`} title="More options">
+                <MoreVertical size={16} />
+              </button>
+              {moreOpen && (
+                <div className="absolute right-0 z-30 mt-2 w-48 rounded-xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-1 shadow-2xl">
+                  <button type="button" onClick={() => { setMoreOpen(false); setSyncOpen((o) => !o) }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-slate-300 light:text-slate-700 hover:bg-white/5"><RefreshCw size={14} />Sync</button>
+                  <button type="button" onClick={() => { setMoreOpen(false); onEdit(loan) }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-slate-300 light:text-slate-700 hover:bg-white/5"><Pencil size={14} />Edit loan</button>
+                  <button type="button" onClick={() => { setMoreOpen(false); onDelete(loan) }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-rose-300/70 light:text-rose-700 hover:bg-rose-300/10"><Trash2 size={14} />Delete loan</button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
+
         <div className="flex w-full flex-wrap gap-2 sm:w-auto">
           <button onClick={() => onPay(loan)} disabled={loan.status === 'closed'} className="hidden rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-4 py-2.5 text-sm font-semibold text-[#07101c] disabled:opacity-50 lg:inline-block">Log payment</button>
-          <button onClick={() => setSyncOpen((o) => !o)} className={`flex items-center gap-1.5 rounded-xl border px-3 py-2.5 text-sm font-medium transition ${syncOpen ? 'border-accent-300/40 bg-accent-400/10 text-accent-200 light:text-accent-700' : 'border-white/10 light:border-black/10 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900'}`}><RefreshCw size={15} /><span className="hidden sm:inline">Sync</span></button>
-          <button onClick={() => onEdit(loan)} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900"><Pencil size={15} /></button>
-          <button onClick={() => onDelete(loan)} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-rose-300/70 light:text-rose-700 hover:bg-rose-300/10"><Trash2 size={15} /></button>
-          <button onClick={onToggleMoney} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
-            {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
-          </button>
+          {/* Desktop: unchanged, everything stays inline */}
+          <div className="hidden sm:contents">
+            <button onClick={() => setSyncOpen((o) => !o)} className={`flex items-center gap-1.5 rounded-xl border px-3 py-2.5 text-sm font-medium transition ${syncOpen ? 'border-accent-300/40 bg-accent-400/10 text-accent-200 light:text-accent-700' : 'border-white/10 light:border-black/10 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900'}`}><RefreshCw size={15} /><span className="hidden sm:inline">Sync</span></button>
+            <button onClick={() => onEdit(loan)} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900"><Pencil size={15} /></button>
+            <button onClick={() => onDelete(loan)} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-rose-300/70 light:text-rose-700 hover:bg-rose-300/10"><Trash2 size={15} /></button>
+            <button onClick={onToggleMoney} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
+              {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
+            </button>
+          </div>
         </div>
       </div>
 

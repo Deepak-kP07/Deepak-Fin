@@ -1,7 +1,7 @@
 'use client'
 
-import { useRef } from 'react'
-import { ArrowDownRight, ArrowUpRight, ChevronRight, Eye, EyeOff, Pencil, Trash2, User, UserPlus } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { ArrowDownRight, ArrowUpRight, ChevronRight, Eye, EyeOff, MoreVertical, Pencil, Trash2, User, UserPlus } from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { HeroStatTile } from '@/components/shared/HeroStatTile'
 import { capitalizeFirst, formatDate, money } from '@/lib/format'
@@ -52,41 +52,85 @@ export function LendBorrowDetailView({ record, repayments, accounts, transaction
   }
   const suppressLongPressTap = () => { longPressFired.current = false }
 
+  // Mobile: Manage access/Edit/Delete collapse into this "..." menu, same pattern as the other
+  // detail views — the eye toggle stays outside it, always visible. Desktop is unchanged.
+  const [moreOpen, setMoreOpen] = useState(false)
+  const moreRef = useRef(null)
+  useEffect(() => {
+    const onDocClick = (e) => { if (moreRef.current && !moreRef.current.contains(e.target)) setMoreOpen(false) }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [])
+
   return (
     <div className="space-y-5 pb-8">
       <button onClick={onBack} className="flex items-center gap-1.5 text-sm text-slate-400 light:text-slate-500 hover:text-white hover:light:text-slate-900"><ChevronRight size={14} className="rotate-180" /> Back to lend &amp; borrow</button>
 
       <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
-        <div className="flex items-center gap-3">
-          <div className={`flex h-14 w-14 items-center justify-center rounded-2xl ${isLent ? 'bg-emerald-400/15 text-emerald-200 light:text-emerald-700' : 'bg-rose-400/15 text-rose-200 light:text-rose-700'}`}>
-            <User size={22} />
-          </div>
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="text-lg font-semibold text-white light:text-slate-900">{capitalizeFirst(record.person_name)}</div>
-              <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-widest ${isLent ? 'bg-emerald-400/15 text-emerald-200 light:text-emerald-700' : 'bg-rose-400/15 text-rose-200 light:text-rose-700'}`}>{isLent ? 'lent' : 'borrowed'}</span>
-              <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-widest ${record.status === 'returned' ? 'bg-emerald-400/15 text-emerald-200 light:text-emerald-700' : record.status === 'partial' ? 'bg-amber-400/15 text-amber-200 light:text-amber-700' : 'bg-accent-400/15 text-accent-200 light:text-accent-700'}`}>{record.status}</span>
-              {overdue && <span className="rounded-full bg-rose-400/15 px-2 py-0.5 text-[10px] uppercase tracking-widest text-rose-200 light:text-rose-700">overdue</span>}
+        <div className="flex items-start justify-between gap-3 sm:contents">
+          <div className="flex items-center gap-3">
+            <div className={`flex h-14 w-14 items-center justify-center rounded-2xl ${isLent ? 'bg-emerald-400/15 text-emerald-200 light:text-emerald-700' : 'bg-rose-400/15 text-rose-200 light:text-rose-700'}`}>
+              <User size={22} />
             </div>
-            <div className="mt-1 text-xs text-slate-500">{capitalizeFirst(record.reason) || (isLent ? 'Lent' : 'Borrowed')} · {formatDate(record.date)}{account ? ` · ${account.name}` : ''}{record.due_date ? ` · due ${formatDate(record.due_date)}` : ''}</div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="text-lg font-semibold text-white light:text-slate-900">{capitalizeFirst(record.person_name)}</div>
+                <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-widest ${isLent ? 'bg-emerald-400/15 text-emerald-200 light:text-emerald-700' : 'bg-rose-400/15 text-rose-200 light:text-rose-700'}`}>{isLent ? 'lent' : 'borrowed'}</span>
+                <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-widest ${record.status === 'returned' ? 'bg-emerald-400/15 text-emerald-200 light:text-emerald-700' : record.status === 'partial' ? 'bg-amber-400/15 text-amber-200 light:text-amber-700' : 'bg-accent-400/15 text-accent-200 light:text-accent-700'}`}>{record.status}</span>
+                {overdue && <span className="rounded-full bg-rose-400/15 px-2 py-0.5 text-[10px] uppercase tracking-widest text-rose-200 light:text-rose-700">overdue</span>}
+              </div>
+              <div className="mt-1 text-xs text-slate-500">{capitalizeFirst(record.reason) || (isLent ? 'Lent' : 'Borrowed')} · {formatDate(record.date)}{account ? ` · ${account.name}` : ''}{record.due_date ? ` · due ${formatDate(record.due_date)}` : ''}</div>
+            </div>
+          </div>
+
+          {/* Mobile: Manage access/Edit/Delete collapse into this "..." menu; eye toggle stays
+              outside it, always visible, same as every other detail view. */}
+          <div className="flex shrink-0 items-center gap-2 sm:hidden">
+            <button onClick={onToggleMoney} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
+              {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
+            </button>
+            {(canManageShares(role) || canEditRecord(role) || canDeleteRecord(role)) && (
+              <div ref={moreRef} className="relative">
+                <button type="button" onClick={() => setMoreOpen((o) => !o)} className={`rounded-xl border p-2.5 transition ${moreOpen ? 'border-accent-300/40 bg-accent-400/10 text-accent-200 light:text-accent-700' : 'border-white/10 light:border-black/10 text-slate-400 light:text-slate-500 hover:bg-white/5'}`} title="More options">
+                  <MoreVertical size={16} />
+                </button>
+                {moreOpen && (
+                  <div className="absolute right-0 z-30 mt-2 w-56 rounded-xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-1 shadow-2xl">
+                    {canManageShares(role) && (
+                      <button type="button" onClick={() => { setMoreOpen(false); onManageAccess(record) }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-slate-300 light:text-slate-700 hover:bg-white/5"><UserPlus size={14} />Manage access</button>
+                    )}
+                    {canEditRecord(role) && (
+                      <button type="button" onClick={() => { setMoreOpen(false); onEdit(record) }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-slate-300 light:text-slate-700 hover:bg-white/5"><Pencil size={14} />Edit record</button>
+                    )}
+                    {canDeleteRecord(role) && (
+                      <button type="button" onClick={() => { setMoreOpen(false); onDelete(record) }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-rose-300/70 light:text-rose-700 hover:bg-rose-300/10"><Trash2 size={14} />Delete record</button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
+
         <div className="flex w-full min-w-0 flex-wrap gap-2 sm:w-auto">
           {canLogRepayment(role) && (
             <button onClick={() => onLogRepayment(record)} disabled={isSettled} title={isSettled ? 'Already fully settled' : undefined} className="hidden rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-4 py-2.5 text-sm font-semibold text-[#07101c] disabled:opacity-40 lg:inline-block">+ Log {isLent ? 'repayment' : 'payment'}</button>
           )}
-          {canManageShares(role) && (
-            <button onClick={() => onManageAccess(record)} title="Manage who has access" className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900"><UserPlus size={15} /></button>
-          )}
-          {canEditRecord(role) && (
-            <button onClick={() => onEdit(record)} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900"><Pencil size={15} /></button>
-          )}
-          {canDeleteRecord(role) && (
-            <button onClick={() => onDelete(record)} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-rose-300/70 light:text-rose-700 hover:bg-rose-300/10"><Trash2 size={15} /></button>
-          )}
-          <button onClick={onToggleMoney} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
-            {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
-          </button>
+          {/* Desktop: unchanged, everything stays inline */}
+          <div className="hidden sm:contents">
+            {canManageShares(role) && (
+              <button onClick={() => onManageAccess(record)} title="Manage who has access" className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900"><UserPlus size={15} /></button>
+            )}
+            {canEditRecord(role) && (
+              <button onClick={() => onEdit(record)} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900"><Pencil size={15} /></button>
+            )}
+            {canDeleteRecord(role) && (
+              <button onClick={() => onDelete(record)} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-rose-300/70 light:text-rose-700 hover:bg-rose-300/10"><Trash2 size={15} /></button>
+            )}
+            <button onClick={onToggleMoney} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
+              {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
+            </button>
+          </div>
         </div>
       </div>
 

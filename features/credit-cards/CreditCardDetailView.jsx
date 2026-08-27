@@ -1,7 +1,7 @@
 'use client'
 
-import { useRef, useState } from 'react'
-import { ArrowDownRight, ArrowUpRight, ChevronRight, Eye, EyeOff, Pencil, Target, Trash2 } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { ArrowDownRight, ArrowUpRight, ChevronRight, Eye, EyeOff, MoreVertical, Pencil, Target, Trash2 } from 'lucide-react'
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { BankCardFace } from '@/components/shared/BankCardFace'
 import { StatCard } from '@/components/shared/StatCard'
@@ -82,6 +82,16 @@ export function CreditCardDetailView({ card, cardTransactions, allTransactions, 
   }
   const suppressLongPressTap = () => { longPressFired.current = false }
 
+  // Mobile: Edit/Delete collapse into this "..." menu, same pattern as the other detail views —
+  // the eye toggle stays outside it, always visible. Desktop is unchanged.
+  const [moreOpen, setMoreOpen] = useState(false)
+  const moreRef = useRef(null)
+  useEffect(() => {
+    const onDocClick = (e) => { if (moreRef.current && !moreRef.current.contains(e.target)) setMoreOpen(false) }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [])
+
   return (
     <div className="space-y-5">
       <button onClick={onBack} className="flex items-center gap-1.5 text-sm text-slate-400 light:text-slate-500 hover:text-white hover:light:text-slate-900"><ChevronRight size={14} className="rotate-180" /> Back to credit cards</button>
@@ -90,14 +100,35 @@ export function CreditCardDetailView({ card, cardTransactions, allTransactions, 
         <div className="w-72 sm:w-80">
           <BankCardFace name={card.name} subtitle={card.bank || 'Credit card'} last4={card.last4} color={card.color || '#a78bfa'} />
         </div>
-        <div className="flex w-full min-w-0 flex-wrap gap-2 sm:w-auto">
+        <div className="flex w-full min-w-0 flex-wrap justify-end gap-2 sm:w-auto">
           <button onClick={() => onSpend(card)} className="hidden rounded-xl bg-white/[.06] light:bg-black/[.04] px-4 py-2.5 text-sm font-semibold text-white light:text-slate-900 hover:bg-white/[.1] hover:light:bg-black/[.06] lg:inline-block">+ Log spend</button>
           <button onClick={() => onPay(card)} disabled={Number(card.current_outstanding) <= 0} className="rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-4 py-2.5 text-sm font-semibold text-[#07101c] disabled:opacity-50">Pay bill</button>
-          <button onClick={() => onEdit(card)} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900"><Pencil size={15} /></button>
-          <button onClick={() => onDelete(card)} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-rose-300/70 light:text-rose-700 hover:bg-rose-300/10"><Trash2 size={15} /></button>
-          <button onClick={onToggleMoney} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
-            {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
-          </button>
+          {/* Mobile: Edit/Delete collapse into this "..." menu; eye toggle stays outside it,
+              always visible — row reads Pay bill, eye, "...", right-aligned, "..." rightmost. */}
+          <div className="flex items-center gap-2 sm:hidden">
+            <button onClick={onToggleMoney} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
+              {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
+            </button>
+            <div ref={moreRef} className="relative">
+              <button type="button" onClick={() => setMoreOpen((o) => !o)} className={`rounded-xl border p-2.5 transition ${moreOpen ? 'border-accent-300/40 bg-accent-400/10 text-accent-200 light:text-accent-700' : 'border-white/10 light:border-black/10 text-slate-400 light:text-slate-500 hover:bg-white/5'}`} title="More options">
+                <MoreVertical size={16} />
+              </button>
+              {moreOpen && (
+                <div className="absolute right-0 z-30 mt-2 w-48 rounded-xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-1 shadow-2xl">
+                  <button type="button" onClick={() => { setMoreOpen(false); onEdit(card) }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-slate-300 light:text-slate-700 hover:bg-white/5"><Pencil size={14} />Edit card</button>
+                  <button type="button" onClick={() => { setMoreOpen(false); onDelete(card) }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-rose-300/70 light:text-rose-700 hover:bg-rose-300/10"><Trash2 size={14} />Delete card</button>
+                </div>
+              )}
+            </div>
+          </div>
+          {/* Desktop: unchanged, everything stays inline */}
+          <div className="hidden sm:contents">
+            <button onClick={() => onEdit(card)} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900"><Pencil size={15} /></button>
+            <button onClick={() => onDelete(card)} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-rose-300/70 light:text-rose-700 hover:bg-rose-300/10"><Trash2 size={15} /></button>
+            <button onClick={onToggleMoney} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
+              {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
+            </button>
+          </div>
         </div>
       </div>
 

@@ -40,13 +40,13 @@ export function ScholarshipsView({ data, onAdd, onEdit, onDelete, onPay, onRefre
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex items-end justify-between gap-3">
         <div>
           <div className="mb-2 text-xs uppercase tracking-widest text-accent-200/70 light:text-accent-700">Scholarship trail</div>
           <h1 className="text-3xl font-semibold tracking-tight text-white light:text-slate-900">Scholarships &amp; fees</h1>
         </div>
         <div className="flex gap-2">
-          <button onClick={onAdd} className="hidden flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-4 py-2.5 text-sm font-semibold text-[#07101c] sm:flex-none lg:flex"><Plus size={15} />Add scholarship</button>
+          <button onClick={onAdd} className="hidden items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-4 py-2.5 text-sm font-semibold text-[#07101c] lg:flex"><Plus size={15} />Add scholarship</button>
           <button onClick={onToggleMoney} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
             {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
           </button>
