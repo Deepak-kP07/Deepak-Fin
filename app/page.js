@@ -3,10 +3,10 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { MotionConfig } from 'framer-motion'
 import { createClient } from '@/lib/supabase/browser'
-import { removeAttachment, uploadAttachment, viewAttachment } from '@/lib/attachments'
+import { removeAttachment, uploadAttachment } from '@/lib/attachments'
 import { calcEmi, daysBetween, projectSchedule, totalInterest } from '@/lib/amortization'
 import {
-  MONTH_NAMES, addMonthsToDate, formatDate, formatDateTime, liveOutstanding, maskedMoney, money, money2,
+  MONTH_NAMES, addMonthsToDate, capitalizeFirst, formatDate, formatDateTime, liveOutstanding, maskedMoney, money, money2,
   monthAbbr, monthName, ordinal, paymentTypeLabel, todayISO,
 } from '@/lib/format'
 import { PALETTE } from '@/lib/palette'
@@ -114,6 +114,7 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
   const [busy, setBusy] = useState(false)
   const [attachmentFile, setAttachmentFile] = useState(null)
   const [attachmentRemoved, setAttachmentRemoved] = useState(false)
+  const [viewingAttachment, setViewingAttachment] = useState(null)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [history, setHistory] = useState(null)
   const [descOpen, setDescOpen] = useState(false)
@@ -328,6 +329,7 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
   }
 
   return (
+    <>
     <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center sm:p-4" onClick={onClose}>
       <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="max-h-[92vh] w-full overflow-y-auto rounded-t-3xl border-t border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-6 shadow-2xl sm:max-w-xl sm:rounded-3xl sm:border" style={{ paddingBottom: 'max(1.5rem, calc(env(safe-area-inset-bottom) + 1.5rem))' }}>
         <div className="flex items-center justify-between">
@@ -420,7 +422,7 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
             Receipt / attachment
             {editing?.attachment_path && !attachmentRemoved ? (
               <div className="mt-2 flex items-center justify-between rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3">
-                <button type="button" onClick={() => viewAttachment(`/api/finance/transactions/${editing.id}/attachment`)} className="flex min-w-0 items-center gap-2 truncate text-sm text-accent-200 light:text-accent-700 hover:underline"><Paperclip size={14} className="shrink-0 text-slate-500" />{editing.attachment_name || 'Attachment'}</button>
+                <button type="button" onClick={() => setViewingAttachment(editing)} className="flex min-w-0 items-center gap-2 truncate text-sm text-accent-200 light:text-accent-700 hover:underline"><Paperclip size={14} className="shrink-0 text-slate-500" />{editing.attachment_name || 'Attachment'}</button>
                 <button type="button" onClick={() => setAttachmentRemoved(true)} className="shrink-0 rounded-lg p-1.5 text-rose-300/70 light:text-rose-700 hover:bg-rose-300/10"><Trash2 size={14} /></button>
               </div>
             ) : (
@@ -459,6 +461,8 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
       </form>
       {confirm.view}
     </div>
+    <AttachmentViewer open={!!viewingAttachment} onClose={() => setViewingAttachment(null)} transaction={viewingAttachment} />
+    </>
   )
 }
 
@@ -576,7 +580,7 @@ function TransactionRow({ t, categories, accounts, creditCards = [], showMoney }
           <span className="sr-only">{t.type === 'transfer' ? 'Transfer' : t.type === 'income' ? 'Income' : 'Expense'}</span>
         </div>
         <div className="min-w-0">
-          <div className="truncate text-sm font-medium text-white light:text-slate-900">{t.description}</div>
+          <div className="truncate text-sm font-medium text-white light:text-slate-900">{capitalizeFirst(t.description)}</div>
           <div className="truncate text-[11px] text-slate-400 light:text-slate-500">{cat?.name || (t.type === 'transfer' ? 'Transfer' : 'Uncategorised')}{acc ? ` · ${acc.name}` : ''} · {formatDateTime(t.date, t.time)}</div>
         </div>
       </div>
@@ -911,8 +915,8 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
   // disclose no absolute amount, and the toggle's own label is "Hide amounts". Keep new cards
   // consistent with this split.
   const STAT_CARDS = [
-    { key: 'income_month', available: true, node: <StatCard label={`Income · ${thisMonth?.label || ''}`} value={showMoney ? money(thisMonth?.income || 0) : '••••'} sub={<span className="flex items-center gap-1"><ArrowUpRight size={13} aria-hidden="true" /><span className="sr-only">Money in · </span>This month · tap for all-time</span>} icon={TrendingUp} accent="bg-emerald-400/15 text-emerald-200 light:text-emerald-700" onClick={() => setDrilldown('income')} /> },
-    { key: 'expense_month', available: true, node: <StatCard label={`Expense · ${thisMonth?.label || ''}`} value={showMoney ? money(thisMonth?.expense || 0) : '••••'} sub={<span className="flex items-center gap-1 text-rose-300 light:text-rose-700"><ArrowDownRight size={13} aria-hidden="true" /><span className="sr-only">Money out · </span>This month · tap for all-time</span>} icon={TrendingDown} accent="bg-rose-400/15 text-rose-200 light:text-rose-700" tone="text-rose-300 light:text-rose-700" onClick={() => setDrilldown('expense')} /> },
+    { key: 'income_month', available: true, node: <StatCard label={`Income · ${thisMonth?.label || ''}`} value={showMoney ? money(thisMonth?.income || 0) : '••••'} sub={<span className="flex items-center gap-1"><ArrowUpRight size={13} aria-hidden="true" /><span className="sr-only">Money in · </span><span className="hidden sm:inline">This month · tap for all-time</span><span className="sm:hidden">Tap for all-time</span></span>} icon={TrendingUp} accent="bg-emerald-400/15 text-emerald-200 light:text-emerald-700" onClick={() => setDrilldown('income')} /> },
+    { key: 'expense_month', available: true, node: <StatCard label={`Expense · ${thisMonth?.label || ''}`} value={showMoney ? money(thisMonth?.expense || 0) : '••••'} sub={<span className="flex items-center gap-1 text-rose-300 light:text-rose-700"><ArrowDownRight size={13} aria-hidden="true" /><span className="sr-only">Money out · </span><span className="hidden sm:inline">This month · tap for all-time</span><span className="sm:hidden">Tap for all-time</span></span>} icon={TrendingDown} accent="bg-rose-400/15 text-rose-200 light:text-rose-700" tone="text-rose-300 light:text-rose-700" onClick={() => setDrilldown('expense')} /> },
     { key: 'savings_rate', available: true, node: <StatCard label="Savings rate" value={`${savingsRate}%`} sub={<span className={savingsRate >= 20 ? 'text-emerald-300 light:text-emerald-700' : 'text-amber-300 light:text-amber-700'}>{savingsRate >= 20 ? 'Great pace' : 'Aim for 20%+'} · tap for detail</span>} icon={Target} accent="bg-accent-400/15 text-accent-200 light:text-accent-700" tone={savingsRate >= 20 ? 'text-emerald-300 light:text-emerald-700' : 'text-amber-300 light:text-amber-700'} onClick={() => setDrilldown('savings')} /> },
     { key: 'net_cashflow', available: true, node: <StatCard label="Net cash flow" value={showMoney ? money(netCashflow) : '••••'} sub={<span className={netCashflow >= 0 ? 'text-emerald-300 light:text-emerald-700' : 'text-rose-300 light:text-rose-700'}>{netCashflow >= 0 ? 'Positive' : 'Negative'} this month</span>} icon={ArrowLeftRight} accent="bg-accent-400/15 text-accent-200 light:text-accent-700" tone={netCashflow >= 0 ? 'text-emerald-300 light:text-emerald-700' : 'text-rose-300 light:text-rose-700'} /> },
     { key: 'total_debt', available: moduleSettings.loans.enabled || moduleSettings.credit_cards.enabled, node: <StatCard label="Total debt" value={showMoney ? money(totalDebt) : '••••'} sub="Loans + credit cards" icon={CreditCard} accent="bg-rose-400/15 text-rose-200 light:text-rose-700" /> },
@@ -1625,7 +1629,7 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTx
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
           <div className="mb-2 text-xs uppercase tracking-widest text-accent-200/70 light:text-accent-700">Money movement</div>
-          <h1 className="text-3xl font-semibold tracking-tight text-white light:text-slate-900">Every rupee, accounted for</h1>
+          <h1 className="text-3xl font-semibold tracking-tight text-white light:text-slate-900">Transactions</h1>
         </div>
         <div className="flex gap-2">
           <div className={`flex items-center rounded-xl border ${customRange ? 'border-white/5 light:border-black/5 opacity-40' : 'border-white/10 light:border-black/10'}`}>
@@ -1820,9 +1824,14 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTx
                       edit. No per-row delete icon here; long-press enters selection mode (tap
                       toggles rows, the toolbar above handles bulk delete) instead. */}
                   <div className="flex items-center gap-3 sm:hidden">
-                    <button
-                      type="button"
+                    {/* A div, not a button — the attachment paperclip below is a real nested
+                        <button> right after the description, and a button can't legally contain
+                        another button. role="button" + onKeyDown keeps it keyboard-accessible. */}
+                    <div
+                      role="button"
+                      tabIndex={0}
                       onClick={() => handleRowTap(t)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleRowTap(t) } }}
                       onTouchStart={() => startLongPress(t.id)}
                       onTouchEnd={cancelLongPress}
                       onTouchMove={cancelLongPress}
@@ -1843,13 +1852,15 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTx
                       )}
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5 truncate text-sm font-medium text-white light:text-slate-900">
-                          <span className="truncate">{t.description}</span>
-                          {t.attachment_path && <Paperclip size={11} className="shrink-0 text-slate-500" />}
+                          <span className="truncate">{capitalizeFirst(t.description)}</span>
+                          {t.attachment_path && (
+                            <button type="button" onClick={(e) => { e.stopPropagation(); setViewingAttachment(t) }} className="shrink-0 pl-0.5 text-slate-500 hover:text-accent-300 hover:light:text-accent-700" title="View attachment"><Paperclip size={12} /></button>
+                          )}
                           {t.recurring_source_id && <Repeat size={11} className="shrink-0 text-slate-500" />}
                         </div>
                         <div className="truncate text-[11px] text-slate-500">{cat?.name || (isTransfer ? 'Transfer' : 'Uncategorised')} · {formatDate(t.date)}</div>
                       </div>
-                    </button>
+                    </div>
                     <div className={`shrink-0 text-sm font-semibold ${color}`}>{showMoney ? `${sign}${money(t.amount).replace('-', '')}` : '••••'}</div>
                   </div>
 
@@ -1861,13 +1872,13 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTx
                       </div>
                       <div>
                         <div className="flex items-center gap-1.5 text-sm font-medium text-white light:text-slate-900">
-                          {t.description}
+                          {capitalizeFirst(t.description)}
                           {t.attachment_path && (
                             <button type="button" onClick={(e) => { e.stopPropagation(); setViewingAttachment(t) }} className="shrink-0 text-slate-500 hover:text-accent-300 hover:light:text-accent-700" title="View attachment"><Paperclip size={12} /></button>
                           )}
                           {t.recurring_source_id && <Repeat size={12} className="shrink-0 text-slate-500" title="Auto-generated from a recurring rule" />}
                         </div>
-                        {t.notes && <div className="text-[11px] text-slate-500">{t.notes}</div>}
+                        {t.notes && <div className="text-[11px] text-slate-500">{capitalizeFirst(t.notes)}</div>}
                       </div>
                     </div>
                     <div className="text-xs text-slate-400 light:text-slate-500">
