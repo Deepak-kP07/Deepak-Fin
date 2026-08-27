@@ -65,8 +65,8 @@ function CardFace({ back = false, revealed = false, onToggleReveal }) {
           <div className="h-8 w-full rounded-[3px] bg-black/70" />
           <div>
             <div className="text-[8px] font-medium tracking-[0.2em] text-white/40">CARD NUMBER</div>
-            <div className="font-mono text-sm tracking-[0.16em] text-white/90">
-              {revealed ? '4242  4242  4242  4242' : <>••••&nbsp;&nbsp;••••&nbsp;&nbsp;••••&nbsp;&nbsp;4821</>}
+            <div className="font-mono text-[11px] tracking-[0.08em] text-white/90 sm:text-sm sm:tracking-[0.16em]">
+              {revealed ? '4242 4242 4242 4242' : <>••••&nbsp;••••&nbsp;••••&nbsp;4821</>}
             </div>
             <div className="mt-3 flex items-end justify-between">
               <div className="flex items-center gap-4">
@@ -97,26 +97,26 @@ function CardFace({ back = false, revealed = false, onToggleReveal }) {
       ) : (
         <div className="relative flex h-full flex-col justify-between p-5">
           <div className="flex items-start justify-between">
-            <span className="text-[10px] font-semibold tracking-[0.22em] text-white/60">PERSONAL FINANCE</span>
+            <span className="text-[10px] font-semibold tracking-[0.22em] text-white/60">PERSONAL FIN</span>
             <Wifi size={16} className="rotate-90 text-white/40" />
           </div>
-          <div className="h-7 w-9 rounded-[6px] bg-gradient-to-br from-yellow-200 via-yellow-300 to-yellow-500 shadow-inner">
-            <div className="grid h-full grid-cols-3 grid-rows-2 gap-px p-[3px]">
-              {Array.from({ length: 6 }).map((_, i) => <div key={i} className="rounded-[1px] bg-yellow-700/40" />)}
+          <div className="h-8 w-10 rounded-[6px] bg-gradient-to-br from-yellow-200 via-yellow-300 to-yellow-500 shadow-inner">
+            <div className="grid h-full grid-cols-3 grid-rows-2 gap-[2px] p-[3px]">
+              {Array.from({ length: 6 }).map((_, i) => <div key={i} className="rounded-[1px] bg-yellow-800/50" />)}
             </div>
           </div>
           <div>
-            <div className="font-mono text-sm tracking-[0.16em] text-white/90">
-              ••••&nbsp;&nbsp;••••&nbsp;&nbsp;••••&nbsp;&nbsp;4821
+            <div className="font-mono text-[11px] tracking-[0.08em] text-white/90 sm:text-sm sm:tracking-[0.16em]">
+              ••••&nbsp;••••&nbsp;••••&nbsp;4821
             </div>
             <div className="mt-3 flex items-end justify-between">
               <div>
                 <div className="text-[8px] font-medium tracking-[0.2em] text-white/40">CARDHOLDER</div>
                 <div className="text-xs font-semibold tracking-wide text-white/90">DEEPAK KP</div>
               </div>
-              <div className="flex -space-x-2.5" aria-hidden="true">
-                <span className="h-5 w-5 rounded-full bg-accent-300/85" />
-                <span className="h-5 w-5 rounded-full bg-white/50" />
+              <div className="flex -space-x-2" aria-hidden="true">
+                <span className="h-5 w-5 rounded-full bg-accent-300/90" />
+                <span className="h-5 w-5 rounded-full bg-white/60" />
               </div>
             </div>
           </div>
@@ -188,8 +188,8 @@ function GlassLayer() {
         <div className="flex items-center gap-1.5" aria-hidden="true">
           <Sparkle size={12} className="text-white/50" />
           <span className="flex -space-x-2">
-            <span className="h-4 w-4 rounded-full bg-white/40" />
-            <span className="h-4 w-4 rounded-full bg-white/20" />
+            <span className="h-5 w-5 rounded-full bg-white/60" />
+            <span className="h-5 w-5 rounded-full bg-white/30" />
           </span>
         </div>
         <Wifi size={14} className="rotate-90 text-white/40" />
@@ -223,7 +223,7 @@ function FlipCard() {
   // untranslated box, sits centered — mobile/tablet only; desktop's row layout has room either
   // way and was left as designed.
   return (
-    <div className="relative m-16 translate-x-[10.5%] translate-y-[7%] sm:m-20 lg:m-24 lg:translate-x-0 lg:translate-y-0" style={{ perspective: '1500px' }}>
+    <div className="relative m-10 translate-x-[10.5%] translate-y-[7%] sm:m-20 lg:m-24 lg:translate-x-0 lg:translate-y-0" style={{ perspective: '1500px' }}>
       <EchoLayer />
       <GlassLayer />
       <motion.div
@@ -399,19 +399,21 @@ export function AuthScreen({ onAuth, initialError, initialMode = 'landing', init
                 down, so the marquee visually landed on top of the trust line. Letting this row size
                 to its natural content height on mobile (plain block flow) fixes that structurally;
                 the hero's own `overflow-y-auto` (see above) scrolls the rest into view. */}
-            <div className="relative mx-auto flex w-full max-w-[1100px] flex-col items-center justify-start gap-10 lg:min-h-0 lg:flex-1 lg:flex-row lg:justify-between lg:gap-12">
-              <div className="max-w-xl text-center lg:text-left">
-                {/* Mobile: the two HEADLINE lines flow as one wrapped paragraph (no forced break
-                    per array) at a size tuned to land on exactly two lines within this column's
-                    ~342px width (px-6 on a 390px viewport) — the old size/forced-block combo let
-                    "Your entire financial life." alone overflow onto its own second line, pushing
-                    "One calm view." to a third. Desktop's forced two-line block layout (`lg:block`)
-                    and larger size are unchanged — there's room for it to look intentional there. */}
-                <h1 className="text-[clamp(1.75rem,7vw,2.5rem)] font-semibold leading-[1.08] tracking-[-.03em] text-white lg:text-[clamp(3.5rem,5vw,5.25rem)] lg:leading-[1.0] lg:tracking-[-.04em]">
+            <div className="relative mx-auto my-auto flex w-full max-w-[1100px] flex-col items-center justify-start gap-6 lg:my-0 lg:min-h-0 lg:flex-1 lg:flex-row lg:justify-between lg:gap-12">
+              <div className="order-2 max-w-xl text-center lg:order-none lg:text-left">
+                {/* Each HEADLINE array is forced onto its own line at every width (not just
+                    desktop) so the two groups can never merge onto one wrapped line — the earlier
+                    "flow as one paragraph, tuned to land on two lines" approach depended on the
+                    browser's wrap landing exactly on the array boundary at one specific viewport
+                    width, and broke differently (mid-phrase, mixing white and gold text on one
+                    line) at others. The mobile size is capped low enough that "Your entire
+                    financial life." itself doesn't need to wrap a second time down to a 320px
+                    viewport (measured, not guessed — see PR notes). */}
+                <h1 className="text-[clamp(1.5rem,8vw,2.25rem)] font-semibold leading-[1.15] tracking-[-.02em] text-white lg:text-[clamp(3.5rem,5vw,5.25rem)] lg:leading-[1.0] lg:tracking-[-.04em]">
                   {HEADLINE.map((line, li) => (
                     <motion.span
                       key={li}
-                      className={`lg:block ${li === 1 ? 'whitespace-nowrap text-accent-200 lg:whitespace-normal' : ''}`}
+                      className={`block ${li === 1 ? 'text-accent-200' : ''}`}
                       initial="hidden" animate="show"
                       variants={{ show: { transition: { staggerChildren: 0.06, delayChildren: li * 0.26 } } }}
                     >
@@ -425,7 +427,7 @@ export function AuthScreen({ onAuth, initialError, initialMode = 'landing', init
                   initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7, duration: 0.5 }}
                   className="mx-auto mt-4 max-w-md text-base leading-7 text-slate-400 lg:mx-0"
                 >
-                  Accounts, investments, loans, credit cards and 7 more — all connected, all live, in 11 modules built around how you actually track money.
+                  One unified view of your money, fully customizable — the same experience on mobile and web.
                 </motion.p>
                 <motion.div
                   initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.85, duration: 0.5 }}
@@ -441,16 +443,12 @@ export function AuthScreen({ onAuth, initialError, initialMode = 'landing', init
               </div>
 
               <motion.div
-                className="flex shrink-0 flex-col items-center gap-6"
+                className="order-1 mt-6 flex shrink-0 flex-col items-center gap-4 lg:order-none lg:mt-0"
                 initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1, duration: 0.6 }}
               >
                 <FlipCard />
                 <ModuleMarquee />
               </motion.div>
-            </div>
-
-            <div className="relative flex shrink-0 items-center justify-center gap-1.5 text-xs text-slate-500">
-              <ShieldCheck size={13} className="text-emerald-300 shrink-0" /><span className="whitespace-nowrap">Private &amp; secure — powered by Supabase</span>
             </div>
           </div>
         ) : (

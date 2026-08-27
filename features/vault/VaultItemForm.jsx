@@ -79,7 +79,7 @@ function VaultItemFormFields({ form, setForm, accounts, isBank, prefilling }) {
             </div>
           </label>
           <label className="text-sm text-slate-300 light:text-slate-700">CVV
-            <input required maxLength={4} value={form.cvv} onChange={(e) => setForm({ ...form, cvv: e.target.value.replace(/\D/g, '') })} className={`${inputClass} font-mono`} placeholder="123" />
+            <input maxLength={4} value={form.cvv} onChange={(e) => setForm({ ...form, cvv: e.target.value.replace(/\D/g, '') })} className={`${inputClass} font-mono`} placeholder="Optional" />
           </label>
           <label className="text-sm text-slate-300 light:text-slate-700">PIN
             <input maxLength={6} value={form.pin} onChange={(e) => setForm({ ...form, pin: e.target.value.replace(/\D/g, '') })} className={`${inputClass} font-mono`} placeholder="Optional" />

@@ -28,7 +28,7 @@ export function BankCardFace({ name, subtitle, last4, color = '#a78bfa', fill = 
           <Wifi size={18} className="rotate-90 text-white/70" />
         </div>
         <div>
-          <div className="font-mono text-[13px] tracking-[0.18em] text-white/90 sm:text-base">
+          <div className="font-mono text-[13px] font-bold tracking-[0.18em] text-white/90 sm:text-base">
             {revealedNumber || `•••• •••• •••• ${last4 || '••••'}`}
           </div>
           {/* Same "own full-width line" reasoning either way — when a holder name is supplied

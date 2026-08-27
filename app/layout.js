@@ -1,9 +1,14 @@
 import './globals.css'
 import { ThemeProvider } from '@/components/ThemeProvider'
 
+const SITE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
+const SITE_TITLE = 'Personal Fin'
+const SITE_DESCRIPTION = 'A calm, clear command centre for your money'
+
 export const metadata = {
-  title: 'Personal Fin',
-  description: 'A calm, clear command centre for your money',
+  metadataBase: new URL(SITE_URL),
+  title: SITE_TITLE,
+  description: SITE_DESCRIPTION,
   manifest: '/manifest.webmanifest',
   icons: {
     icon: [
@@ -18,6 +23,24 @@ export const metadata = {
     capable: true,
     statusBarStyle: 'black-translucent',
     title: 'Finance',
+  },
+  // Every page (invite links included, since those are client components that can't declare
+  // their own metadata) inherits this unless it overrides — so a pasted link at minimum always
+  // unfurls with the app's own branding instead of nothing at all.
+  openGraph: {
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+    url: SITE_URL,
+    siteName: SITE_TITLE,
+    images: [{ url: '/logo.png', width: 512, height: 512, alt: SITE_TITLE }],
+    locale: 'en_US',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary',
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+    images: ['/logo.png'],
   },
 }
 

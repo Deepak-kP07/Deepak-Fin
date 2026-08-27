@@ -18,11 +18,11 @@ function groupNumber(v) {
 // share now doubles as a mention of the app instead of that button existing on its own.
 function shareCaption(item, secrets) {
   const who = secrets.holder_name || item.label
-  const heading = item.bank_name ? `${item.bank_name} — ${who}` : who
+  const heading = item.bank_name ? [item.bank_name, who] : [who]
   const lines = item.item_type === 'bank_account'
     ? [`A/C: ${secrets.account_number || '—'}`, `IFSC: ${secrets.ifsc_code || '—'}`, secrets.branch && `Branch: ${secrets.branch}`]
     : [`Card: ${groupNumber(secrets.card_number) || '—'}`, `Expiry: ${secrets.expiry_month || '--'}/${secrets.expiry_year || '--'}`]
-  return [heading, ...lines.filter(Boolean), '', 'Sent via Personal Fin — manage all your personal finance at personalfin.site'].join('\n')
+  return [...heading, ...lines.filter(Boolean), '', 'Sent via Personal Fin — manage all your personal finance at personalfin.site'].join('\n')
 }
 
 // Snapshots the actual front-face DOM node (not a redrawn approximation) so the shared image is
@@ -33,13 +33,23 @@ async function cardImageFile(frontNode, filename) {
   return new File([blob], filename, { type: 'image/png' })
 }
 
+// Real mobile OS share sheets (Android/iOS) handle a shared image file natively; desktop
+// Chrome's navigator.share for files goes through a much shakier bridge that (at least with
+// WhatsApp Desktop as the target) both duplicates the image and pastes the file's local temp
+// path as raw text glued onto the caption. Gating native file-share to actual mobile devices —
+// not just a narrow viewport, which a resized desktop window can also match — keeps desktop on
+// the download+text fallback below, which has neither problem.
+function isMobileDevice() {
+  return typeof navigator !== 'undefined' && /android|iphone|ipad|ipod/i.test(navigator.userAgent || '')
+}
+
 async function shareItem(item, secrets, frontNode) {
   const text = shareCaption(item, secrets)
-  const filename = `${(item.label || 'card').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.png`
+  const filename = `${(item.label || 'card').replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase()}.png`
   let file = null
   try { file = await cardImageFile(frontNode, filename) } catch { /* falls through to text-only share below */ }
 
-  if (file && typeof navigator !== 'undefined' && navigator.canShare?.({ files: [file] })) {
+  if (file && isMobileDevice() && typeof navigator !== 'undefined' && navigator.canShare?.({ files: [file] })) {
     try { await navigator.share({ files: [file], title: item.label, text }) } catch { /* user cancelled the share sheet */ }
     return
   }
@@ -113,7 +123,6 @@ export function VaultCardFlip({ item, onEdit, onDelete }) {
               last4={item.last4}
               color={item.color || '#a78bfa'}
               fill
-              revealedNumber={preview?.card_number ? groupNumber(preview.card_number) : undefined}
               holderName={preview?.holder_name || undefined}
             />
           ) : (
@@ -124,7 +133,7 @@ export function VaultCardFlip({ item, onEdit, onDelete }) {
               </div>
               <div className="relative">
                 <div className="font-mono text-[13px] tracking-[0.18em] text-white/90 sm:text-base">
-                  {preview?.account_number || `••${item.last4 || '••••'}`}
+                  ••{item.last4 || '••••'}
                 </div>
                 <div className="mt-2 text-xs font-semibold leading-tight text-white sm:text-sm">{preview?.holder_name || item.label}</div>
                 {(preview?.holder_name ? item.label || item.bank_name : item.bank_name) && (
