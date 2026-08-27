@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { ArrowDownRight, ArrowUpRight, ChevronRight, Eye, EyeOff, Pencil, Target, Trash2 } from 'lucide-react'
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { BankCardFace } from '@/components/shared/BankCardFace'
@@ -8,7 +8,7 @@ import { StatCard } from '@/components/shared/StatCard'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { MonthCursor } from '@/components/shared/MonthCursor'
 import { nextBillDue, utilisationSeverity } from '@/lib/creditCards'
-import { formatDate, formatDateTime, money, monthName, ordinal } from '@/lib/format'
+import { capitalizeFirst, formatDate, formatDateTime, money, monthName, ordinal } from '@/lib/format'
 
 // Bill payments are logged through /finance/credit_cards/:id/pay_bill, which creates a plain
 // transaction with a fixed, app-generated description rather than a linked_module reference —
@@ -67,6 +67,21 @@ export function CreditCardDetailView({ card, cardTransactions, allTransactions, 
 
   const deleteActivity = (a) => (a.source === 'log' ? onDeleteSpend(a.row) : onDeleteTx(a.row))
 
+  // Mobile rows (card activity + repayments) have no visible delete icon — a long press
+  // reverses/deletes the entry directly, same 500ms timing/suppression pattern as the Loans
+  // and Accounts detail views. Both deleteActivity's targets and onDeleteTx already confirm
+  // before acting, so a direct long-press delete is safe here too.
+  const longPressTimer = useRef(null)
+  const longPressFired = useRef(false)
+  const LONG_PRESS_MS = 500
+  const cancelLongPress = () => { if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null } }
+  const startLongPress = (onDelete) => {
+    longPressFired.current = false
+    cancelLongPress()
+    longPressTimer.current = setTimeout(() => { longPressFired.current = true; onDelete() }, LONG_PRESS_MS)
+  }
+  const suppressLongPressTap = () => { longPressFired.current = false }
+
   return (
     <div className="space-y-5">
       <button onClick={onBack} className="flex items-center gap-1.5 text-sm text-slate-400 light:text-slate-500 hover:text-white hover:light:text-slate-900"><ChevronRight size={14} className="rotate-180" /> Back to credit cards</button>
@@ -76,7 +91,7 @@ export function CreditCardDetailView({ card, cardTransactions, allTransactions, 
           <BankCardFace name={card.name} subtitle={card.bank || 'Credit card'} last4={card.last4} color={card.color || '#a78bfa'} />
         </div>
         <div className="flex w-full min-w-0 flex-wrap gap-2 sm:w-auto">
-          <button onClick={() => onSpend(card)} className="rounded-xl bg-white/[.06] light:bg-black/[.04] px-4 py-2.5 text-sm font-semibold text-white light:text-slate-900 hover:bg-white/[.1] hover:light:bg-black/[.06]">+ Log spend</button>
+          <button onClick={() => onSpend(card)} className="hidden rounded-xl bg-white/[.06] light:bg-black/[.04] px-4 py-2.5 text-sm font-semibold text-white light:text-slate-900 hover:bg-white/[.1] hover:light:bg-black/[.06] lg:inline-block">+ Log spend</button>
           <button onClick={() => onPay(card)} disabled={Number(card.current_outstanding) <= 0} className="rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-4 py-2.5 text-sm font-semibold text-[#07101c] disabled:opacity-50">Pay bill</button>
           <button onClick={() => onEdit(card)} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900"><Pencil size={15} /></button>
           <button onClick={() => onDelete(card)} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-rose-300/70 light:text-rose-700 hover:bg-rose-300/10"><Trash2 size={15} /></button>
@@ -90,7 +105,7 @@ export function CreditCardDetailView({ card, cardTransactions, allTransactions, 
         Bill on the {ordinal(card.billing_date)} · Due {nd.days > 0 ? `in ${nd.days} day${nd.days === 1 ? '' : 's'}` : nd.days === 0 ? 'today' : 'overdue'} ({formatDate(nd.due.toISOString().slice(0, 10))})
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
         <StatCard label="Outstanding" value={showMoney ? money(card.current_outstanding) : '••••'} icon={ArrowDownRight} accent="bg-rose-400/15 text-rose-200 light:text-rose-700" tone="text-rose-300 light:text-rose-700" sub={<span>of {money(card.credit_limit)} limit</span>} />
         <StatCard label="Utilisation" value={`${util}%`} icon={Target} accent="bg-accent-400/15 text-accent-200 light:text-accent-700" tone={utilisationSeverity(util).tone} sub={<span>{utilisationSeverity(util).label}</span>} />
         <StatCard label="Total repaid" value={showMoney ? money(totalRepaid) : '••••'} icon={ArrowUpRight} accent="bg-emerald-400/15 text-emerald-200 light:text-emerald-700" sub={<span>{repayments.length} payment{repayments.length === 1 ? '' : 's'}</span>} />
@@ -136,25 +151,34 @@ export function CreditCardDetailView({ card, cardTransactions, allTransactions, 
               <span className="text-right">Amount</span>
               <span />
             </div>
-            <div className="max-h-96 divide-y divide-white/5 light:divide-black/5 overflow-y-auto">
+            <div className="divide-y divide-white/5 light:divide-black/5">
             {monthActivity.map((a) => {
               const cat = categories.find((c) => c.id === a.categoryId)
               const isDebit = a.direction === 'debit'
               const color = isDebit ? 'text-rose-300 light:text-rose-700' : 'text-emerald-300 light:text-emerald-700'
               return (
                 <div key={`${a.source}-${a.id}`} className="px-5 py-3 sm:py-4">
-                  {/* Mobile: one compact row — same icon-bubble + name/subtitle + trailing amount
-                      pattern as Accounts/Transactions, no per-row delete icon on mobile either. */}
-                  <div className="flex items-center gap-3 sm:hidden">
+                  {/* Mobile: one compact row, long-press to delete (no visible delete icon) —
+                      same icon-bubble + name/subtitle + trailing amount pattern as Accounts/Transactions. */}
+                  <button
+                    type="button"
+                    onClick={suppressLongPressTap}
+                    onTouchStart={() => startLongPress(() => deleteActivity(a))}
+                    onTouchEnd={cancelLongPress}
+                    onTouchMove={cancelLongPress}
+                    onTouchCancel={cancelLongPress}
+                    onContextMenu={(e) => e.preventDefault()}
+                    className="flex w-full min-w-0 items-center gap-3 text-left sm:hidden"
+                  >
                     <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/[.05] light:bg-black/[.035]" style={{ color: cat?.color || '#94a3b8' }}>
                       {isDebit ? <ArrowDownRight size={16} /> : <ArrowUpRight size={16} />}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-medium text-white light:text-slate-900">{a.description}</div>
+                      <div className="truncate text-sm font-medium text-white light:text-slate-900">{capitalizeFirst(a.description)}</div>
                       <div className="truncate text-[11px] text-slate-500">{cat?.name || 'Uncategorised'} · {formatDateTime(a.date, a.time)}{a.status ? ` · ${a.status}` : ''}</div>
                     </div>
                     <div className={`shrink-0 text-sm font-semibold ${color}`}>{isDebit ? '-' : '+'}{showMoney ? money(a.amount) : '••••'}</div>
-                  </div>
+                  </button>
 
                   {/* Desktop: unchanged full row */}
                   <div className="hidden sm:grid sm:grid-cols-[1.4fr_.9fr_.6fr_.6fr_auto] sm:items-center sm:gap-4">
@@ -163,7 +187,7 @@ export function CreditCardDetailView({ card, cardTransactions, allTransactions, 
                         {isDebit ? <ArrowDownRight size={16} /> : <ArrowUpRight size={16} />}
                       </div>
                       <div className="min-w-0">
-                        <div className="truncate text-sm font-medium text-white light:text-slate-900">{a.description}</div>
+                        <div className="truncate text-sm font-medium text-white light:text-slate-900">{capitalizeFirst(a.description)}</div>
                         {a.status && <div className="text-[11px] uppercase tracking-widest text-slate-500">{a.status}</div>}
                       </div>
                     </div>
@@ -189,11 +213,32 @@ export function CreditCardDetailView({ card, cardTransactions, allTransactions, 
         {repayments.length === 0 ? (
           <div className="px-5 py-6 text-sm text-slate-500">No payments logged yet.</div>
         ) : (
-          <div className="max-h-64 divide-y divide-white/5 light:divide-black/5 overflow-y-auto">
+          <div className="divide-y divide-white/5 light:divide-black/5">
             {repayments.map((r) => (
-              <div key={r.id} className="flex items-center justify-between px-5 py-3 text-sm">
-                <div className="text-slate-300 light:text-slate-700">{formatDate(r.date)}</div>
-                <div className="font-medium text-emerald-300 light:text-emerald-700">{showMoney ? `+${money(r.amount)}` : '••••'}</div>
+              <div key={r.id} className="px-5 py-3">
+                {/* Mobile: long-press to delete, no visible delete icon */}
+                <button
+                  type="button"
+                  onClick={suppressLongPressTap}
+                  onTouchStart={() => startLongPress(() => onDeleteTx(r))}
+                  onTouchEnd={cancelLongPress}
+                  onTouchMove={cancelLongPress}
+                  onTouchCancel={cancelLongPress}
+                  onContextMenu={(e) => e.preventDefault()}
+                  className="flex w-full items-center justify-between gap-3 text-left text-sm sm:hidden"
+                >
+                  <div className="text-slate-300 light:text-slate-700">{formatDate(r.date)}</div>
+                  <div className="font-medium text-emerald-300 light:text-emerald-700">{showMoney ? `+${money(r.amount)}` : '••••'}</div>
+                </button>
+
+                {/* Desktop: same row, with a visible delete icon */}
+                <div className="hidden items-center justify-between gap-3 text-sm sm:flex">
+                  <div className="text-slate-300 light:text-slate-700">{formatDate(r.date)}</div>
+                  <div className="flex items-center gap-2">
+                    <div className="font-medium text-emerald-300 light:text-emerald-700">{showMoney ? `+${money(r.amount)}` : '••••'}</div>
+                    <button onClick={() => onDeleteTx(r)} className="rounded-lg p-1.5 text-rose-300/70 light:text-rose-700 hover:bg-rose-300/10"><Trash2 size={13} /></button>
+                  </div>
+                </div>
               </div>
             ))}
           </div>
