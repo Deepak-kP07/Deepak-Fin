@@ -219,7 +219,7 @@ export function InvestmentsView({
       {/* lg:+ splits into two regions, mirroring the Dashboard net-worth card: the figure stays
           the left column, and a portfolio-mix breakdown fills the right column instead of the
           card just stretching its hero content across the full width with nothing beside it. */}
-      <div className="rounded-3xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-6 lg:grid lg:grid-cols-[minmax(300px,1.05fr)_minmax(0,1fr)] lg:items-center lg:gap-8">
+      <div className="rounded-3xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-black/[.025] glassy:glass-card p-6 lg:grid lg:grid-cols-[minmax(300px,1.05fr)_minmax(0,1fr)] lg:items-center lg:gap-8">
         <div>
           <div className="text-xs uppercase tracking-widest text-slate-500">Current value</div>
           <div className="mt-1 text-[clamp(2rem,6vw,3rem)] font-semibold leading-[1.1] tracking-[-0.01em] text-white light:text-slate-900">
@@ -297,7 +297,7 @@ export function InvestmentsView({
       </DismissibleBanner>
 
       {portfolios.length === 0 ? (
-        <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card">
+        <div className="rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card">
           <EmptyState icon={TrendingUp} title="No portfolios yet" message="Create a portfolio like ‘Zerodha Demat A’ to group your holdings." cta="Create portfolio" onCta={onAddPortfolio} />
         </div>
       ) : (
@@ -321,7 +321,7 @@ export function InvestmentsView({
               pOther.length > 0 ? `${pOther.length} other` : null,
             ].filter(Boolean)
             return (
-              <div key={p.id} onClick={() => setSelectedPortfolioId(p.id)} className="cursor-pointer rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-5 transition hover:border-accent-300/30 hover:bg-white/[.05] hover:light:bg-black/[.035]">
+              <div key={p.id} onClick={() => setSelectedPortfolioId(p.id)} className="cursor-pointer rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card p-5 transition hover:border-accent-300/30 hover:bg-white/[.05] hover:light:bg-black/[.035]">
                 <div className="flex items-center gap-3">
                   <div className="flex h-11 w-11 items-center justify-center rounded-2xl" style={{ background: `${p.color || '#a78bfa'}22`, color: p.color || '#a78bfa' }}>
                     <TrendingUp size={18} />
@@ -352,7 +352,7 @@ export function InvestmentsView({
       )}
 
       {(holdings.length > 0 || sips.length > 0 || otherInvestments.length > 0 || totalCash > 0) && (
-        <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-5">
+        <div className="rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card p-5">
           <div className="text-sm font-semibold text-white light:text-slate-900">Allocation</div>
           {(() => {
             const oiByCategory = (cat) => otherInvestments.filter((o) => o.category === cat).reduce((s, o) => s + currentValueOf(o), 0)
@@ -418,7 +418,7 @@ export function InvestmentsView({
       )}
 
       {portfolios.length > 1 && combinedHoldings.length > 0 && (
-        <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card">
+        <div className="rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card">
           <div className="flex items-center gap-2 border-b border-white/10 light:border-black/10 px-5 py-3 text-xs uppercase tracking-widest text-slate-500">
             <Layers size={13} />Combined holdings · {combinedHoldings.length} stock{combinedHoldings.length === 1 ? '' : 's'} across portfolios
           </div>
@@ -461,7 +461,7 @@ export function InvestmentsView({
       )}
 
       {portfolios.length > 1 && combinedSips.length > 0 && (
-        <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card">
+        <div className="rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card">
           <div className="flex items-center gap-2 border-b border-white/10 light:border-black/10 px-5 py-3 text-xs uppercase tracking-widest text-slate-500">
             <Layers size={13} />Combined SIPs · {combinedSips.length} fund{combinedSips.length === 1 ? '' : 's'} across portfolios
           </div>
@@ -501,7 +501,7 @@ export function InvestmentsView({
       )}
 
       {portfolios.length > 1 && combinedOtherInvestments.length > 0 && (
-        <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card">
+        <div className="rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card">
           <div className="flex items-center gap-2 border-b border-white/10 light:border-black/10 px-5 py-3 text-xs uppercase tracking-widest text-slate-500">
             <Layers size={13} />Combined other investments · {combinedOtherInvestments.length} categor{combinedOtherInvestments.length === 1 ? 'y' : 'ies'} across portfolios
           </div>
@@ -555,7 +555,7 @@ export function InvestmentsView({
         </div>
       )}
       {sips.length === 0 ? (
-        <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card">
+        <div className="rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card">
           <EmptyState compact icon={PiggyBank} title="No SIPs yet" message="Track your mutual fund SIPs here, or sync them from Kite." cta="Add SIP" onCta={() => onAddSip()} />
         </div>
       ) : (
@@ -566,7 +566,7 @@ export function InvestmentsView({
             const isKite = s.source === 'kite'
             const sipPortfolio = portfolios.find((p) => p.id === s.portfolio_id)
             return (
-              <div key={s.id} className="group rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-5">
+              <div key={s.id} className="group rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card p-5">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5">
@@ -604,11 +604,11 @@ export function InvestmentsView({
         <h2 className="text-lg font-semibold text-white light:text-slate-900">Order history</h2>
       </div>
       {kite_orders.length === 0 ? (
-        <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card">
+        <div className="rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card">
           <EmptyState compact icon={Wallet} title="No orders tracked yet" message="Starts tracking from when you connect Kite — it doesn't expose your past orders, only what happens from here on." />
         </div>
       ) : (
-        <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card">
+        <div className="rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card">
           <div className="max-h-96 divide-y divide-white/5 light:divide-black/5 overflow-y-auto">
             {kite_orders.map((o) => {
               const isBuy = o.transaction_type === 'BUY'

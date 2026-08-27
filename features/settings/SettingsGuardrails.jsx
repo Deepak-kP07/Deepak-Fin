@@ -5,7 +5,7 @@ import { ToggleSwitch } from '@/components/shared/ToggleSwitch'
 export function SettingsGuardrails({ data, onSaveProfile }) {
   const { profile } = data
   return (
-    <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-5">
+    <div className="rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card p-5">
       <div className="text-sm font-semibold text-white light:text-slate-900">Spending guardrails</div>
       <div className="mt-3 flex items-center justify-between gap-4 rounded-xl bg-black/20 light:bg-black/[.06] px-4 py-3">
         <div>

@@ -29,7 +29,7 @@ export function SettingsKite({ data, onSaveKiteCredentials, onRemoveKiteCredenti
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-5">
+      <div className="rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card p-5">
         <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
           <div className="text-sm font-semibold text-white light:text-slate-900">Your own Kite Connect app</div>
           <a

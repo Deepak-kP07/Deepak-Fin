@@ -87,7 +87,7 @@ export function BudgetsView({ data, onSetMonth, onCloseMonth, onReopenMonth, onD
         </div>
       </div>
 
-      <div className="rounded-3xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-6">
+      <div className="rounded-3xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-black/[.025] glassy:glass-card p-6">
         {/* Status (Remaining/Over-by) sits with the header's action buttons on the right — the
             same "badge next to the title row" spot every other detail view (e.g. Loan's "Active"
             badge) uses, instead of stacked under the hero figure where it left a dead gap between
@@ -257,7 +257,7 @@ export function BudgetsView({ data, onSetMonth, onCloseMonth, onReopenMonth, onD
               const t = planTotals(p, transactions)
               const tone = t.pct >= 100 ? 'text-rose-300 light:text-rose-700' : t.pct >= 80 ? 'text-amber-300 light:text-amber-700' : 'text-emerald-300 light:text-emerald-700'
               return (
-                <div key={p.id} onClick={() => setSelectedClosedId(p.id)} className="cursor-pointer rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-5 transition hover:border-accent-300/30 hover:bg-white/[.05] hover:light:bg-black/[.035]">
+                <div key={p.id} onClick={() => setSelectedClosedId(p.id)} className="cursor-pointer rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card p-5 transition hover:border-accent-300/30 hover:bg-white/[.05] hover:light:bg-black/[.035]">
                   <div className="flex items-center gap-2">
                     <Calendar size={14} className="text-slate-500" />
                     <div className="text-sm font-semibold text-white light:text-slate-900">{monthLabel(p.year, p.month)}</div>
@@ -292,7 +292,7 @@ export function BudgetsView({ data, onSetMonth, onCloseMonth, onReopenMonth, onD
               const tone = pct >= 100 ? 'bg-rose-400' : pct >= 80 ? 'bg-amber-400' : 'bg-emerald-400'
               const text = pct >= 100 ? 'text-rose-300 light:text-rose-700' : pct >= 80 ? 'text-amber-300 light:text-amber-700' : 'text-emerald-300 light:text-emerald-700'
               return (
-                <div key={b.id} className="group rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-5">
+                <div key={b.id} className="group rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card p-5">
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
                       <div className="h-9 w-9 rounded-xl" style={{ background: `${cat?.color || '#94a3b8'}22`, color: cat?.color }} />

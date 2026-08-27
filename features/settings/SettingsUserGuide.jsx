@@ -239,7 +239,7 @@ export function SettingsUserGuide({ onReplayTour }) {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-5">
+      <div className="rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="text-sm font-semibold text-white light:text-slate-900">User guide</div>
           {onReplayTour && (
@@ -264,7 +264,7 @@ export function SettingsUserGuide({ onReplayTour }) {
         </div>
       </div>
 
-      <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-5">
+      <div className="rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card p-5">
         <div className="flex items-center gap-2 text-sm font-semibold text-white light:text-slate-900">
           <ShieldAlert size={16} className="text-accent-300 light:text-accent-700" />
           Keeping your data safe

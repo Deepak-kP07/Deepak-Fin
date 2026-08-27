@@ -9,7 +9,7 @@ import { money } from '@/lib/format'
 // panel (app/page.js), so this reads as the same visual language, not a new one invented here.
 function ItemSection({ title, subtotal, items, showMoney, caption, emptyIcon: EmptyIcon, emptyTitle, emptyMessage, emptyCta, onEmptyCta }) {
   return (
-    <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card">
+    <div className="rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card">
       <div className="flex items-center justify-between gap-3 border-b border-white/10 light:border-black/10 px-5 py-3">
         <div className="text-xs uppercase tracking-widest text-slate-500">{title}</div>
         <div className="text-sm font-semibold text-white light:text-slate-900">{showMoney ? money(subtotal) : '••••'}</div>
@@ -68,13 +68,13 @@ export function NetWorthDetailView({
       </div>
 
       {nothingTracked ? (
-        <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card">
+        <div className="rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card">
           <EmptyState icon={Landmark} title="Nothing tracked yet" message="Add an account, loan, card, or investment to see your net worth calculation." cta="Add an account" onCta={() => setView('accounts')} />
         </div>
       ) : (
         <>
           {/* The formula, spelled out with real numbers — the direct answer to "how is this calculated." */}
-          <div className="rounded-3xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-6">
+          <div className="rounded-3xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-black/[.025] glassy:glass-card p-6">
             <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-center sm:gap-4 sm:text-center">
               <div>
                 <div className="text-[11px] uppercase tracking-widest text-slate-500">Assets</div>

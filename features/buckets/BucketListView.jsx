@@ -32,7 +32,7 @@ export function BucketListView({ data, onAdd, onEdit, onDelete, showMoney, onTog
       </div>
 
       {bucket_list.length > 0 && (
-        <div className="rounded-3xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-6">
+        <div className="rounded-3xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-black/[.025] glassy:glass-card p-6">
           <div className="text-xs uppercase tracking-widest text-slate-500">Ready to buy</div>
           <div className={`mt-1 text-[clamp(2rem,6vw,3rem)] font-semibold leading-[1.1] tracking-[-0.01em] ${readyCount > 0 ? 'text-emerald-300 light:text-emerald-700' : 'text-white light:text-slate-900'}`}>{readyCount}</div>
           <div className="mt-1 text-sm text-slate-500">{readyCount === 1 ? 'item has' : 'items have'} passed the 30-day wait</div>
@@ -53,11 +53,11 @@ export function BucketListView({ data, onAdd, onEdit, onDelete, showMoney, onTog
       )}
 
       {bucket_list.length === 0 ? (
-        <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card">
+        <div className="rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card">
           <EmptyState icon={Mountain} title="Nothing waiting" message="Before buying something, add it here with why you want it — come back in 30 days and see if you still do." cta="Add first item" onCta={onAdd} />
         </div>
       ) : (
-        <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card">
+        <div className="rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card">
           <div className="hidden grid-cols-[1.6fr_1fr_.7fr_auto] gap-4 border-b border-white/10 light:border-black/10 px-5 py-2.5 text-[10px] uppercase tracking-widest text-slate-600 sm:grid">
             <span>Product</span>
             <span>Reasons to buy</span>

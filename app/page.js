@@ -999,7 +999,7 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
       )}
 
       {widgets.net_worth?.enabled && (
-        <div className="shrink-0 rounded-3xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] p-6 lg:grid lg:grid-cols-[minmax(300px,1.05fr)_minmax(0,1.5fr)] lg:items-center lg:gap-8 xl:grid-cols-[minmax(300px,1fr)_minmax(0,1.5fr)_minmax(0,0.75fr)] glassy:glass-hero">
+        <div className="shrink-0 rounded-3xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-black/[.025] p-6 lg:grid lg:grid-cols-[minmax(300px,1.05fr)_minmax(0,1.5fr)] lg:items-center lg:gap-8 xl:grid-cols-[minmax(300px,1fr)_minmax(0,1.5fr)_minmax(0,0.75fr)] glassy:glass-hero">
           <div>
             <div className="flex items-center gap-1.5">
               <h2 className="text-xs uppercase tracking-widest text-slate-400 light:text-slate-500">Net worth</h2>
@@ -1155,7 +1155,7 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
       <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[1.4fr_1fr]">
         <div ref={leftColRef} className="flex min-h-0 flex-col gap-3">
           {widgets.cashflow_chart.enabled && (
-            <div className="shrink-0 rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-3.5">
+            <div className="shrink-0 rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card p-3.5">
               <div className="mb-1 flex items-center justify-between">
                 <div>
                   <h2 className="text-sm font-semibold text-white light:text-slate-900">Cash flow · last 6 months</h2>
@@ -1228,7 +1228,7 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
             // The ticker's own height (`recentTxMaxHeight`) is computed to match Balances' actual
             // bottom edge — `lg:flex-1` here is just the shared-stretch fallback (see the comment
             // on `recentTxMaxHeight` above), not the primary mechanism.
-            <div className="hidden rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card lg:flex lg:flex-col lg:flex-1">
+            <div className="hidden rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card lg:flex lg:flex-col lg:flex-1">
               <div ref={txHeaderRef} className="flex shrink-0 items-center justify-between px-3.5 py-2.5">
                 <div>
                   <h2 className="text-sm font-semibold text-white light:text-slate-900">Recent transactions</h2>
@@ -1251,7 +1251,7 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
             // shows balances there). Desktop: `lg:flex-1` only kicks in when this card's own
             // natural content is shorter than Transactions' floor (very few balance items) — see
             // the comment on `recentTxMaxHeight` above.
-            <div className="flex min-h-[160px] min-w-0 flex-col rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-3.5 lg:flex-1">
+            <div className="flex min-h-[160px] min-w-0 flex-col rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card p-3.5 lg:flex-1">
               <div className="mb-2 flex shrink-0 items-center justify-between">
                 <div>
                   <h2 className="text-sm font-semibold text-white light:text-slate-900">Balances</h2>
@@ -1757,11 +1757,11 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTx
 
       {chartView ? (
         categoryBreakdown.length === 0 ? (
-          <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card">
+          <div className="rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card">
             <EmptyState icon={Tag} title="No category data" message="Nothing categorised in the current filters yet." />
           </div>
         ) : (
-          <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-4 sm:p-6">
+          <div className="rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card p-4 sm:p-6">
             <div className="mb-5 text-sm font-semibold text-white light:text-slate-900">By category · {customRange ? `${formatDate(customRange.start)} – ${formatDate(customRange.end)}` : `${MONTH_NAMES[monthCursor.month]} ${monthCursor.year}`}</div>
             <div className="grid gap-6 lg:grid-cols-[1.3fr_1fr] lg:gap-8">
               <div className="h-72 lg:h-[28rem]">
@@ -1795,7 +1795,7 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTx
           </div>
         )
       ) : (
-      <section className="overflow-hidden rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card">
+      <section className="overflow-hidden rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card">
         <div className="hidden grid-cols-[1.4fr_.9fr_.6fr_.6fr_auto] gap-4 border-b border-white/10 light:border-black/10 px-5 py-3 text-[10px] uppercase tracking-widest text-slate-600 sm:grid">
           <button type="button" onClick={() => toggleSort('description')} className="flex items-center gap-1 text-left hover:text-slate-300 hover:light:text-slate-700">Description{sortIcon('description')}</button>
           <span>Category / Account</span>
@@ -2566,7 +2566,7 @@ function Shell({ user, onLogout }) {
               </button>
             ))}
           </nav>
-          <div className="mt-auto flex w-full items-center gap-1 rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] p-2.5 glassy:glass-pill">
+          <div className="mt-auto flex w-full items-center gap-1 rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] p-2.5 glassy:glass-pill">
             <button data-tour="nav-profile" onClick={() => setView('profile')} className={`flex min-w-0 flex-1 items-center gap-3 rounded-xl px-1.5 py-1 text-left transition hover:bg-white/[.06] hover:light:bg-black/[.04] ${view === 'profile' ? 'bg-white/[.06] light:bg-black/[.04]' : ''}`}>
               <div className="relative shrink-0">
                 <Avatar src={avatarUrl} name={firstName} email={user?.email} size={36} />

@@ -5,6 +5,7 @@ import { CreditCard, Landmark, Plus, Target } from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { HeroStatTile } from '@/components/shared/HeroStatTile'
 import { utilisationSeverity } from '@/lib/creditCards'
+import { visibleSwatch } from '@/lib/palette'
 import { money } from '@/lib/format'
 import { CreditCardFlip } from '@/features/credit-cards/CreditCardFlip'
 import { CreditCardDetailView } from '@/features/credit-cards/CreditCardDetailView'
@@ -40,9 +41,14 @@ export function CreditCardsView({ data, onAdd, onEdit, onDelete, onSpend, onPay,
   const overallSeverity = utilisationSeverity(overallUtil)
 
   // Per-card share of total outstanding, for the hero's desktop-only side region — "which card
-  // is dragging my utilisation up," same idea as Investments' portfolio-mix bar.
-  const cardMix = credit_cards.map((c) => ({ id: c.id, name: c.name, color: c.color || '#a78bfa', value: Number(c.current_outstanding || 0) }))
-    .filter((c) => c.value > 0).sort((a, b) => b.value - a.value)
+  // is dragging my utilisation up," same idea as Investments' portfolio-mix bar. That "share of
+  // total" framing is meaningless with a single card (always 100% by definition, and reads as
+  // confusingly close to "100% utilised") — so with just one card, `util` (this card's own
+  // outstanding/limit) is shown instead of its trivial 100% mix share; see the render below.
+  const cardMix = credit_cards.map((c) => ({
+    id: c.id, name: c.name, color: visibleSwatch(c.color || '#a78bfa'), value: Number(c.current_outstanding || 0),
+    util: Number(c.credit_limit) > 0 ? Math.round((Number(c.current_outstanding || 0) / Number(c.credit_limit)) * 100) : 0,
+  })).filter((c) => c.value > 0).sort((a, b) => b.value - a.value)
   const cardMixTotal = cardMix.reduce((s, c) => s + c.value, 0)
 
   return (
@@ -61,7 +67,7 @@ export function CreditCardsView({ data, onAdd, onEdit, onDelete, onSpend, onPay,
         // lg:+ splits into two regions, same recipe as Investments' hero: the figure stays the
         // left column, and a per-card outstanding breakdown fills the right column instead of
         // the two HeroStatTiles just stretching wider with nothing beside them.
-        <div className="rounded-3xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-6 lg:grid lg:grid-cols-[minmax(300px,1.05fr)_minmax(0,1fr)] lg:items-center lg:gap-8">
+        <div className="rounded-3xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-black/[.025] glassy:glass-card p-6 lg:grid lg:grid-cols-[minmax(300px,1.05fr)_minmax(0,1fr)] lg:items-center lg:gap-8">
           <div>
             <div className="text-xs uppercase tracking-widest text-slate-500">Total outstanding</div>
             <div className="mt-1 text-[clamp(2rem,6vw,3rem)] font-semibold leading-[1.1] tracking-[-0.01em] text-white light:text-slate-900">
@@ -79,13 +85,13 @@ export function CreditCardsView({ data, onAdd, onEdit, onDelete, onSpend, onPay,
               <div className="text-sm text-slate-500">Nothing outstanding — every card is paid off.</div>
             ) : (
               <>
-                <span className="text-[11px] font-semibold uppercase tracking-widest text-slate-500">Outstanding by card</span>
+                <span className="text-[11px] font-semibold uppercase tracking-widest text-slate-500">{cardMix.length === 1 ? 'Utilisation' : 'Outstanding by card'}</span>
                 <div
                   role="img"
-                  aria-label={`Outstanding by card: ${cardMix.map((c) => `${c.name} ${((c.value / cardMixTotal) * 100).toFixed(1)}%`).join(', ')}`}
-                  className="mt-1.5 flex h-2 gap-px overflow-hidden rounded-full bg-white/[.07] light:bg-black/[.07]"
+                  aria-label={cardMix.length === 1 ? `${cardMix[0].name}: ${cardMix[0].util}% utilised` : `Outstanding by card: ${cardMix.map((c) => `${c.name} ${((c.value / cardMixTotal) * 100).toFixed(1)}%`).join(', ')}`}
+                  className="mt-1.5 flex h-2.5 gap-px overflow-hidden rounded-full border border-white/10 light:border-black/10 bg-white/[.12] light:bg-black/[.09]"
                 >
-                  {cardMix.map((c) => <div key={c.id} className="ring-1 ring-inset ring-white/15 light:ring-black/10" style={{ width: `${(c.value / cardMixTotal) * 100}%`, background: c.color }} />)}
+                  {cardMix.map((c) => <div key={c.id} className="ring-1 ring-inset ring-white/25 light:ring-black/20" style={{ width: `${cardMix.length === 1 ? c.util : (c.value / cardMixTotal) * 100}%`, background: c.color }} />)}
                 </div>
                 <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-400 light:text-slate-500">
                   {cardMix.map((c) => (
@@ -94,7 +100,7 @@ export function CreditCardsView({ data, onAdd, onEdit, onDelete, onSpend, onPay,
                           near-black (e.g. a literal "black card") against this near-black ground,
                           or near-white against the light-theme ground */}
                       <span className="h-1.5 w-1.5 shrink-0 rounded-full ring-1 ring-inset ring-white/25 light:ring-black/15" style={{ background: c.color }} />
-                      {c.name} · {((c.value / cardMixTotal) * 100).toFixed(0)}%
+                      {c.name} · {cardMix.length === 1 ? `${c.util}% used` : `${((c.value / cardMixTotal) * 100).toFixed(0)}% of total`}
                     </span>
                   ))}
                 </div>
@@ -105,7 +111,7 @@ export function CreditCardsView({ data, onAdd, onEdit, onDelete, onSpend, onPay,
       )}
 
       {credit_cards.length === 0 ? (
-        <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card">
+        <div className="rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card">
           <EmptyState icon={CreditCard} title="No credit cards yet" message="Track credit card spends, utilisation and pay bills without leaving the app." cta="Add first card" onCta={onAdd} />
         </div>
       ) : (

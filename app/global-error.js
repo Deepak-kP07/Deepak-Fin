@@ -14,7 +14,7 @@ export default function GlobalError({ error, reset }) {
       <body style={{
         margin: 0, minHeight: '100vh', display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'center', gap: 16, padding: 24, textAlign: 'center',
-        background: '#0c1018', color: '#f1f5f9',
+        background: '#080b12', color: '#f1f5f9',
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
       }}>
         <div>

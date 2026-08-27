@@ -3,7 +3,7 @@ import { Star } from 'lucide-react'
 export function MoneyRulesWidget({ rules, onOpen }) {
   const active = rules.filter((r) => r.is_active).slice(0, 4)
   return (
-    <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-5">
+    <div className="rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card p-5">
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-accent-400/15 text-accent-200 light:text-accent-700"><Star size={15} /></div>

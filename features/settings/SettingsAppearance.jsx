@@ -9,7 +9,7 @@ export function SettingsAppearance({ theme, onThemeChange, accentColor, onAccent
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-5">
+      <div className="rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card p-5">
         <div className="text-sm font-semibold text-white light:text-slate-900">Accent color</div>
         <div className="mt-1 text-[11px] text-slate-500">The one signature color used across every screen — buttons, active tabs, highlights.</div>
         <div className="mt-3 flex flex-wrap gap-3">
@@ -41,7 +41,7 @@ export function SettingsAppearance({ theme, onThemeChange, accentColor, onAccent
         </div>
       </div>
 
-      <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-5">
+      <div className="rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card p-5">
         <div className="text-sm font-semibold text-white light:text-slate-900">Theme</div>
         <div className="mt-3 grid grid-cols-3 gap-3">
           {[

@@ -206,7 +206,7 @@ export function LoanDetailView({ loan, payments, accounts, onBack, onPay, onDele
         </div>
       )}
 
-      <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card">
+      <div className="rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card">
         <div className="border-b border-white/10 light:border-black/10 px-5 py-3 text-xs uppercase tracking-widest text-slate-500">Payment history · {payments.length}</div>
         {payments.length === 0 ? (
           <div className="px-5 py-6 text-sm text-slate-500">No payments logged yet.</div>
@@ -251,7 +251,7 @@ export function LoanDetailView({ loan, payments, accounts, onBack, onPay, onDele
       </div>
 
       {emiCalendar.length > 0 && (
-        <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card">
+        <div className="rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card">
           <button type="button" onClick={() => setScheduleOpen((o) => !o)} className="flex w-full items-center justify-between px-5 py-3 text-xs uppercase tracking-widest text-slate-500 hover:text-slate-300 hover:light:text-slate-700">
             <span>EMI calendar · {emisPaid} paid, {monthsRemaining} to go{monthsSaved > 0 ? `, ${monthsSaved} saved` : ''} of {emiCalendar.length} original</span>
             <ChevronDown size={14} className={`transition-transform ${scheduleOpen ? 'rotate-180' : ''}`} />

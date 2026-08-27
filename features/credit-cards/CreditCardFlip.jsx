@@ -52,7 +52,7 @@ export function CreditCardFlip({ card, showMoney, onSpend, onPay, onViewDetails 
                 <div className="text-xs text-slate-300 light:text-slate-700">{showMoney ? money(card.credit_limit) : '••••'}</div>
               </div>
             </div>
-            <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/5"><div className={`h-full rounded-full ${tone} transition-all`} style={{ width: `${util}%` }} /></div>
+            <div className="mt-1.5 h-1.5 overflow-hidden rounded-full border border-white/10 light:border-black/10 bg-white/[.08] light:bg-black/[.08]"><div className={`h-full rounded-full ${tone} transition-all`} style={{ width: `${util}%` }} /></div>
             <div className={`mt-1 text-[10px] ${utilText}`}>{util}% used</div>
           </div>
 

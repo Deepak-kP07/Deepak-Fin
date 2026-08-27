@@ -10,7 +10,7 @@ export default function Error({ error, reset }) {
   useEffect(() => { console.error(error) }, [error])
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-5 bg-[#0c1018] light:bg-[#eef1f6] px-6 text-center">
+    <div className="flex min-h-screen flex-col items-center justify-center gap-5 bg-[#080b12] light:bg-[#eef1f6] px-6 text-center">
       <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-rose-300/25 bg-rose-300/5 text-rose-200 light:text-rose-700">
         <AlertTriangle size={24} />
       </div>

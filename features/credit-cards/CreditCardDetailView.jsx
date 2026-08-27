@@ -86,7 +86,7 @@ export function CreditCardDetailView({ card, cardTransactions, allTransactions, 
         </div>
       </div>
 
-      <div className={`rounded-xl border px-4 py-3 text-sm ${nd.days <= 4 ? 'border-amber-300/30 bg-amber-300/5 text-amber-200 light:text-amber-700' : 'border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card text-slate-300 light:text-slate-700'}`}>
+      <div className={`rounded-xl border px-4 py-3 text-sm ${nd.days <= 4 ? 'border-amber-300/30 bg-amber-300/5 text-amber-200 light:text-amber-700' : 'border-white/10 light:border-black/10 bg-[#141a28] light:bg-black/[.025] glassy:glass-card text-slate-300 light:text-slate-700'}`}>
         Bill on the {ordinal(card.billing_date)} · Due {nd.days > 0 ? `in ${nd.days} day${nd.days === 1 ? '' : 's'}` : nd.days === 0 ? 'today' : 'overdue'} ({formatDate(nd.due.toISOString().slice(0, 10))})
       </div>
 
@@ -96,7 +96,7 @@ export function CreditCardDetailView({ card, cardTransactions, allTransactions, 
         <StatCard label="Total repaid" value={showMoney ? money(totalRepaid) : '••••'} icon={ArrowUpRight} accent="bg-emerald-400/15 text-emerald-200 light:text-emerald-700" sub={<span>{repayments.length} payment{repayments.length === 1 ? '' : 's'}</span>} />
       </div>
 
-      <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-5">
+      <div className="rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card p-5">
         <div className="text-sm font-semibold text-white light:text-slate-900">Net spend by month · last 6 months</div>
         <div className="mt-4 h-40">
           <ResponsiveContainer width="100%" height="100%">
@@ -120,7 +120,7 @@ export function CreditCardDetailView({ card, cardTransactions, allTransactions, 
         </div>
       </div>
 
-      <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card">
+      <div className="rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card">
         <div className="flex items-center justify-between gap-3 border-b border-white/10 light:border-black/10 px-5 py-3">
           <div className="text-xs uppercase tracking-widest text-slate-500">Card activity · {monthActivity.length}</div>
           <MonthCursor cursor={monthCursor} onShift={shiftMonth} showAll={showAllMonths} onToggleAll={() => setShowAllMonths((v) => !v)} />
@@ -184,7 +184,7 @@ export function CreditCardDetailView({ card, cardTransactions, allTransactions, 
         )}
       </div>
 
-      <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card">
+      <div className="rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card">
         <div className="border-b border-white/10 light:border-black/10 px-5 py-3 text-xs uppercase tracking-widest text-slate-500">Repayment history · {repayments.length}</div>
         {repayments.length === 0 ? (
           <div className="px-5 py-6 text-sm text-slate-500">No payments logged yet.</div>

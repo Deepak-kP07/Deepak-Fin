@@ -74,7 +74,7 @@ export function LendBorrowDetailView({ record, repayments, accounts, transaction
         </div>
       </div>
 
-      <div className="rounded-3xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-6">
+      <div className="rounded-3xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-black/[.025] glassy:glass-card p-6">
         <div className="text-xs uppercase tracking-widest text-slate-500">{isLent ? 'They still owe you' : 'You still owe'}</div>
         <div className="mt-1 text-[clamp(2rem,6vw,3rem)] font-semibold leading-[1.1] tracking-[-0.01em] text-white light:text-slate-900">{showMoney ? money(pending) : '••••'}</div>
         <div className="mt-1 text-sm text-slate-500">of {money(record.amount)} total</div>
@@ -87,7 +87,7 @@ export function LendBorrowDetailView({ record, repayments, accounts, transaction
         </div>
       </div>
 
-      <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card">
+      <div className="rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card">
         <div className="border-b border-white/10 light:border-black/10 px-5 py-3 text-xs uppercase tracking-widest text-slate-500">{isLent ? 'Repayments received' : 'Payments made'} · {paymentsForThis.length}</div>
         {paymentsForThis.length === 0 ? (
           <EmptyState compact icon={isLent ? ArrowDownRight : ArrowUpRight} title="No payments yet" message={isSettled ? 'This record is fully settled.' : `Log it here when ${isLent ? 'they repay you' : 'you make a payment'}.`} cta={isSettled || !canLogRepayment(role) ? undefined : `Log ${isLent ? 'repayment' : 'payment'}`} onCta={isSettled || !canLogRepayment(role) ? undefined : () => onLogRepayment(record)} />

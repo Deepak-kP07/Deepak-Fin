@@ -125,7 +125,7 @@ export function AccountDetailView({ account, debitCard, transactions, categories
       )}
 
       {debitCard && (
-        <div className="flex items-center justify-between rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card px-5 py-3">
+        <div className="flex items-center justify-between rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card px-5 py-3">
           <div className="text-sm text-white light:text-slate-900">{account.name}</div>
           <button onClick={() => onEditCard(debitCard)} className="text-xs text-accent-300 light:text-accent-700 hover:underline">Edit card</button>
         </div>
@@ -137,7 +137,7 @@ export function AccountDetailView({ account, debitCard, transactions, categories
         <StatCard label="Money out" value={showMoney ? money(outflow) : '••••'} icon={ArrowDownRight} accent="bg-rose-400/15 text-rose-200 light:text-rose-700" tone="text-rose-300 light:text-rose-700" sub={<span>All time</span>} />
       </div>
 
-      <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-5">
+      <div className="rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card p-5">
         <div className="text-sm font-semibold text-white light:text-slate-900">Net cash flow by month · last 6 months</div>
         <div className="mt-4 h-40">
           <ResponsiveContainer width="100%" height="100%">
@@ -152,7 +152,7 @@ export function AccountDetailView({ account, debitCard, transactions, categories
         </div>
       </div>
 
-      <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card">
+      <div className="rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card">
         {selectMode ? (
           <div className="flex items-center gap-2 border-b border-white/10 light:border-black/10 px-5 py-3 sm:hidden">
             <button type="button" onClick={exitSelectMode} className="shrink-0 rounded-xl border border-white/10 light:border-black/10 p-2 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900" title="Cancel selection"><X size={15} /></button>

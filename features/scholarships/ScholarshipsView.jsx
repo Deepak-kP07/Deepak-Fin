@@ -53,7 +53,7 @@ export function ScholarshipsView({ data, onAdd, onEdit, onDelete, onPay, onRefre
       </div>
 
       {scholarships.length > 0 && (
-        <div className="rounded-3xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-6">
+        <div className="rounded-3xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-black/[.025] glassy:glass-card p-6">
           <div className="text-xs uppercase tracking-widest text-slate-500">Pending to college</div>
           <div className={`mt-1 text-[clamp(2rem,6vw,3rem)] font-semibold leading-[1.1] tracking-[-0.01em] ${pendingToCollege > 0 ? 'text-amber-300 light:text-amber-700' : 'text-emerald-300 light:text-emerald-700'}`}>{showMoney ? money(pendingToCollege) : '••••••'}</div>
           <div className="mt-1 text-sm text-slate-500">{pendingToCollege > 0 ? 'Due to college' : 'All paid'}</div>
@@ -77,7 +77,7 @@ export function ScholarshipsView({ data, onAdd, onEdit, onDelete, onPay, onRefre
       )}
 
       {scholarships.length === 0 ? (
-        <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card">
+        <div className="rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card">
           <EmptyState icon={ShieldCheck} title="No scholarships yet" message="Log received batches and payments to college, and we'll warn if funds are misused." cta="Add first batch" onCta={onAdd} />
         </div>
       ) : (
@@ -89,7 +89,7 @@ export function ScholarshipsView({ data, onAdd, onEdit, onDelete, onPay, onRefre
             const pending = Math.max(0, total - paid)
             const displayStatus = scholarshipDisplayStatus(s)
             return (
-              <div key={s.id} onClick={() => setSelectedId(s.id)} className="cursor-pointer rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-5 transition hover:border-accent-300/30 hover:bg-white/[.05] hover:light:bg-black/[.035]">
+              <div key={s.id} onClick={() => setSelectedId(s.id)} className="cursor-pointer rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card p-5 transition hover:border-accent-300/30 hover:bg-white/[.05] hover:light:bg-black/[.035]">
                 <div className="flex items-center gap-2">
                   <div className="text-base font-semibold text-white light:text-slate-900">{s.name}</div>
                   <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-widest ${displayStatus === 'paid' ? 'bg-emerald-400/15 text-emerald-200 light:text-emerald-700' : displayStatus === 'received' ? 'bg-accent-400/15 text-accent-200 light:text-accent-700' : 'bg-slate-500/15 text-slate-300 light:text-slate-700'}`}>{displayStatus}</span>

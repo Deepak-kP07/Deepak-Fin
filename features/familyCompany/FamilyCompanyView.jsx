@@ -57,7 +57,7 @@ export function FamilyCompanyView({
       </div>
 
       {profiles.length > 0 && (
-        <div className="rounded-3xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card p-6">
+        <div className="rounded-3xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-black/[.025] glassy:glass-card p-6">
           <div className="text-xs uppercase tracking-widest text-slate-500">Total held for others</div>
           <div className="mt-1 text-[clamp(2rem,6vw,3rem)] font-semibold leading-[1.1] tracking-[-0.01em] text-white light:text-slate-900">{money(totalBalance)}</div>
           <div className="mt-1 text-sm text-slate-500">{profiles.length} profile{profiles.length === 1 ? '' : 's'}</div>
@@ -65,7 +65,7 @@ export function FamilyCompanyView({
       )}
 
       {profiles.length === 0 ? (
-        <div className="rounded-2xl border border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card">
+        <div className="rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card">
           <EmptyState icon={Users} title="No profiles yet" message="Create a profile for your family or a company you manage money for — link it to a bank account if you want its entries to reflect in your Transactions module too." cta="New profile" onCta={onAddProfile} />
         </div>
       ) : (
@@ -75,7 +75,7 @@ export function FamilyCompanyView({
             const { income, expense, balance } = profileTotals(p, pEntries)
             const isClosed = p.status === 'closed'
             return (
-              <div key={p.id} onClick={() => setSelectedProfileId(p.id)} className={`cursor-pointer rounded-2xl border p-5 transition ${isClosed ? 'border-white/5 light:border-black/5 bg-white/[.02] light:bg-black/[.02] hover:bg-white/[.035] hover:light:bg-black/[.025]' : 'border-white/10 light:border-black/10 bg-white/[.035] light:bg-black/[.025] glassy:glass-card hover:border-accent-300/30 hover:bg-white/[.05] hover:light:bg-black/[.035]'}`}>
+              <div key={p.id} onClick={() => setSelectedProfileId(p.id)} className={`cursor-pointer rounded-2xl border p-5 transition ${isClosed ? 'border-white/5 light:border-black/5 bg-white/[.02] light:bg-black/[.02] hover:bg-white/[.035] hover:light:bg-black/[.025]' : 'border-white/10 light:border-black/10 bg-[#141a28] light:bg-black/[.025] glassy:glass-card hover:border-accent-300/30 hover:bg-white/[.05] hover:light:bg-black/[.035]'}`}>
                 <div className="flex items-center gap-3">
                   <div className={`flex h-11 w-11 items-center justify-center rounded-2xl ${isClosed ? 'bg-slate-500/15 text-slate-400 light:text-slate-500' : 'bg-accent-400/15 text-accent-200 light:text-accent-700'}`}>
                     <Users size={18} />
