@@ -1,9 +1,10 @@
 'use client'
 
+import { useRef } from 'react'
 import { ArrowDownRight, ArrowUpRight, ChevronRight, Eye, EyeOff, Pencil, Trash2, User, UserPlus } from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { HeroStatTile } from '@/components/shared/HeroStatTile'
-import { formatDate, money } from '@/lib/format'
+import { capitalizeFirst, formatDate, money } from '@/lib/format'
 import { roleFor, canEditRecord, canDeleteRecord, canLogRepayment, canManageShares } from '@/lib/lendBorrowSharing'
 
 export function LendBorrowDetailView({ record, repayments, accounts, transactions, onBack, onEdit, onDelete, onDeleteTx, onLogRepayment, onManageAccess, showMoney, onToggleMoney, toast }) {
@@ -36,6 +37,21 @@ export function LendBorrowDetailView({ record, repayments, accounts, transaction
     if (tx) onDeleteTx(tx)
   }
 
+  // Mobile payment rows have no visible delete icon — a long press deletes directly (deletePayment
+  // itself routes through onDeleteTx, which already confirms before acting), same 500ms
+  // timing/suppression pattern as the Loans and Credit Cards detail views.
+  const longPressTimer = useRef(null)
+  const longPressFired = useRef(false)
+  const LONG_PRESS_MS = 500
+  const cancelLongPress = () => { if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null } }
+  const startLongPress = (r) => {
+    if (!canLogRepayment(role)) return
+    longPressFired.current = false
+    cancelLongPress()
+    longPressTimer.current = setTimeout(() => { longPressFired.current = true; deletePayment(r) }, LONG_PRESS_MS)
+  }
+  const suppressLongPressTap = () => { longPressFired.current = false }
+
   return (
     <div className="space-y-5 pb-8">
       <button onClick={onBack} className="flex items-center gap-1.5 text-sm text-slate-400 light:text-slate-500 hover:text-white hover:light:text-slate-900"><ChevronRight size={14} className="rotate-180" /> Back to lend &amp; borrow</button>
@@ -47,17 +63,17 @@ export function LendBorrowDetailView({ record, repayments, accounts, transaction
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <div className="text-lg font-semibold text-white light:text-slate-900">{record.person_name}</div>
+              <div className="text-lg font-semibold text-white light:text-slate-900">{capitalizeFirst(record.person_name)}</div>
               <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-widest ${isLent ? 'bg-emerald-400/15 text-emerald-200 light:text-emerald-700' : 'bg-rose-400/15 text-rose-200 light:text-rose-700'}`}>{isLent ? 'lent' : 'borrowed'}</span>
               <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-widest ${record.status === 'returned' ? 'bg-emerald-400/15 text-emerald-200 light:text-emerald-700' : record.status === 'partial' ? 'bg-amber-400/15 text-amber-200 light:text-amber-700' : 'bg-accent-400/15 text-accent-200 light:text-accent-700'}`}>{record.status}</span>
               {overdue && <span className="rounded-full bg-rose-400/15 px-2 py-0.5 text-[10px] uppercase tracking-widest text-rose-200 light:text-rose-700">overdue</span>}
             </div>
-            <div className="mt-1 text-xs text-slate-500">{record.reason || (isLent ? 'Lent' : 'Borrowed')} · {formatDate(record.date)}{account ? ` · ${account.name}` : ''}{record.due_date ? ` · due ${formatDate(record.due_date)}` : ''}</div>
+            <div className="mt-1 text-xs text-slate-500">{capitalizeFirst(record.reason) || (isLent ? 'Lent' : 'Borrowed')} · {formatDate(record.date)}{account ? ` · ${account.name}` : ''}{record.due_date ? ` · due ${formatDate(record.due_date)}` : ''}</div>
           </div>
         </div>
         <div className="flex w-full min-w-0 flex-wrap gap-2 sm:w-auto">
           {canLogRepayment(role) && (
-            <button onClick={() => onLogRepayment(record)} disabled={isSettled} title={isSettled ? 'Already fully settled' : undefined} className="rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-4 py-2.5 text-sm font-semibold text-[#07101c] disabled:opacity-40">+ Log {isLent ? 'repayment' : 'payment'}</button>
+            <button onClick={() => onLogRepayment(record)} disabled={isSettled} title={isSettled ? 'Already fully settled' : undefined} className="hidden rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-4 py-2.5 text-sm font-semibold text-[#07101c] disabled:opacity-40 lg:inline-block">+ Log {isLent ? 'repayment' : 'payment'}</button>
           )}
           {canManageShares(role) && (
             <button onClick={() => onManageAccess(record)} title="Manage who has access" className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900"><UserPlus size={15} /></button>
@@ -100,27 +116,53 @@ export function LendBorrowDetailView({ record, repayments, accounts, transaction
               <span className="text-right">Amount</span>
               <span />
             </div>
-            <div className="max-h-96 divide-y divide-white/5 light:divide-black/5 overflow-y-auto">
+            <div className="divide-y divide-white/5 light:divide-black/5">
               {paymentsForThis.map((r, i) => {
                 const acc = accounts.find((a) => a.id === r.account_id)
+                const amountColor = isLent ? 'text-emerald-300 light:text-emerald-700' : 'text-rose-300 light:text-rose-700'
                 return (
-                  <div key={r.id} className="grid grid-cols-1 gap-2 px-5 py-4 sm:grid-cols-[1.4fr_.9fr_.6fr_.6fr_auto] sm:items-center sm:gap-4">
-                    <div className="flex items-center gap-3">
-                      <div className={`flex h-9 w-9 items-center justify-center rounded-xl bg-white/[.05] light:bg-black/[.035] ${isLent ? 'text-emerald-300 light:text-emerald-700' : 'text-rose-300 light:text-rose-700'}`}>
+                  <div key={r.id} className="px-5 py-3 sm:py-4">
+                    {/* Mobile: single compact row, date under the description — same pattern as
+                        the main ledger — with long-press to delete (no visible delete icon). */}
+                    <button
+                      type="button"
+                      onClick={suppressLongPressTap}
+                      onTouchStart={() => startLongPress(r)}
+                      onTouchEnd={cancelLongPress}
+                      onTouchMove={cancelLongPress}
+                      onTouchCancel={cancelLongPress}
+                      onContextMenu={(e) => e.preventDefault()}
+                      className="flex w-full min-w-0 items-center gap-3 text-left sm:hidden"
+                    >
+                      <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/[.05] light:bg-black/[.035] ${amountColor}`}>
                         {isLent ? <ArrowDownRight size={16} /> : <ArrowUpRight size={16} />}
                       </div>
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <div className="truncate text-sm font-medium text-white light:text-slate-900">Payment #{paymentsForThis.length - i}</div>
-                        {r.notes && <div className="truncate text-[11px] text-slate-500">{r.notes}</div>}
+                        <div className="truncate text-[11px] text-slate-500">{formatDate(r.date)}{acc ? ` · ${acc.name}` : ''}</div>
                       </div>
-                    </div>
-                    <div className="text-xs text-slate-400 light:text-slate-500">
-                      <span className="inline-block rounded-md bg-white/[.05] light:bg-black/[.035] px-2 py-0.5 text-slate-300 light:text-slate-700">{acc?.name || 'No account'}</span>
-                    </div>
-                    <div className="text-xs text-slate-500">{formatDate(r.date)}</div>
-                    <div className={`text-sm font-semibold sm:text-right ${isLent ? 'text-emerald-300 light:text-emerald-700' : 'text-rose-300 light:text-rose-700'}`}>{isLent ? '+' : '-'}{showMoney ? money(r.amount) : '••••'}</div>
-                    <div className="flex justify-end">
-                      {canLogRepayment(role) && <button onClick={() => deletePayment(r)} className="rounded-lg p-1.5 text-rose-300/70 light:text-rose-700 hover:bg-rose-300/10"><Trash2 size={13} /></button>}
+                      <div className={`shrink-0 text-sm font-semibold ${amountColor}`}>{isLent ? '+' : '-'}{showMoney ? money(r.amount) : '••••'}</div>
+                    </button>
+
+                    {/* Desktop: unchanged full row */}
+                    <div className="hidden sm:grid sm:grid-cols-[1.4fr_.9fr_.6fr_.6fr_auto] sm:items-center sm:gap-4">
+                      <div className="flex items-center gap-3">
+                        <div className={`flex h-9 w-9 items-center justify-center rounded-xl bg-white/[.05] light:bg-black/[.035] ${amountColor}`}>
+                          {isLent ? <ArrowDownRight size={16} /> : <ArrowUpRight size={16} />}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-medium text-white light:text-slate-900">Payment #{paymentsForThis.length - i}</div>
+                          {r.notes && <div className="truncate text-[11px] text-slate-500">{capitalizeFirst(r.notes)}</div>}
+                        </div>
+                      </div>
+                      <div className="text-xs text-slate-400 light:text-slate-500">
+                        <span className="inline-block rounded-md bg-white/[.05] light:bg-black/[.035] px-2 py-0.5 text-slate-300 light:text-slate-700">{acc?.name || 'No account'}</span>
+                      </div>
+                      <div className="text-xs text-slate-500">{formatDate(r.date)}</div>
+                      <div className={`text-sm font-semibold sm:text-right ${amountColor}`}>{isLent ? '+' : '-'}{showMoney ? money(r.amount) : '••••'}</div>
+                      <div className="flex justify-end">
+                        {canLogRepayment(role) && <button onClick={() => deletePayment(r)} className="rounded-lg p-1.5 text-rose-300/70 light:text-rose-700 hover:bg-rose-300/10"><Trash2 size={13} /></button>}
+                      </div>
                     </div>
                   </div>
                 )

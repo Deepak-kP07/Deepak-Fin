@@ -1,18 +1,19 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Eye, EyeOff, Heart, History, Plus } from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { HeroStatTile } from '@/components/shared/HeroStatTile'
-import { formatDate, money } from '@/lib/format'
+import { capitalizeFirst, formatDate, money } from '@/lib/format'
 import { LendBorrowDetailView } from '@/features/lend-borrow/LendBorrowDetailView'
 
-export function LendBorrowView({ data, onAdd, onEdit, onDelete, onDeleteTx, onLogRepayment, onManageAccess, showMoney, onToggleMoney, toast }) {
+export function LendBorrowView({ data, onAdd, onEdit, onDelete, onDeleteTx, onLogRepayment, onManageAccess, showMoney, onToggleMoney, toast, onDetailChange }) {
   const { lend_borrow, lend_repayments, accounts, transactions } = data
   const now = new Date()
   const [showHistory, setShowHistory] = useState(false)
   const [selectedId, setSelectedId] = useState(null)
   const selected = lend_borrow.find((l) => l.id === selectedId)
+  useEffect(() => { onDetailChange?.(selectedId) }, [selectedId])
 
   if (selected) {
     return (
@@ -58,12 +59,12 @@ export function LendBorrowView({ data, onAdd, onEdit, onDelete, onDeleteTx, onLo
     return (
       <div key={l.id} onClick={() => setSelectedId(l.id)} className={`cursor-pointer rounded-2xl border p-5 transition ${isClosed ? 'border-white/5 light:border-black/5 bg-white/[.02] light:bg-black/[.02] hover:bg-white/[.035] hover:light:bg-black/[.025]' : isLent ? 'border-emerald-400/10 bg-emerald-500/[.03] hover:bg-white/[.02] hover:light:bg-black/[.02]' : 'border-rose-400/10 bg-rose-500/[.03] hover:bg-white/[.02] hover:light:bg-black/[.02]'}`}>
         <div className="flex items-center gap-2">
-          <div className="text-base font-semibold text-white light:text-slate-900">{l.person_name}</div>
+          <div className="text-base font-semibold text-white light:text-slate-900">{capitalizeFirst(l.person_name)}</div>
           <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-widest ${isClosed ? 'bg-slate-500/15 text-slate-400 light:text-slate-500' : isLent ? 'bg-emerald-400/15 text-emerald-200 light:text-emerald-700' : 'bg-rose-400/15 text-rose-200 light:text-rose-700'}`}>{isLent ? 'lent' : 'borrowed'}</span>
           <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-widest ${isClosed ? 'bg-slate-500/15 text-slate-400 light:text-slate-500' : l.status === 'partial' ? 'bg-amber-400/15 text-amber-200 light:text-amber-700' : 'bg-accent-400/15 text-accent-200 light:text-accent-700'}`}>{l.status}</span>
           {overdue && <span className="rounded-full bg-rose-400/15 px-2 py-0.5 text-[10px] uppercase tracking-widest text-rose-200 light:text-rose-700">overdue</span>}
         </div>
-        <div className="mt-1 text-xs text-slate-500">{l.reason || (isLent ? 'Lent' : 'Borrowed')} · {formatDate(l.date)}{acc ? ` · ${acc.name}` : ''}{l.due_date ? ` · due ${formatDate(l.due_date)}` : ''}</div>
+        <div className="mt-1 text-xs text-slate-500">{capitalizeFirst(l.reason) || (isLent ? 'Lent' : 'Borrowed')} · {formatDate(l.date)}{acc ? ` · ${acc.name}` : ''}{l.due_date ? ` · due ${formatDate(l.due_date)}` : ''}</div>
         <div className="mt-4 flex items-baseline justify-between">
           <div>
             <div className="text-xs text-slate-500">{isLent ? 'They still owe you' : 'You still owe'}</div>
@@ -94,7 +95,7 @@ export function LendBorrowView({ data, onAdd, onEdit, onDelete, onDeleteTx, onLo
           <button onClick={() => setShowHistory((v) => !v)} className={`flex flex-1 items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold transition sm:flex-none ${showHistory ? 'border-accent-300/50 bg-accent-400/10 text-accent-200 light:text-accent-700' : 'border-white/10 light:border-black/10 text-slate-400 light:text-slate-500 hover:bg-white/5'}`}>
             <History size={15} />{showHistory ? 'Hide settled' : 'View all history'}
           </button>
-          <button onClick={onAdd} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-4 py-2.5 text-sm font-semibold text-[#07101c] sm:flex-none"><Plus size={15} />Log</button>
+          <button onClick={onAdd} className="hidden flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-4 py-2.5 text-sm font-semibold text-[#07101c] sm:flex-none lg:flex"><Plus size={15} />Log</button>
           <button onClick={onToggleMoney} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
             {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
           </button>
