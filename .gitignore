@@ -6,6 +6,7 @@
 # Local planning docs (not part of the shipped app)
 TODO.md
 PROJECT_CONTEXT.md
+ci.yml
 
 # IDE and editors
 .idea/

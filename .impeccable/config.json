@@ -224,6 +224,14 @@
         ],
         "createdAt": "2026-08-27T12:01:00.413Z",
         "reason": "matches the identical text-[13px] number-line size already used in components/shared/BankCardFace.jsx for the same front-of-card number display"
+      },
+      {
+        "rule": "gray-on-color",
+        "value": "text-rose-200 on bg-rose-300/15",
+        "files": [
+          "features/familyCompany/MoneyProfileBulkImport.jsx"
+        ],
+        "createdAt": "2026-08-27T14:57:15.199Z"
       }
     ]
   }
