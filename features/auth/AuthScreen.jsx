@@ -216,8 +216,14 @@ function FlipCard() {
   const [revealed, setRevealed] = useState(false)
   const flipped = pinned || hovering
   const toggleFlip = () => setPinned((p) => !p)
+  // The echo/glass layers below overhang this box asymmetrically — glass sits 36%/32% past the
+  // left/top edge, echo only 15%/18% past the right/bottom — so the flex parent centering this
+  // element's own box (which doesn't include the absolutely-positioned overhang) actually left/
+  // up-biases the whole visual cluster. This nudges it back so the cluster itself, not just the
+  // untranslated box, sits centered — mobile/tablet only; desktop's row layout has room either
+  // way and was left as designed.
   return (
-    <div className="relative m-16 sm:m-20 lg:m-24" style={{ perspective: '1500px' }}>
+    <div className="relative m-16 translate-x-[10.5%] translate-y-[7%] sm:m-20 lg:m-24 lg:translate-x-0 lg:translate-y-0" style={{ perspective: '1500px' }}>
       <EchoLayer />
       <GlassLayer />
       <motion.div
@@ -336,7 +342,10 @@ export function AuthScreen({ onAuth, initialError, initialMode = 'landing', init
         })
         googleButtonRef.current.innerHTML = ''
         window.google.accounts.id.renderButton(googleButtonRef.current, {
-          type: 'standard', theme: 'outline', size: 'large', shape: 'pill',
+          // filled_black — Google's own dark-mode button variant. This screen is always dark
+          // (theme isn't known pre-login), and 'outline' is white-only, which is exactly the
+          // glaring white box that stood out against the rest of this page.
+          type: 'standard', theme: 'filled_black', size: 'large', shape: 'pill',
           text: 'continue_with', logo_alignment: 'left',
           width: Math.min(400, Math.round(googleButtonRef.current.offsetWidth || 320)),
         })
@@ -392,11 +401,17 @@ export function AuthScreen({ onAuth, initialError, initialMode = 'landing', init
                 the hero's own `overflow-y-auto` (see above) scrolls the rest into view. */}
             <div className="relative mx-auto flex w-full max-w-[1100px] flex-col items-center justify-start gap-10 lg:min-h-0 lg:flex-1 lg:flex-row lg:justify-between lg:gap-12">
               <div className="max-w-xl text-center lg:text-left">
-                <h1 className="text-[clamp(2.5rem,7vw,3.5rem)] font-semibold leading-[1.0] tracking-[-.04em] text-white lg:text-[clamp(3.5rem,5vw,5.25rem)]">
+                {/* Mobile: the two HEADLINE lines flow as one wrapped paragraph (no forced break
+                    per array) at a size tuned to land on exactly two lines within this column's
+                    ~342px width (px-6 on a 390px viewport) — the old size/forced-block combo let
+                    "Your entire financial life." alone overflow onto its own second line, pushing
+                    "One calm view." to a third. Desktop's forced two-line block layout (`lg:block`)
+                    and larger size are unchanged — there's room for it to look intentional there. */}
+                <h1 className="text-[clamp(1.75rem,7vw,2.5rem)] font-semibold leading-[1.08] tracking-[-.03em] text-white lg:text-[clamp(3.5rem,5vw,5.25rem)] lg:leading-[1.0] lg:tracking-[-.04em]">
                   {HEADLINE.map((line, li) => (
                     <motion.span
                       key={li}
-                      className={`block ${li === 1 ? 'text-accent-200' : ''}`}
+                      className={`lg:block ${li === 1 ? 'whitespace-nowrap text-accent-200 lg:whitespace-normal' : ''}`}
                       initial="hidden" animate="show"
                       variants={{ show: { transition: { staggerChildren: 0.06, delayChildren: li * 0.26 } } }}
                     >
@@ -435,7 +450,7 @@ export function AuthScreen({ onAuth, initialError, initialMode = 'landing', init
             </div>
 
             <div className="relative flex shrink-0 items-center justify-center gap-1.5 text-xs text-slate-500">
-              <ShieldCheck size={13} className="text-emerald-300" />Private, single-account access — protected by Supabase Auth
+              <ShieldCheck size={13} className="text-emerald-300 shrink-0" /><span className="whitespace-nowrap">Private &amp; secure — powered by Supabase</span>
             </div>
           </div>
         ) : (
