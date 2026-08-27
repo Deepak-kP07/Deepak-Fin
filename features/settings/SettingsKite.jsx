@@ -15,7 +15,11 @@ export function SettingsKite({ data, onSaveKiteCredentials, onRemoveKiteCredenti
     if (profile) setApiKey(profile.kite_api_key || '')
   }, [profile])
   useEffect(() => {
-    setRedirectUrl(`${window.location.origin}/api/kite/callback`)
+    // The URL registered with Zerodha has to be one fixed address, not wherever this settings
+    // page happens to be loaded from — same NEXT_PUBLIC_BASE_URL every other absolute-URL builder
+    // in the app already uses (lib/email.js, lib/server/cors.js, etc.), so this always shows the
+    // real production callback even when viewed from a local dev server.
+    setRedirectUrl(`${process.env.NEXT_PUBLIC_BASE_URL || window.location.origin}/api/kite/callback`)
   }, [])
 
   const save = async () => {
