@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import {
   ArrowDownRight, ArrowUpRight, CheckCircle2, ChevronDown, ChevronRight, Clock, Eye, EyeOff,
   Landmark, Pencil, RefreshCw, Sparkles, Target, Trash2,
@@ -108,6 +108,20 @@ export function LoanDetailView({ loan, payments, accounts, onBack, onPay, onDele
     return `${monthAbbr(cycleDate.toISOString().slice(0, 10))} EMI${p.prepay_mode ? ` + prepayment${modeSuffix}` : ''}`
   }
 
+  // Mobile payment rows have no visible delete icon — a long press on a row reverses that
+  // payment directly (deleteLoanPayment already confirms before it acts, so this is safe).
+  // Same timing/suppression pattern as the main ledger and Account detail view.
+  const longPressTimer = useRef(null)
+  const longPressFired = useRef(false)
+  const LONG_PRESS_MS = 500
+  const cancelLongPress = () => { if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null } }
+  const startLongPress = (p) => {
+    longPressFired.current = false
+    cancelLongPress()
+    longPressTimer.current = setTimeout(() => { longPressFired.current = true; onDeletePayment(p) }, LONG_PRESS_MS)
+  }
+  const suppressLongPressTap = () => { longPressFired.current = false }
+
   const emiDue = (() => {
     if (!loan.emi_due_day || loan.status === 'closed') return null
     const now = new Date(); const day = Number(loan.emi_due_day)
@@ -130,7 +144,7 @@ export function LoanDetailView({ loan, payments, accounts, onBack, onPay, onDele
           <div className="mt-1 text-sm text-slate-500">{loan.lender || 'Lender'}{account ? ` · Paying from ${account.name}` : ''}</div>
         </div>
         <div className="flex w-full flex-wrap gap-2 sm:w-auto">
-          <button onClick={() => onPay(loan)} disabled={loan.status === 'closed'} className="rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-4 py-2.5 text-sm font-semibold text-[#07101c] disabled:opacity-50">Log payment</button>
+          <button onClick={() => onPay(loan)} disabled={loan.status === 'closed'} className="hidden rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-4 py-2.5 text-sm font-semibold text-[#07101c] disabled:opacity-50 lg:inline-block">Log payment</button>
           <button onClick={() => setSyncOpen((o) => !o)} className={`flex items-center gap-1.5 rounded-xl border px-3 py-2.5 text-sm font-medium transition ${syncOpen ? 'border-accent-300/40 bg-accent-400/10 text-accent-200 light:text-accent-700' : 'border-white/10 light:border-black/10 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900'}`}><RefreshCw size={15} /><span className="hidden sm:inline">Sync</span></button>
           <button onClick={() => onEdit(loan)} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900"><Pencil size={15} /></button>
           <button onClick={() => onDelete(loan)} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-rose-300/70 light:text-rose-700 hover:bg-rose-300/10"><Trash2 size={15} /></button>
@@ -177,7 +191,7 @@ export function LoanDetailView({ loan, payments, accounts, onBack, onPay, onDele
         </DismissibleBanner>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-6">
         <StatCard label="Outstanding" value={showMoney ? money(todaysOutstanding) : '••••'} icon={Landmark} accent="bg-rose-400/15 text-rose-200 light:text-rose-700" tone="text-rose-300 light:text-rose-700" sub={<span>{cleared}% cleared{accruedSinceLastPayment > 0.5 ? ` · +${money(accruedSinceLastPayment)} accrued today` : ''}</span>} />
         <StatCard label="EMI" value={showMoney ? money(emi) : '••••'} icon={RefreshCw} accent="bg-accent-300/15 text-accent-200 light:text-accent-700" sub={<span>{rate}% p.a.</span>} />
         <StatCard label="EMIs paid" value={String(emisPaid)} icon={Target} accent="bg-accent-400/15 text-accent-200 light:text-accent-700" sub={<span>of ~{loan.status === 'closed' ? emisPaid : emisPaid + monthsRemaining} total</span>} />
@@ -196,10 +210,32 @@ export function LoanDetailView({ loan, payments, accounts, onBack, onPay, onDele
           </div>
           <div className="divide-y divide-white/5 light:divide-black/5">
             {prepaymentEvents.map((p) => (
-              <div key={p.id} className="grid grid-cols-1 items-center gap-1.5 px-5 py-3 text-sm sm:grid-cols-[1.2fr_1fr_1fr] sm:gap-3 sm:gap-y-0">
-                <div className="text-slate-300 light:text-slate-700">{formatDate(p.payment_date)}<span className="ml-1 text-[11px] text-slate-500">{p.extra < Number(p.amount) - 0.01 ? '· on top of EMI' : '· standalone'}</span></div>
-                <div className="font-medium text-white light:text-slate-900">{showMoney ? `+${money(p.extra)}` : '••••'} extra</div>
-                <div className="text-emerald-300 light:text-emerald-700 sm:text-right">{showMoney ? money(p.interest_saved || 0) : '••••'} saved</div>
+              <div key={p.id} className="px-5 py-3">
+                {/* Mobile: single compact row, long-press to reverse (no visible delete icon) */}
+                <button
+                  type="button"
+                  onClick={suppressLongPressTap}
+                  onTouchStart={() => startLongPress(p)}
+                  onTouchEnd={cancelLongPress}
+                  onTouchMove={cancelLongPress}
+                  onTouchCancel={cancelLongPress}
+                  onContextMenu={(e) => e.preventDefault()}
+                  className="flex w-full min-w-0 items-center gap-3 text-left sm:hidden"
+                >
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-400/10 text-emerald-300 light:text-emerald-700"><Sparkles size={16} /></div>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-medium text-white light:text-slate-900">{formatDate(p.payment_date)}</div>
+                    <div className="truncate text-[11px] text-slate-500">{p.extra < Number(p.amount) - 0.01 ? 'On top of EMI' : 'Standalone'} · {showMoney ? money(p.interest_saved || 0) : '••••'} saved</div>
+                  </div>
+                  <div className="shrink-0 text-sm font-semibold text-white light:text-slate-900">{showMoney ? `+${money(p.extra)}` : '••••'}</div>
+                </button>
+
+                {/* Desktop: unchanged 3-column row */}
+                <div className="hidden items-center gap-3 text-sm sm:grid sm:grid-cols-[1.2fr_1fr_1fr]">
+                  <div className="text-slate-300 light:text-slate-700">{formatDate(p.payment_date)}<span className="ml-1 text-[11px] text-slate-500">{p.extra < Number(p.amount) - 0.01 ? '· on top of EMI' : '· standalone'}</span></div>
+                  <div className="font-medium text-white light:text-slate-900">{showMoney ? `+${money(p.extra)}` : '••••'} extra</div>
+                  <div className="text-emerald-300 light:text-emerald-700 sm:text-right">{showMoney ? money(p.interest_saved || 0) : '••••'} saved</div>
+                </div>
               </div>
             ))}
           </div>
@@ -219,28 +255,52 @@ export function LoanDetailView({ loan, payments, accounts, onBack, onPay, onDele
               <span className="text-right">Amount</span>
               <span />
             </div>
-            <div className="max-h-96 divide-y divide-white/5 light:divide-black/5 overflow-y-auto">
+            <div className="divide-y divide-white/5 light:divide-black/5">
               {payments.map((p) => {
                 const acc = accounts.find((a) => a.id === p.account_id)
                 const typeLabel = p.type === 'adjustment' ? 'Synced' : p.prepay_mode ? (p.prepay_mode === 'reduce_emi' ? 'Reduce EMI' : 'Reduce tenure') : p.type === 'emi' ? 'EMI' : 'Prepayment'
                 return (
-                  <div key={p.id} className="grid grid-cols-1 gap-2 px-5 py-4 sm:grid-cols-[1.4fr_.9fr_.6fr_.6fr_auto] sm:items-center sm:gap-4">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/[.05] light:bg-black/[.035] text-accent-200 light:text-accent-700">
+                  <div key={p.id} className="px-5 py-3 sm:py-4">
+                    {/* Mobile: single compact row, long-press to reverse (no visible delete icon) */}
+                    <button
+                      type="button"
+                      onClick={suppressLongPressTap}
+                      onTouchStart={() => startLongPress(p)}
+                      onTouchEnd={cancelLongPress}
+                      onTouchMove={cancelLongPress}
+                      onTouchCancel={cancelLongPress}
+                      onContextMenu={(e) => e.preventDefault()}
+                      className="flex w-full min-w-0 items-center gap-3 text-left sm:hidden"
+                    >
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/[.05] light:bg-black/[.035] text-accent-200 light:text-accent-700">
                         {p.type === 'adjustment' ? <RefreshCw size={16} /> : <ArrowDownRight size={16} />}
                       </div>
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <div className="truncate text-sm font-medium text-white light:text-slate-900">{paymentRowLabel(p)}</div>
-                        {acc && <div className="text-[11px] text-slate-500">{acc.name}</div>}
+                        <div className="truncate text-[11px] text-slate-500">{typeLabel} · {formatDate(p.payment_date)}</div>
                       </div>
-                    </div>
-                    <div className="text-xs text-slate-400 light:text-slate-500">
-                      <span className="inline-block rounded-md bg-white/[.05] light:bg-black/[.035] px-2 py-0.5 text-accent-200 light:text-accent-700">{typeLabel}</span>
-                    </div>
-                    <div className="text-xs text-slate-500">paid {formatDate(p.payment_date)}</div>
-                    <div className="text-sm font-semibold text-white light:text-slate-900 sm:text-right">{showMoney ? money(p.amount) : '••••'}</div>
-                    <div className="flex justify-end">
-                      <button onClick={() => onDeletePayment(p)} className="rounded-lg p-1.5 text-rose-300/70 light:text-rose-700 hover:bg-rose-300/10"><Trash2 size={13} /></button>
+                      <div className="shrink-0 text-sm font-semibold text-white light:text-slate-900">{showMoney ? money(p.amount) : '••••'}</div>
+                    </button>
+
+                    {/* Desktop: unchanged full row with visible delete icon */}
+                    <div className="hidden sm:grid sm:grid-cols-[1.4fr_.9fr_.6fr_.6fr_auto] sm:items-center sm:gap-4">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/[.05] light:bg-black/[.035] text-accent-200 light:text-accent-700">
+                          {p.type === 'adjustment' ? <RefreshCw size={16} /> : <ArrowDownRight size={16} />}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-medium text-white light:text-slate-900">{paymentRowLabel(p)}</div>
+                          {acc && <div className="text-[11px] text-slate-500">{acc.name}</div>}
+                        </div>
+                      </div>
+                      <div className="text-xs text-slate-400 light:text-slate-500">
+                        <span className="inline-block rounded-md bg-white/[.05] light:bg-black/[.035] px-2 py-0.5 text-accent-200 light:text-accent-700">{typeLabel}</span>
+                      </div>
+                      <div className="text-xs text-slate-500">paid {formatDate(p.payment_date)}</div>
+                      <div className="text-sm font-semibold text-white light:text-slate-900 sm:text-right">{showMoney ? money(p.amount) : '••••'}</div>
+                      <div className="flex justify-end">
+                        <button onClick={() => onDeletePayment(p)} className="rounded-lg p-1.5 text-rose-300/70 light:text-rose-700 hover:bg-rose-300/10"><Trash2 size={13} /></button>
+                      </div>
                     </div>
                   </div>
                 )
