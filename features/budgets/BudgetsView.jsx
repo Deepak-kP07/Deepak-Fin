@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { AlertTriangle, Calendar, Eye, EyeOff, Lock, Pencil, Plus, Target, Trash2, TrendingUp, Upload, X } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { AlertTriangle, Calendar, Eye, EyeOff, Lock, MoreVertical, Pencil, Plus, Target, Trash2, TrendingUp, Upload, X } from 'lucide-react'
 import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { HeroStatTile } from '@/components/shared/HeroStatTile'
@@ -31,6 +31,16 @@ export function BudgetsView({ data, onSetMonth, onCloseMonth, onReopenMonth, onD
     })
   }
 
+  // Mobile: the active month's Edit/Close/Delete actions collapse into this "..." menu, same
+  // pattern as Investments/Portfolio — three buttons plus the "Over by" status kept wrapping
+  // onto their own lines at 390px. Desktop keeps them inline.
+  const [monthMenuOpen, setMonthMenuOpen] = useState(false)
+  const monthMenuRef = useRef(null)
+  useEffect(() => {
+    const onDocClick = (e) => { if (monthMenuRef.current && !monthMenuRef.current.contains(e.target)) setMonthMenuOpen(false) }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [])
   const linesFor = (planId) => budget_month_categories.filter((l) => l.budget_month_id === planId)
   const activePlan = budget_months.find((p) => p.status === 'active' && p.year === now.getFullYear() && p.month === now.getMonth())
   // Active plans for any OTHER month — a future one set up ahead of time, or a past one reopened
@@ -68,7 +78,7 @@ export function BudgetsView({ data, onSetMonth, onCloseMonth, onReopenMonth, onD
     // its own small "+ Add" button, which needs more clearance than a plain list to avoid sitting
     // under the fixed bottom nav + floating add button, confirmed via a real scrolled screenshot.
     <div className="space-y-5 pb-28">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex items-end justify-between gap-3">
         <div>
           <div className="mb-2 text-xs uppercase tracking-widest text-accent-200/70 light:text-accent-700">Guardrails</div>
           <h1 className="text-3xl font-semibold tracking-tight text-white light:text-slate-900">Budgets</h1>
@@ -78,8 +88,8 @@ export function BudgetsView({ data, onSetMonth, onCloseMonth, onReopenMonth, onD
             onClick={() => downloadBudgetsExport({ budgetMonths: budget_months, budgetMonthCategories: budget_month_categories, yearlyBudgets, categories, transactions }, new Date().toISOString().slice(0, 10))}
             disabled={budget_months.length === 0 && yearlyBudgets.length === 0}
             title="Export"
-            className="flex items-center justify-center gap-2 rounded-xl border border-white/10 light:border-black/10 px-4 py-2.5 text-sm font-medium text-slate-300 light:text-slate-700 hover:bg-white/5 disabled:opacity-50"
-          ><Upload size={14} /><span className="hidden sm:inline">Export</span></button>
+            className="hidden items-center justify-center gap-2 rounded-xl border border-white/10 light:border-black/10 px-4 py-2.5 text-sm font-medium text-slate-300 light:text-slate-700 hover:bg-white/5 disabled:opacity-50 lg:flex"
+          ><Upload size={14} />Export</button>
           <button onClick={() => onSetMonth(nextMonth.getFullYear(), nextMonth.getMonth())} className="hidden items-center justify-center gap-2 rounded-xl bg-white/[.06] light:bg-black/[.04] px-4 py-2.5 text-sm font-semibold text-white light:text-slate-900 transition hover:bg-white/[.1] hover:light:bg-black/[.06] lg:flex"><Plus size={14} />Plan a month</button>
           <button onClick={onToggleMoney} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
             {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
@@ -88,33 +98,43 @@ export function BudgetsView({ data, onSetMonth, onCloseMonth, onReopenMonth, onD
       </div>
 
       <div className="rounded-3xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-black/[.025] glassy:glass-card p-6">
-        {/* Status (Remaining/Over-by) sits with the header's action buttons on the right — the
-            same "badge next to the title row" spot every other detail view (e.g. Loan's "Active"
-            badge) uses, instead of stacked under the hero figure where it left a dead gap between
-            the figure and the stat tiles. */}
+        {/* Edit/Close/Delete (when there's an active plan) plus Export collapse into this single
+            "..." menu on mobile — same pattern as Investments/Portfolio — rather than a second,
+            separate menu up in the header. The over/under status moved down next to the
+            "Budgeted" figure instead (see below), same small-pill treatment the Dashboard's
+            net-worth card uses for "Net negative". */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="text-sm font-semibold text-white light:text-slate-900">{monthLabel(now.getFullYear(), now.getMonth())}</div>
           {activePlan && (
-            <div className="flex flex-wrap items-center gap-3">
-              {activeTotals.remaining >= 0 ? (
-                <div className="text-sm text-emerald-300 light:text-emerald-700">Remaining {showMoney ? money(activeTotals.remaining) : '••••'}</div>
-              ) : (
-                // Same border + 5%-wash + tinted-text Status Banner pattern as the insights list
-                // below and CreditCardBillAlert — the headline overspend figure gets the same
-                // alarm treatment the app already uses for every other overdue/over-budget signal,
-                // instead of plain tinted text that reads no more urgent than "on track."
-                <div className="inline-flex items-center gap-1.5 rounded-xl border border-rose-300/25 bg-rose-300/5 px-3 py-1.5 text-sm font-medium text-rose-200 light:text-rose-700">
-                  <AlertTriangle size={13} className="shrink-0" />
-                  Over by {showMoney ? money(Math.abs(activeTotals.remaining)) : '••••'}
-                </div>
-              )}
-              <div className="flex items-center gap-2">
-                <button onClick={() => onSetMonth(activePlan.year, activePlan.month)} className="flex items-center gap-1.5 rounded-lg border border-white/10 light:border-black/10 px-3 py-1.5 text-xs font-medium text-slate-300 light:text-slate-700 hover:bg-white/5"><Pencil size={12} />Edit</button>
-                <button onClick={() => onCloseMonth(activePlan)} className="flex items-center gap-1.5 rounded-lg bg-white/[.06] light:bg-black/[.04] px-3 py-1.5 text-xs font-semibold text-white light:text-slate-900 hover:bg-white/[.1] hover:light:bg-black/[.06]"><Lock size={12} />Close month</button>
-                <button onClick={() => onDeleteMonth(activePlan)} title="Delete month" className="rounded-lg p-1.5 text-rose-300/70 light:text-rose-700 hover:bg-rose-300/10"><Trash2 size={14} /></button>
-              </div>
+            <div className="hidden items-center gap-2 sm:flex">
+              <button onClick={() => onSetMonth(activePlan.year, activePlan.month)} className="flex items-center gap-1.5 rounded-lg border border-white/10 light:border-black/10 px-3 py-1.5 text-xs font-medium text-slate-300 light:text-slate-700 hover:bg-white/5"><Pencil size={12} />Edit</button>
+              <button onClick={() => onCloseMonth(activePlan)} className="flex items-center gap-1.5 rounded-lg bg-white/[.06] light:bg-black/[.04] px-3 py-1.5 text-xs font-semibold text-white light:text-slate-900 hover:bg-white/[.1] hover:light:bg-black/[.06]"><Lock size={12} />Close month</button>
+              <button onClick={() => onDeleteMonth(activePlan)} title="Delete month" className="rounded-lg p-1.5 text-rose-300/70 light:text-rose-700 hover:bg-rose-300/10"><Trash2 size={14} /></button>
             </div>
           )}
+          <div ref={monthMenuRef} className="relative sm:hidden">
+            <button type="button" onClick={() => setMonthMenuOpen((o) => !o)} className={`rounded-xl border p-2.5 transition ${monthMenuOpen ? 'border-accent-300/40 bg-accent-400/10 text-accent-200 light:text-accent-700' : 'border-white/10 light:border-black/10 text-slate-400 light:text-slate-500 hover:bg-white/5'}`} title="More options">
+              <MoreVertical size={16} />
+            </button>
+            {monthMenuOpen && (
+              <div className="absolute right-0 z-30 mt-2 w-48 rounded-xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-1 shadow-2xl">
+                {activePlan && (
+                  <>
+                    <button type="button" onClick={() => { setMonthMenuOpen(false); onSetMonth(activePlan.year, activePlan.month) }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-slate-300 light:text-slate-700 hover:bg-white/5"><Pencil size={14} />Edit</button>
+                    <button type="button" onClick={() => { setMonthMenuOpen(false); onCloseMonth(activePlan) }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-slate-300 light:text-slate-700 hover:bg-white/5"><Lock size={14} />Close month</button>
+                    <button type="button" onClick={() => { setMonthMenuOpen(false); onDeleteMonth(activePlan) }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-rose-300/70 light:text-rose-700 hover:bg-rose-300/10"><Trash2 size={14} />Delete month</button>
+                    <div className="my-1 border-t border-white/10 light:border-black/10" />
+                  </>
+                )}
+                <button
+                  type="button"
+                  disabled={budget_months.length === 0 && yearlyBudgets.length === 0}
+                  onClick={() => { setMonthMenuOpen(false); downloadBudgetsExport({ budgetMonths: budget_months, budgetMonthCategories: budget_month_categories, yearlyBudgets, categories, transactions }, new Date().toISOString().slice(0, 10)) }}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-slate-300 light:text-slate-700 hover:bg-white/5 disabled:opacity-50"
+                ><Upload size={14} />Export</button>
+              </div>
+            )}
+          </div>
         </div>
 
         {!activePlan ? (
@@ -126,7 +146,18 @@ export function BudgetsView({ data, onSetMonth, onCloseMonth, onReopenMonth, onD
                 dashboards, rather than a one-off side-by-side split just for this page. */}
             <div className="mt-5">
               <div className="text-xs uppercase tracking-widest text-slate-400">Budgeted</div>
-              <div className="mt-1 text-[clamp(2rem,6vw,3rem)] font-semibold leading-[1.1] tracking-[-0.01em] text-white light:text-slate-900">{showMoney ? money(activeTotals.budgeted) : '••••••'}</div>
+              <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <div className="text-[clamp(2rem,6vw,3rem)] font-semibold leading-[1.1] tracking-[-0.01em] text-white light:text-slate-900">{showMoney ? money(activeTotals.budgeted) : '••••••'}</div>
+                {activeTotals.remaining >= 0 ? (
+                  <span className="rounded-full border border-emerald-300/30 bg-emerald-300/5 px-2 py-0.5 text-[11px] font-semibold text-emerald-200 light:text-emerald-700">
+                    Remaining {showMoney ? money(activeTotals.remaining) : '••••'}
+                  </span>
+                ) : (
+                  <span className="rounded-full border border-rose-300/30 bg-rose-300/5 px-2 py-0.5 text-[11px] font-semibold text-rose-200 light:text-rose-700">
+                    Over by {showMoney ? money(Math.abs(activeTotals.remaining)) : '••••'}
+                  </span>
+                )}
+              </div>
               <div className="mt-5 grid grid-cols-2 gap-3">
                 <HeroStatTile
                   icon={TrendingUp}
