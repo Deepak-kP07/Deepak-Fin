@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
-import { Eye, Landmark, Pencil, RotateCcw, Trash2 } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { toBlob } from 'html-to-image'
+import { Eye, Landmark, Pencil, RotateCcw, Share2, Trash2 } from 'lucide-react'
 import { BankCardFace } from '@/components/shared/BankCardFace'
 import { capitalizeFirst } from '@/lib/format'
 
@@ -9,6 +10,53 @@ const TYPE_LABEL = { bank_account: 'Bank account', debit_card: 'Debit card', cre
 
 function groupNumber(v) {
   return String(v || '').replace(/\s+/g, '').replace(/(.{4})/g, '$1 ').trim()
+}
+
+// Deliberately excludes pin/cvv even though they're on screen at this point (the manual reveal
+// shows everything) — sharing is for handing someone your account/card number, not your PIN.
+// Carries the same referral signature the page-level share button would have, since every real
+// share now doubles as a mention of the app instead of that button existing on its own.
+function shareCaption(item, secrets) {
+  const who = secrets.holder_name || item.label
+  const heading = item.bank_name ? `${item.bank_name} — ${who}` : who
+  const lines = item.item_type === 'bank_account'
+    ? [`A/C: ${secrets.account_number || '—'}`, `IFSC: ${secrets.ifsc_code || '—'}`, secrets.branch && `Branch: ${secrets.branch}`]
+    : [`Card: ${groupNumber(secrets.card_number) || '—'}`, `Expiry: ${secrets.expiry_month || '--'}/${secrets.expiry_year || '--'}`]
+  return [heading, ...lines.filter(Boolean), '', 'Sent via Personal Fin — manage all your personal finance at personalfin.site'].join('\n')
+}
+
+// Snapshots the actual front-face DOM node (not a redrawn approximation) so the shared image is
+// pixel-for-pixel what's already on screen — same gradient, chip, wifi mark, number, and holder
+// name — and never drifts out of sync if that design changes later.
+async function cardImageFile(frontNode, filename) {
+  const blob = await toBlob(frontNode, { pixelRatio: 2, cacheBust: true })
+  return new File([blob], filename, { type: 'image/png' })
+}
+
+async function shareItem(item, secrets, frontNode) {
+  const text = shareCaption(item, secrets)
+  const filename = `${(item.label || 'card').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.png`
+  let file = null
+  try { file = await cardImageFile(frontNode, filename) } catch { /* falls through to text-only share below */ }
+
+  if (file && typeof navigator !== 'undefined' && navigator.canShare?.({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: item.label, text }) } catch { /* user cancelled the share sheet */ }
+    return
+  }
+  // No file-share support (desktop browsers, some older WebViews) — download the image so it can
+  // be attached manually, and still open the chat with the caption ready to send alongside it.
+  if (file) {
+    const url = URL.createObjectURL(file)
+    const link = document.createElement('a')
+    link.href = url; link.download = filename
+    document.body.appendChild(link); link.click(); link.remove()
+    URL.revokeObjectURL(url)
+  }
+  if (typeof navigator !== 'undefined' && navigator.share) {
+    try { await navigator.share({ title: item.label, text }) } catch { /* user cancelled the share sheet */ }
+  } else {
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank')
+  }
 }
 
 // Same flip mechanism as features/credit-cards/CreditCardFlip.jsx (pure CSS 3D transform, no
@@ -19,9 +67,17 @@ export function VaultCardFlip({ item, onEdit, onDelete }) {
   const [flipped, setFlipped] = useState(false)
   const [secrets, setSecrets] = useState(null)
   const [revealing, setRevealing] = useState(false)
+  const [sharing, setSharing] = useState(false)
+  const frontRef = useRef(null)
   const stop = (fn) => (e) => { e.stopPropagation(); fn() }
 
   const flipBack = () => { setFlipped(false); setSecrets(null) }
+
+  const doShare = async () => {
+    if (sharing) return
+    setSharing(true)
+    try { await shareItem(item, secrets, frontRef.current) } finally { setSharing(false) }
+  }
 
   const reveal = async () => {
     setRevealing(true)
@@ -31,14 +87,35 @@ export function VaultCardFlip({ item, onEdit, onDelete }) {
     } finally { setRevealing(false) }
   }
 
+  // The front shows the real number and holder name without a tap — unlike the back's `secrets`
+  // above, which stays gated behind an explicit reveal. `?preview=1` decrypts server-side but
+  // strips PIN/CVV/expiry/IFSC/branch/notes before responding, so those never reach the client
+  // just from a card being on screen.
+  const [preview, setPreview] = useState(null)
+  useEffect(() => {
+    let cancelled = false
+    fetch(`/api/finance/vault_items/${item.id}/reveal?preview=1`, { method: 'POST' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (!cancelled && d?.secrets) setPreview(d.secrets) })
+    return () => { cancelled = true }
+  }, [item.id])
+
   const isCard = item.item_type === 'debit_card' || item.item_type === 'credit_card'
 
   return (
     <div className="mx-auto aspect-[85/54] w-full max-w-[340px] cursor-pointer select-none" style={{ perspective: '1500px' }} onClick={() => setFlipped((f) => !f)}>
       <div className="relative h-full w-full transition-transform duration-700 ease-out" style={{ transformStyle: 'preserve-3d', transform: flipped ? 'rotateY(180deg)' : 'none' }}>
-        <div className="absolute inset-0" style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}>
+        <div ref={frontRef} className="absolute inset-0" style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}>
           {isCard ? (
-            <BankCardFace name={item.label} subtitle={item.bank_name || TYPE_LABEL[item.item_type]} last4={item.last4} color={item.color || '#a78bfa'} fill />
+            <BankCardFace
+              name={item.label}
+              subtitle={item.bank_name || TYPE_LABEL[item.item_type]}
+              last4={item.last4}
+              color={item.color || '#a78bfa'}
+              fill
+              revealedNumber={preview?.card_number ? groupNumber(preview.card_number) : undefined}
+              holderName={preview?.holder_name || undefined}
+            />
           ) : (
             <div className="relative flex h-full w-full flex-col justify-between overflow-hidden rounded-2xl p-4 shadow-lg" style={{ background: `linear-gradient(135deg, ${item.color || '#22d3ee'} 0%, ${item.color || '#22d3ee'}cc 45%, #0b0f18 100%)` }}>
               <div className="absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-white/[.06]" />
@@ -46,12 +123,23 @@ export function VaultCardFlip({ item, onEdit, onDelete }) {
                 <Landmark size={18} className="text-white/80" />
               </div>
               <div className="relative">
-                <div className="text-xs font-semibold leading-tight text-white sm:text-sm">{item.label}</div>
-                <div className="mt-0.5 flex items-center gap-1.5 text-[9px] uppercase tracking-widest text-white/60 sm:text-[10px]">
-                  {item.bank_name && <span className="truncate">{item.bank_name}</span>}
-                  {item.bank_name && item.last4 && <span>·</span>}
-                  {item.last4 && <span className="shrink-0">••{item.last4}</span>}
+                <div className="font-mono text-[13px] tracking-[0.18em] text-white/90 sm:text-base">
+                  {preview?.account_number || `••${item.last4 || '••••'}`}
                 </div>
+                <div className="mt-2 text-xs font-semibold leading-tight text-white sm:text-sm">{preview?.holder_name || item.label}</div>
+                {(preview?.holder_name ? item.label || item.bank_name : item.bank_name) && (
+                  <div className="mt-0.5 flex items-center gap-1.5 text-[9px] uppercase tracking-widest text-white/60 sm:text-[10px]">
+                    {preview?.holder_name ? (
+                      <>
+                        {item.label && <span className="truncate">{item.label}</span>}
+                        {item.label && item.bank_name && <span>·</span>}
+                        {item.bank_name && <span className="truncate">{item.bank_name}</span>}
+                      </>
+                    ) : (
+                      <span className="truncate">{item.bank_name}</span>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -64,7 +152,14 @@ export function VaultCardFlip({ item, onEdit, onDelete }) {
                 <div className="truncate text-sm font-semibold text-white">{item.label}</div>
                 <div className="mt-0.5 text-[11px] text-slate-500">{TYPE_LABEL[item.item_type]}{item.bank_name ? ` · ${item.bank_name}` : ''}</div>
               </div>
-              <button type="button" onClick={stop(flipBack)} title="Flip back" className="shrink-0 rounded-lg p-1 text-slate-500 hover:bg-white/5 hover:text-white"><RotateCcw size={13} /></button>
+              <div className="flex shrink-0 items-center gap-1">
+                {/* Only appears once the details are actually on screen — nothing to share
+                    before the explicit reveal above has happened. */}
+                {secrets && (
+                  <button type="button" onClick={stop(doShare)} disabled={sharing} title="Share" className="rounded-lg p-1 text-slate-500 hover:bg-white/5 hover:text-white disabled:opacity-50">{sharing ? <span className="block h-[13px] w-[13px] animate-spin rounded-full border-[1.5px] border-slate-500 border-t-transparent" /> : <Share2 size={13} />}</button>
+                )}
+                <button type="button" onClick={stop(flipBack)} title="Flip back" className="rounded-lg p-1 text-slate-500 hover:bg-white/5 hover:text-white"><RotateCcw size={13} /></button>
+              </div>
             </div>
 
             {!secrets ? (

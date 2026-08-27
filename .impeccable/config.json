@@ -215,6 +215,15 @@
         "rule": "design-system-color",
         "value": "rgba(0, 0, 0, .45)",
         "createdAt": "2026-08-27T01:58:17.112Z"
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": "13px",
+        "files": [
+          "features/vault/VaultCardFlip.jsx"
+        ],
+        "createdAt": "2026-08-27T12:01:00.413Z",
+        "reason": "matches the identical text-[13px] number-line size already used in components/shared/BankCardFace.jsx for the same front-of-card number display"
       }
     ]
   }

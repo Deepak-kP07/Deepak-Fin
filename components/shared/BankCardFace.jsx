@@ -4,7 +4,12 @@ import { Wifi } from 'lucide-react'
 // used anywhere an account is actually backed by a real card (a credit card, or a bank
 // account with a debit card linked to it). Accounts with no card of their own (plain bank,
 // cash) don't get this treatment; there's no card to depict.
-export function BankCardFace({ name, subtitle, last4, color = '#a78bfa', fill = false }) {
+//
+// `revealedNumber`/`holderName` are optional and additive, used only by the Vault's own card
+// faces (which show the real number and an actual person's name up front, unlike every other
+// caller here — Credit Cards, the debit-card face in Account detail — which stay masked with
+// just the item's label). Omitted, the face renders exactly as it always has.
+export function BankCardFace({ name, subtitle, last4, color = '#a78bfa', fill = false, revealedNumber, holderName }) {
   return (
     <div
       className={`relative w-full overflow-hidden rounded-2xl p-4 shadow-lg ${fill ? 'h-full' : 'aspect-[85/54]'}`}
@@ -24,18 +29,29 @@ export function BankCardFace({ name, subtitle, last4, color = '#a78bfa', fill = 
         </div>
         <div>
           <div className="font-mono text-[13px] tracking-[0.18em] text-white/90 sm:text-base">
-            •••• •••• •••• {last4 || '••••'}
+            {revealedNumber || `•••• •••• •••• ${last4 || '••••'}`}
           </div>
-          {/* Name gets its own full-width line so a long card name never has to compete with
-              the issuer label for space and end up ellipsised — the issuer + last 4 sit
-              together underneath instead, same grouping a real card statement uses. */}
-          <div className="mt-2 text-xs font-semibold leading-tight text-white sm:text-sm">{name}</div>
-          {(subtitle || last4) && (
-            <div className="mt-0.5 flex items-center gap-1.5 text-[9px] uppercase tracking-widest text-white/60 sm:text-[10px]">
-              {subtitle && <span className="truncate">{subtitle}</span>}
-              {subtitle && last4 && <span>·</span>}
-              {last4 && <span className="shrink-0">••{last4}</span>}
-            </div>
+          {/* Same "own full-width line" reasoning either way — when a holder name is supplied
+              it takes the prominent slot (like a real card) and the item's own label moves down
+              into the subtitle row alongside the issuer; otherwise the label keeps that slot,
+              same as before. */}
+          <div className="mt-2 text-xs font-semibold leading-tight text-white sm:text-sm">{holderName || name}</div>
+          {holderName ? (
+            (name || subtitle) && (
+              <div className="mt-0.5 flex items-center gap-1.5 text-[9px] uppercase tracking-widest text-white/60 sm:text-[10px]">
+                {name && <span className="truncate">{name}</span>}
+                {name && subtitle && <span>·</span>}
+                {subtitle && <span className="truncate">{subtitle}</span>}
+              </div>
+            )
+          ) : (
+            (subtitle || last4) && (
+              <div className="mt-0.5 flex items-center gap-1.5 text-[9px] uppercase tracking-widest text-white/60 sm:text-[10px]">
+                {subtitle && <span className="truncate">{subtitle}</span>}
+                {subtitle && last4 && <span>·</span>}
+                {last4 && <span className="shrink-0">••{last4}</span>}
+              </div>
+            )
           )}
         </div>
       </div>
