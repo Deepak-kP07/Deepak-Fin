@@ -1502,6 +1502,11 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTx
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
   const activeFilterCount = [type !== 'all', accountId !== 'all', categoryId !== 'all'].filter(Boolean).length
   const rangeRef = useRef(null)
+  // Mobile has its own combined month-nav + custom-range trigger (tap the month label itself
+  // opens the picker) sitting up in the title row, instead of the desktop's separate calendar
+  // icon in the row below — a second ref since both exist in the DOM at once (CSS just hides
+  // whichever doesn't match the current breakpoint) and a single ref can't track both.
+  const mobileRangeRef = useRef(null)
   const settingsRef = useRef(null)
   // Mobile: swipe left/right on the list-vs-chart area to switch, carousel-style, in addition to
   // the explicit toggles (desktop icon pair, mobile Filters sheet switch). Threshold-based on
@@ -1525,7 +1530,9 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTx
   }
   useEffect(() => {
     const onDocClick = (e) => {
-      if (rangeRef.current && !rangeRef.current.contains(e.target)) setRangeOpen(false)
+      const outsideDesktopRange = !rangeRef.current || !rangeRef.current.contains(e.target)
+      const outsideMobileRange = !mobileRangeRef.current || !mobileRangeRef.current.contains(e.target)
+      if (outsideDesktopRange && outsideMobileRange) setRangeOpen(false)
       if (settingsRef.current && !settingsRef.current.contains(e.target)) setSettingsOpen(false)
     }
     document.addEventListener('mousedown', onDocClick)
@@ -1654,15 +1661,61 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTx
     try { kind === 'pdf' ? exportPdf() : exportCsv() } finally { setExportBusy(false); setSettingsOpen(false) }
   }
 
+  // Shared by both the mobile (title row) and desktop (row below) range triggers below — only
+  // one is ever visible at a given width, but both mount, so this avoids keeping two copies in
+  // sync.
+  const rangePopover = (
+    // top-full (not relying on the default `top: auto`) — the mobile trigger is a flex row with
+    // items-center, and an auto-positioned absolute child there gets vertically centered on the
+    // trigger instead of placed below it, since the popover is much taller than the pill.
+    <div className="absolute right-0 top-full z-30 mt-2 w-72 rounded-2xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-4 shadow-2xl">
+      <div className="mb-3 text-xs uppercase tracking-widest text-slate-500">Custom range</div>
+      <label className="mb-3 block text-sm text-slate-300 light:text-slate-700">Start date
+        <DateInput value={rangeDraft.start} onChange={(e) => setRangeDraft((d) => ({ ...d, start: e.target.value }))} className="mt-1.5 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-2.5 text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
+      </label>
+      <label className="mb-4 block text-sm text-slate-300 light:text-slate-700">End date
+        <DateInput value={rangeDraft.end} onChange={(e) => setRangeDraft((d) => ({ ...d, end: e.target.value }))} className="mt-1.5 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-2.5 text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
+      </label>
+      <div className="flex gap-2">
+        {customRange && (
+          <button type="button" onClick={() => { setCustomRange(null); setRangeDraft({ start: '', end: '' }); setRangeOpen(false) }} className="flex-1 rounded-xl border border-white/10 light:border-black/10 px-3 py-2.5 text-sm text-slate-300 light:text-slate-700 hover:bg-white/5">Clear</button>
+        )}
+        <button type="button" disabled={!rangeDraft.start || !rangeDraft.end || rangeDraft.start > rangeDraft.end} onClick={() => { setCustomRange({ start: rangeDraft.start, end: rangeDraft.end }); setRangeOpen(false) }} className="flex-1 rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-3 py-2.5 text-sm font-semibold text-[#07101c] disabled:opacity-50">Apply</button>
+      </div>
+    </div>
+  )
+
   return (
     <div className="space-y-5">
       <CreditCardBillAlert creditCards={creditCards} transactions={transactions} onPay={onPayCardBill} showMoney={showMoney} />
-      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-        <div>
-          <div className="mb-2 text-xs uppercase tracking-widest text-accent-200/70 light:text-accent-700">Money movement</div>
-          <h1 className="text-3xl font-semibold tracking-tight text-white light:text-slate-900">Transactions</h1>
+      <div className="space-y-3">
+        {/* Eye toggle sits beside the title, same row, same as every other module's header
+            (Loans/Cards/etc.) — the date/range/chart controls below are unique to this page and
+            get their own row rather than crowding the title line. */}
+        <div className="flex items-end justify-between gap-3">
+          <div>
+            <div className="mb-2 text-xs uppercase tracking-widest text-accent-200/70 light:text-accent-700">Money movement</div>
+            <h1 className="text-3xl font-semibold tracking-tight text-white light:text-slate-900">Transactions</h1>
+          </div>
+          <div className="flex items-center gap-2">
+            {/* Mobile: month nav + custom range combined into one pill — tapping the month
+                label itself opens the range picker instead of a separate calendar icon, and it
+                sits right here beside the eye toggle. Desktop keeps the original separate
+                month-pill + calendar-icon row below unchanged. */}
+            <div ref={mobileRangeRef} className={`relative flex items-center rounded-xl border lg:hidden ${customRange ? 'border-accent-300/40 bg-accent-400/10' : 'border-white/10 light:border-black/10'}`}>
+              <button type="button" disabled={!!customRange} onClick={() => shiftMonth(-1)} className="rounded-l-xl p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900 disabled:pointer-events-none disabled:opacity-40" title="Previous month"><ChevronLeft size={15} /></button>
+              <button type="button" onClick={() => { setRangeDraft(customRange || { start: '', end: '' }); setRangeOpen((o) => !o) }} className={`px-0.5 text-center text-xs font-semibold uppercase tracking-wider ${customRange ? 'text-accent-200 light:text-accent-700' : 'text-slate-300 light:text-slate-700'}`} title="Custom date range">
+                {customRange ? 'Custom' : MONTH_NAMES[monthCursor.month].slice(0, 3)}
+              </button>
+              <button type="button" disabled={!!customRange} onClick={() => shiftMonth(1)} className="rounded-r-xl p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900 disabled:pointer-events-none disabled:opacity-40" title="Next month"><ChevronRight size={15} /></button>
+              {rangeOpen && rangePopover}
+            </div>
+            <button onClick={onToggleMoney} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
+              {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
+            </button>
+          </div>
         </div>
-        <div className="flex gap-2">
+        <div className="hidden flex-wrap justify-end gap-2 lg:flex">
           <div className={`flex items-center rounded-xl border ${customRange ? 'border-white/5 light:border-black/5 opacity-40' : 'border-white/10 light:border-black/10'}`}>
             <button type="button" disabled={!!customRange} onClick={() => shiftMonth(-1)} className="rounded-l-xl p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900 disabled:pointer-events-none" title="Previous month"><ChevronLeft size={15} /></button>
             <span className="w-9 text-center text-xs font-semibold uppercase tracking-wider text-slate-300 light:text-slate-700" title={`${MONTH_NAMES[monthCursor.month]} ${monthCursor.year}`}>{MONTH_NAMES[monthCursor.month].slice(0, 3)}</span>
@@ -1672,34 +1725,15 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTx
             <button type="button" onClick={() => { setRangeDraft(customRange || { start: '', end: '' }); setRangeOpen((o) => !o) }} className={`rounded-xl border p-2.5 transition ${customRange ? 'border-accent-300/40 bg-accent-400/10 text-accent-200 light:text-accent-700' : 'border-white/10 light:border-black/10 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900'}`} title="Custom date range">
               <Calendar size={16} />
             </button>
-            {rangeOpen && (
-              <div className="absolute right-0 z-30 mt-2 w-72 rounded-2xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-4 shadow-2xl">
-                <div className="mb-3 text-xs uppercase tracking-widest text-slate-500">Custom range</div>
-                <label className="mb-3 block text-sm text-slate-300 light:text-slate-700">Start date
-                  <DateInput value={rangeDraft.start} onChange={(e) => setRangeDraft((d) => ({ ...d, start: e.target.value }))} className="mt-1.5 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-2.5 text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
-                </label>
-                <label className="mb-4 block text-sm text-slate-300 light:text-slate-700">End date
-                  <DateInput value={rangeDraft.end} onChange={(e) => setRangeDraft((d) => ({ ...d, end: e.target.value }))} className="mt-1.5 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-2.5 text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
-                </label>
-                <div className="flex gap-2">
-                  {customRange && (
-                    <button type="button" onClick={() => { setCustomRange(null); setRangeDraft({ start: '', end: '' }); setRangeOpen(false) }} className="flex-1 rounded-xl border border-white/10 light:border-black/10 px-3 py-2.5 text-sm text-slate-300 light:text-slate-700 hover:bg-white/5">Clear</button>
-                  )}
-                  <button type="button" disabled={!rangeDraft.start || !rangeDraft.end || rangeDraft.start > rangeDraft.end} onClick={() => { setCustomRange({ start: rangeDraft.start, end: rangeDraft.end }); setRangeOpen(false) }} className="flex-1 rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-3 py-2.5 text-sm font-semibold text-[#07101c] disabled:opacity-50">Apply</button>
-                </div>
-              </div>
-            )}
+            {rangeOpen && rangePopover}
           </div>
           {/* Already reachable on mobile as a "Chart view" switch inside the Filters sheet below —
               this icon-pair form is desktop-only to avoid showing the same control twice. */}
-          <div className="hidden items-center overflow-hidden rounded-xl border border-white/10 light:border-black/10 lg:flex">
+          <div className="flex items-center overflow-hidden rounded-xl border border-white/10 light:border-black/10">
             <button type="button" onClick={() => { setSwipeDirection(-1); setChartView(false) }} title="Table view" className={`flex items-center px-3 py-2.5 transition ${!chartView ? 'bg-accent-400/15 text-accent-200 light:text-accent-700' : 'text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900'}`}><ListChecks size={16} /></button>
             <div className="h-5 w-px shrink-0 bg-white/10" />
             <button type="button" onClick={() => { setSwipeDirection(1); setChartView(true) }} title="Chart view" className={`flex items-center px-3 py-2.5 transition ${chartView ? 'bg-accent-400/15 text-accent-200 light:text-accent-700' : 'text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900'}`}><PieChartIcon size={16} /></button>
           </div>
-          <button onClick={onToggleMoney} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
-            {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
-          </button>
         </div>
       </div>
 
