@@ -1,5 +1,5 @@
 import { Pencil, Plus, Trash2, X } from 'lucide-react'
-import { formatDate, money } from '@/lib/format'
+import { capitalizeFirst, formatDate, money } from '@/lib/format'
 
 export function RecurringManager({ open, onClose, rules, onAdd, onEdit, onToggle, onDelete, showMoney }) {
   if (!open) return null
@@ -21,7 +21,7 @@ export function RecurringManager({ open, onClose, rules, onAdd, onEdit, onToggle
             <div key={r.id} className={`rounded-2xl border p-4 ${r.is_active ? 'border-white/10 light:border-black/10 bg-[#141a28] light:bg-black/[.025] glassy:glass-card' : 'border-white/5 light:border-black/5 bg-white/[.015] light:bg-black/[.01] opacity-60'}`}>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="truncate text-sm font-medium text-white light:text-slate-900">{r.description}</div>
+                  <div className="truncate text-sm font-medium text-white light:text-slate-900">{capitalizeFirst(r.description)}</div>
                   <div className="mt-0.5 text-xs text-slate-500 capitalize">{r.frequency} · {r.type} · {showMoney ? money(r.amount) : '••••'} · next {formatDate(r.next_due_date)}</div>
                 </div>
                 <div className="flex shrink-0 gap-1">

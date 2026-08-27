@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Eye, Landmark, Pencil, RotateCcw, Trash2 } from 'lucide-react'
 import { BankCardFace } from '@/components/shared/BankCardFace'
+import { capitalizeFirst } from '@/lib/format'
 
 const TYPE_LABEL = { bank_account: 'Bank account', debit_card: 'Debit card', credit_card: 'Credit card' }
 
@@ -87,7 +88,7 @@ export function VaultCardFlip({ item, onEdit, onDelete }) {
                     {secrets.pin && <div>PIN: <span className="text-white">{secrets.pin}</span></div>}
                   </>
                 )}
-                {secrets.notes && <div className="pt-1 text-slate-400">{secrets.notes}</div>}
+                {secrets.notes && <div className="pt-1 text-slate-400">{capitalizeFirst(secrets.notes)}</div>}
               </div>
             )}
           </div>

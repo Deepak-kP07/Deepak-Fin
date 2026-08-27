@@ -1,4 +1,5 @@
 import { Star } from 'lucide-react'
+import { capitalizeFirst } from '@/lib/format'
 
 export function MoneyRulesWidget({ rules, onOpen }) {
   const active = rules.filter((r) => r.is_active).slice(0, 4)
@@ -15,7 +16,7 @@ export function MoneyRulesWidget({ rules, onOpen }) {
         <button onClick={onOpen} className="w-full rounded-xl border border-dashed border-white/10 light:border-black/10 py-4 text-sm text-slate-400 light:text-slate-500 hover:bg-white/5">+ Add your first financial rule</button>
       ) : (
         <ul className="space-y-2">
-          {active.map((r) => (<li key={r.id} className="flex items-start gap-2 text-sm text-slate-200 light:text-slate-700"><span className="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-accent-300" />{r.rule_text}</li>))}
+          {active.map((r) => (<li key={r.id} className="flex items-start gap-2 text-sm text-slate-200 light:text-slate-700"><span className="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-accent-300" />{capitalizeFirst(r.rule_text)}</li>))}
         </ul>
       )}
     </div>

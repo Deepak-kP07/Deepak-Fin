@@ -7,7 +7,7 @@ import { HeroStatTile } from '@/components/shared/HeroStatTile'
 import { DismissibleBanner } from '@/components/shared/DismissibleBanner'
 import { removeAttachment, uploadAttachment, viewAttachment } from '@/lib/attachments'
 import { scholarshipDisplayStatus } from '@/lib/scholarships'
-import { formatDate, money } from '@/lib/format'
+import { capitalizeFirst, formatDate, money } from '@/lib/format'
 
 // Compact upload/view/remove control reused for the scholarship's own receipt and for each
 // individual payment's proof-of-payment — same shape as the Transactions module's attachment
@@ -76,11 +76,11 @@ export function ScholarshipDetailView({
               <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-widest ${displayStatus === 'paid' ? 'bg-emerald-400/15 text-emerald-200 light:text-emerald-700' : displayStatus === 'received' ? 'bg-accent-400/15 text-accent-200 light:text-accent-700' : 'bg-slate-500/15 text-slate-300 light:text-slate-700'}`}>{displayStatus}</span>
               {linkedAccount && <span className="flex items-center gap-1 rounded-full bg-accent-400/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-accent-200 light:text-accent-700"><Link2 size={10} />Linked</span>}
             </div>
-            <div className="mt-1 text-xs text-slate-500">{s.source || '—'} · {s.academic_year || '—'}{linkedAccount ? ` · into ${linkedAccount.name}` : ''}{s.received_date ? ` · received ${formatDate(s.received_date)}` : ''}{s.due_date ? ` · due ${formatDate(s.due_date)}` : ''}</div>
+            <div className="mt-1 text-xs text-slate-500">{capitalizeFirst(s.source) || '—'} · {s.academic_year || '—'}{linkedAccount ? ` · into ${linkedAccount.name}` : ''}{s.received_date ? ` · received ${formatDate(s.received_date)}` : ''}{s.due_date ? ` · due ${formatDate(s.due_date)}` : ''}</div>
           </div>
         </div>
         <div className="flex w-full min-w-0 flex-wrap gap-2 sm:w-auto">
-          <button onClick={() => onPay(s)} disabled={pending <= 0} className="rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-4 py-2.5 text-sm font-semibold text-[#07101c] disabled:opacity-40">Pay to college</button>
+          <button onClick={() => onPay(s)} disabled={pending <= 0} className="hidden rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-4 py-2.5 text-sm font-semibold text-[#07101c] disabled:opacity-40 lg:inline-block">Pay to college</button>
           <button onClick={() => onEdit(s)} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900"><Pencil size={15} /></button>
           <button onClick={() => onDelete(s)} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-rose-300/70 light:text-rose-700 hover:bg-rose-300/10"><Trash2 size={15} /></button>
           <button onClick={onToggleMoney} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
@@ -124,8 +124,8 @@ export function ScholarshipDetailView({
               return (
                 <div key={p.id} className="grid grid-cols-1 gap-2 px-5 py-4 sm:grid-cols-[1.4fr_.8fr_.6fr_.6fr_auto] sm:items-center sm:gap-4">
                   <div className="min-w-0">
-                    <div className="truncate text-sm font-medium text-white light:text-slate-900">{p.paid_to || 'College'}</div>
-                    {p.notes && <div className="truncate text-[11px] text-slate-500">{p.notes}</div>}
+                    <div className="truncate text-sm font-medium text-white light:text-slate-900">{capitalizeFirst(p.paid_to) || 'College'}</div>
+                    {p.notes && <div className="truncate text-[11px] text-slate-500">{capitalizeFirst(p.notes)}</div>}
                   </div>
                   <div className="text-xs text-slate-400 light:text-slate-500">
                     <span className="inline-block rounded-md bg-white/[.05] light:bg-black/[.035] px-2 py-0.5 text-slate-300 light:text-slate-700">{acc?.name || 'No account'}</span>

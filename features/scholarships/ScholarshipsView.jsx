@@ -1,17 +1,18 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ArrowDownRight, ArrowUpRight, Eye, EyeOff, Link2, Plus, ShieldCheck } from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { HeroStatTile } from '@/components/shared/HeroStatTile'
-import { formatDate, money } from '@/lib/format'
+import { capitalizeFirst, formatDate, money } from '@/lib/format'
 import { scholarshipDisplayStatus } from '@/lib/scholarships'
 import { ScholarshipDetailView } from '@/features/scholarships/ScholarshipDetailView'
 
-export function ScholarshipsView({ data, onAdd, onEdit, onDelete, onPay, onRefresh, showMoney, onToggleMoney, toast }) {
+export function ScholarshipsView({ data, onAdd, onEdit, onDelete, onPay, onRefresh, showMoney, onToggleMoney, toast, onDetailChange }) {
   const { scholarships, scholarship_payments, transactions, accounts } = data
   const [selectedId, setSelectedId] = useState(null)
   const selected = scholarships.find((s) => s.id === selectedId)
+  useEffect(() => { onDetailChange?.(selectedId) }, [selectedId])
 
   if (selected) {
     return (
@@ -45,7 +46,7 @@ export function ScholarshipsView({ data, onAdd, onEdit, onDelete, onPay, onRefre
           <h1 className="text-3xl font-semibold tracking-tight text-white light:text-slate-900">Scholarships &amp; fees</h1>
         </div>
         <div className="flex gap-2">
-          <button onClick={onAdd} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-4 py-2.5 text-sm font-semibold text-[#07101c] sm:flex-none"><Plus size={15} />Add scholarship</button>
+          <button onClick={onAdd} className="hidden flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-4 py-2.5 text-sm font-semibold text-[#07101c] sm:flex-none lg:flex"><Plus size={15} />Add scholarship</button>
           <button onClick={onToggleMoney} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
             {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
           </button>
@@ -95,7 +96,7 @@ export function ScholarshipsView({ data, onAdd, onEdit, onDelete, onPay, onRefre
                   <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-widest ${displayStatus === 'paid' ? 'bg-emerald-400/15 text-emerald-200 light:text-emerald-700' : displayStatus === 'received' ? 'bg-accent-400/15 text-accent-200 light:text-accent-700' : 'bg-slate-500/15 text-slate-300 light:text-slate-700'}`}>{displayStatus}</span>
                   {s.received_to_account_id && <span className="flex shrink-0 items-center gap-1 rounded-full bg-accent-400/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-widest text-accent-200 light:text-accent-700"><Link2 size={9} />Linked</span>}
                 </div>
-                <div className="mt-1 text-xs text-slate-500">{s.source || '—'} · {s.academic_year || '—'}</div>
+                <div className="mt-1 text-xs text-slate-500">{capitalizeFirst(s.source) || '—'} · {s.academic_year || '—'}</div>
                 <div className="mt-4 flex items-baseline justify-between">
                   <div>
                     <div className="text-xs text-slate-500">Pending</div>

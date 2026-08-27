@@ -1,7 +1,7 @@
 import { CheckCircle2, Clock, ExternalLink, Eye, EyeOff, Mountain, Pencil, Plus, Trash2 } from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { HeroStatTile } from '@/components/shared/HeroStatTile'
-import { money } from '@/lib/format'
+import { capitalizeFirst, money } from '@/lib/format'
 
 const WAIT_DAYS = 30
 
@@ -24,7 +24,7 @@ export function BucketListView({ data, onAdd, onEdit, onDelete, showMoney, onTog
           <h1 className="text-3xl font-semibold tracking-tight text-white light:text-slate-900">Bucket list</h1>
         </div>
         <div className="flex gap-2">
-          <button onClick={onAdd} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-4 py-2.5 text-sm font-semibold text-[#07101c] sm:flex-none"><Plus size={15} />Add</button>
+          <button onClick={onAdd} className="hidden flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-4 py-2.5 text-sm font-semibold text-[#07101c] sm:flex-none lg:flex"><Plus size={15} />Add</button>
           <button onClick={onToggleMoney} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
             {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
           </button>
@@ -74,11 +74,11 @@ export function BucketListView({ data, onAdd, onEdit, onDelete, showMoney, onTog
                   <div className="min-w-0">
                     {b.product_url ? (
                       <a href={b.product_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 truncate text-sm font-medium text-accent-200 light:text-accent-700 hover:underline">
-                        <span className="truncate">{b.title}</span>
+                        <span className="truncate">{capitalizeFirst(b.title)}</span>
                         <ExternalLink size={12} className="shrink-0 text-accent-300/70 light:text-accent-700" />
                       </a>
                     ) : (
-                      <div className="truncate text-sm font-medium text-white light:text-slate-900">{b.title}</div>
+                      <div className="truncate text-sm font-medium text-white light:text-slate-900">{capitalizeFirst(b.title)}</div>
                     )}
                     {b.estimated_cost != null && <div className="text-xs text-slate-500">{showMoney ? money(b.estimated_cost) : '••••'}</div>}
                   </div>
@@ -86,7 +86,7 @@ export function BucketListView({ data, onAdd, onEdit, onDelete, showMoney, onTog
                   <div className="min-w-0 text-xs text-slate-400 light:text-slate-500">
                     {b.reasons?.length > 0 ? (
                       <ul className="space-y-0.5">
-                        {b.reasons.map((r, i) => <li key={i} className="truncate">· {r}</li>)}
+                        {b.reasons.map((r, i) => <li key={i} className="truncate">· {capitalizeFirst(r)}</li>)}
                       </ul>
                     ) : <span className="text-slate-600">—</span>}
                   </div>
