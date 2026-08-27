@@ -6,15 +6,14 @@ import { formatDate, money, todayISO } from '@/lib/format'
 const FIELDS = [
   { key: 'date', label: 'Date', required: true },
   { key: 'description', label: 'Description', required: true, detect: (l) => l.includes('desc') || l === 'narration' || l === 'particulars' },
-  { key: 'amount', label: 'Amount', required: true, detect: (l) => l === 'amount' || l.includes('amount') || l === 'value' },
-  { key: 'entry_type', label: 'Type', required: false, detect: (l) => l === 'type' || l === 'entry_type' || l === 'kind' },
-  { key: 'category', label: 'Category', required: false, detect: (l) => l.includes('categ') },
+  { key: 'amount', label: 'Amount', required: true, detect: (l) => l === 'amount' || l.includes('amount') || l === 'value', hint: "Always stored as a positive number — whether a row counts as income or expense comes from the category, not a plus/minus sign." },
+  { key: 'category', label: 'Category', required: false, detect: (l) => l.includes('categ'), hint: 'Match this to one of your category names to auto-fill income vs. expense. If your file only marks the type (e.g. a column of "Income"/"Expense"/"Capital"), map that here instead — those are picked up automatically.' },
   { key: 'paid_party', label: 'Paid to / Received from', required: false, detect: (l) => l.includes('paid') || l.includes('received') || l.includes('party') },
   { key: 'notes', label: 'Notes', required: false, detect: (l) => l.includes('note') },
 ]
 
-const TEMPLATE_HEADERS = ['date', 'entry_type', 'category', 'description', 'amount', 'paid_party', 'notes']
-const TEMPLATE_EXAMPLE = '15/01/2026,income,Salary,January salary,50000,Acme Pvt Ltd,\n18/01/2026,expense,Groceries,Weekly groceries,2400,BigBasket,'
+const TEMPLATE_HEADERS = ['date', 'category', 'description', 'amount', 'paid_party', 'notes']
+const TEMPLATE_EXAMPLE = '15/01/2026,income,January salary,50000,Acme Pvt Ltd,\n18/01/2026,expense,Weekly groceries,2400,BigBasket,'
 
 function downloadTemplate() {
   const csv = `${TEMPLATE_HEADERS.join(',')}\n${TEMPLATE_EXAMPLE}\n`
@@ -26,15 +25,24 @@ function downloadTemplate() {
   URL.revokeObjectURL(url)
 }
 
-// Matches a CSV row's free-text category name against the real category list (case-insensitive,
-// scoped to the right income/expense type) — there's no per-row "create if missing" here, since
-// silently minting a category per typo'd CSV value would pollute the real category list; an
-// unmatched name just leaves the entry uncategorized instead.
-function resolveCategoryId(name, entryType, categories) {
+// The single "Category" column has to double as the type signal too, since asking for a separate
+// "Type" mapping just to hold literal "Income"/"Expense"/"Capital" values (rather than a real
+// category name) is exactly what made this confusing — some banks/exports genuinely only carry a
+// column like that. So this first checks whether the mapped text IS a type keyword; only if it
+// isn't does it try to match it against a real category name (any type — whichever the matched
+// category itself is — since there's no separate "type" input left to scope the search with).
+function detectTypeKeyword(text) {
+  if (text.includes('income') || text === 'cr' || text === 'credit') return 'income'
+  if (text.includes('capital')) return 'capital'
+  if (text.includes('expense') || text === 'dr' || text === 'debit') return 'expense'
+  return null
+}
+
+// No per-row "create if missing" here — silently minting a category per typo'd CSV value would
+// pollute the real category list; an unmatched name just leaves the entry uncategorized instead.
+function findCategoryByName(name, categories) {
   if (!name) return null
-  const type = entryType === 'expense' ? 'expense' : 'income'
-  const match = categories.find((c) => c.type === type && c.name.toLowerCase() === name.toLowerCase())
-  return match?.id || null
+  return categories.find((c) => c.name.toLowerCase() === name.toLowerCase()) || null
 }
 
 export function MoneyProfileBulkImport({ open, onClose, onImported, profile, categories = [], toast }) {
@@ -44,17 +52,15 @@ export function MoneyProfileBulkImport({ open, onClose, onImported, profile, cat
     const rawAmount = String(r[mapping.amount] || '').replace(/[,₹\s]/g, '')
     const amount = Number(rawAmount)
     const description = String(r[mapping.description] || '').trim().slice(0, 200)
-    const rawType = (mapping.entry_type ? String(r[mapping.entry_type] || '').toLowerCase() : '')
-    let entry_type = 'expense'
-    if (rawType.includes('income') || rawType === 'cr' || rawType === 'credit') entry_type = 'income'
-    else if (rawType.includes('capital')) entry_type = 'capital'
-    else if (rawType.includes('expense') || rawType === 'dr' || rawType === 'debit') entry_type = 'expense'
-    else if (rawAmount.startsWith('-')) entry_type = 'expense'
+    const rawCategory = mapping.category ? String(r[mapping.category] || '').trim() : ''
+    const keywordType = detectTypeKeyword(rawCategory.toLowerCase())
+    const matchedCategory = keywordType ? null : findCategoryByName(rawCategory, categories)
+    const entry_type = keywordType || matchedCategory?.type || 'expense'
     let date = r[mapping.date] || todayISO()
     const m = String(date).match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/)
     if (m) { const y = m[3].length === 2 ? `20${m[3]}` : m[3]; date = `${y}-${String(m[2]).padStart(2, '0')}-${String(m[1]).padStart(2, '0')}` }
-    const categoryName = mapping.category ? String(r[mapping.category] || '').trim() || null : null
-    const category_id = resolveCategoryId(categoryName, entry_type, categories)
+    const category_id = matchedCategory?.id || null
+    const categoryName = keywordType ? null : (rawCategory || null)
     const paid_party = mapping.paid_party ? String(r[mapping.paid_party] || '').trim() || null : null
     const notes = mapping.notes ? String(r[mapping.notes] || '').trim() || null : null
     const valid = !!description && !!amount && !isNaN(amount)
@@ -70,7 +76,7 @@ export function MoneyProfileBulkImport({ open, onClose, onImported, profile, cat
       title="Bulk import entries"
       subtitle={`Into ${profile.name} · review before importing`}
       itemLabel="entry"
-      uploadHint="Columns: date, type (income/capital/expense), category, description, amount, paid to / received from"
+      uploadHint="Columns: date, category (or type — income/capital/expense), description, amount, paid to / received from"
       fields={FIELDS}
       parseRow={parseRow}
       invalidLabel="missing description/amount, will be skipped"
