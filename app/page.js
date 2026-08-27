@@ -2516,7 +2516,7 @@ function Shell({ user, onLogout }) {
   const moduleSettings = resolveModuleSettings(data.profile)
   const nav = [
     { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { key: 'transactions', label: 'Transactions', icon: BarChart3 },
+    { key: 'transactions', label: 'Transactions', icon: ArrowLeftRight },
     { key: 'accounts', label: 'Accounts', icon: Landmark },
     ...orderedEnabledKeys(moduleSettings).filter((k) => NAV_META[k]).map((k) => NAV_META[k]),
   ]
