@@ -4,7 +4,7 @@ import { useState } from 'react'
 import {
   BarChart3, Bell, Briefcase, ChevronDown, CreditCard, Heart, KeyRound, Landmark,
   LayoutDashboard, Link2, LineChart, Mountain, Palette, Play, Repeat, ShieldAlert, ShieldCheck,
-  Smartphone, Star, Tag, Target, TrendingUp, Users,
+  Smartphone, Star, Tag, Target, Trash2, TrendingUp, Users,
 } from 'lucide-react'
 
 const GUIDE = [
@@ -234,7 +234,7 @@ function GuideItem({ item, isOpen, onToggle }) {
   )
 }
 
-export function SettingsUserGuide({ onReplayTour }) {
+export function SettingsUserGuide({ onReplayTour, onClearAllData }) {
   const [openKey, setOpenKey] = useState(null)
 
   return (
@@ -275,6 +275,19 @@ export function SettingsUserGuide({ onReplayTour }) {
           for your own data: keep your login private, only grant access to people you trust, and use CSV
           exports where available if you want your own backup.
         </p>
+        {onClearAllData && (
+          <div className="mt-4 border-t border-white/10 light:border-black/10 pt-4">
+            <button
+              onClick={onClearAllData}
+              className="flex items-center gap-2 rounded-xl border border-rose-400/20 bg-rose-400/10 px-3.5 py-2.5 text-xs font-medium text-rose-300 light:text-rose-700 hover:bg-rose-400/15"
+            >
+              <Trash2 size={14} />Clear all data
+            </button>
+            <p className="mt-2 text-[11px] leading-5 text-slate-500">
+              Permanently deletes every account, transaction, and record you have across the app. This can't be undone.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   )

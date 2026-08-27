@@ -2380,6 +2380,26 @@ function Shell({ user, onLogout }) {
       toast.push('Could not disconnect', 'error')
     }
   }
+  // Irreversible — every account, transaction, and record across every module, gone for good.
+  // Requires being online (there's no offline queue for this), and a full refresh() afterward
+  // so the app repaints from the now-empty server state, the same way it would for a brand new
+  // signup (right down to categories re-seeding themselves via ensureDefaults).
+  const clearAllData = async () => {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) { toast.push('You need to be online to do this', 'error'); return }
+    if (!(await confirm.ask('Permanently delete every account, transaction, and record you have across the app? This cannot be undone.', { confirmLabel: 'Delete everything' }))) return
+    setLoading(true)
+    try {
+      const response = await fetch('/api/account/clear_data', { method: 'POST' })
+      if (!response.ok) { toast.push('Could not clear your data', 'error'); return }
+      await clearSnapshot().catch(() => {})
+      await refresh()
+      toast.push('All your data has been deleted')
+    } catch {
+      toast.push('Could not clear your data', 'error')
+    } finally {
+      setLoading(false)
+    }
+  }
   useEffect(() => { if (data.profile?.theme) setTheme(data.profile.theme) }, [data.profile])
   useEffect(() => { if (data.profile?.accent_color) applyAccentColor(data.profile.accent_color) }, [data.profile?.accent_color])
   // Every non-mandatory module is opt-in — if the one behind the current view gets turned off
@@ -2805,6 +2825,7 @@ function Shell({ user, onLogout }) {
                   onAddRule={addRule} onToggleRule={toggleRule} onDeleteRule={deleteRule}
                   onLogout={onLogout}
                   onReplayTour={() => setForceTour(true)}
+                  onClearAllData={clearAllData}
                 />
               )}
             </div>
