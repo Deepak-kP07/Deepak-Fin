@@ -571,6 +571,11 @@ export const moneyProfileEntries = pgTable('money_profile_entries', {
   date: date('date').notNull().defaultNow(),
   paidParty: text('paid_party'),
   notes: text('notes'),
+  // Per-entry override of which account this mirrors a transaction onto — falls back to the
+  // profile's own linked_account_id when unset, for the (typical) case where every entry in a
+  // profile goes through the same account. Lets a specific entry post to a different account
+  // than the profile's usual link without requiring the whole profile to be relinked.
+  accountId: uuid('account_id').references(() => accounts.id, { onDelete: 'set null' }),
   linkedTransactionId: uuid('linked_transaction_id').references(() => transactions.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
