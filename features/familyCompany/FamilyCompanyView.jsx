@@ -10,10 +10,10 @@ import { MoneyProfileDetailView } from '@/features/familyCompany/MoneyProfileDet
 
 export function FamilyCompanyView({
   data, onAddProfile, onEditProfile, onDeleteProfile,
-  onAddEntry, onEditEntry, onDeleteEntry, onBulkImport, onToggleStatus, onManageAccess, onDetailChange,
+  onAddEntry, onEditEntry, onDeleteEntry, onBulkImport, onToggleStatus, onManageAccess, onSyncBalance, onDetailChange,
   showMoney, onToggleMoney,
 }) {
-  const { money_profiles: profiles = [], money_profile_entries: entries = [], accounts = [], categories = [] } = data
+  const { money_profiles: profiles = [], money_profile_entries: entries = [], accounts = [], categories = [], transactions = [] } = data
   const [selectedProfileId, setSelectedProfileId] = useState(null)
   const selectedProfile = profiles.find((p) => p.id === selectedProfileId)
   useEffect(() => { onDetailChange?.(selectedProfileId) }, [selectedProfileId])
@@ -24,6 +24,7 @@ export function FamilyCompanyView({
         profile={selectedProfile}
         entries={entries.filter((e) => e.profile_id === selectedProfile.id)}
         accounts={accounts}
+        transactions={transactions}
         categories={categoriesFor(selectedProfile, categories)}
         onBack={() => setSelectedProfileId(null)}
         onEdit={onEditProfile}
@@ -34,6 +35,7 @@ export function FamilyCompanyView({
         onBulkImport={onBulkImport}
         onToggleStatus={onToggleStatus}
         onManageAccess={onManageAccess}
+        onSyncBalance={onSyncBalance}
         showMoney={showMoney}
         onToggleMoney={onToggleMoney}
       />

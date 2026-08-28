@@ -33,28 +33,24 @@ async function cardImageFile(frontNode, filename) {
   return new File([blob], filename, { type: 'image/png' })
 }
 
-// Real mobile OS share sheets (Android/iOS) handle a shared image file natively; desktop
-// Chrome's navigator.share for files goes through a much shakier bridge that (at least with
-// WhatsApp Desktop as the target) both duplicates the image and pastes the file's local temp
-// path as raw text glued onto the caption. Gating native file-share to actual mobile devices —
-// not just a narrow viewport, which a resized desktop window can also match — keeps desktop on
-// the download+text fallback below, which has neither problem.
-function isMobileDevice() {
-  return typeof navigator !== 'undefined' && /android|iphone|ipad|ipod/i.test(navigator.userAgent || '')
-}
-
 async function shareItem(item, secrets, frontNode) {
   const text = shareCaption(item, secrets)
   const filename = `${(item.label || 'card').replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase()}.png`
   let file = null
   try { file = await cardImageFile(frontNode, filename) } catch { /* falls through to text-only share below */ }
 
-  if (file && isMobileDevice() && typeof navigator !== 'undefined' && navigator.canShare?.({ files: [file] })) {
+  if (file && typeof navigator !== 'undefined' && navigator.canShare?.({ files: [file] })) {
     try { await navigator.share({ files: [file], title: item.label, text }) } catch { /* user cancelled the share sheet */ }
     return
   }
-  // No file-share support (desktop browsers, some older WebViews) — download the image so it can
-  // be attached manually, and still open the chat with the caption ready to send alongside it.
+  // No native file-share support — text-only share is still a real share (opens the same OS/app
+  // picker, just without the image attached), so it's tried before ever touching the disk.
+  if (typeof navigator !== 'undefined' && navigator.share) {
+    try { await navigator.share({ title: item.label, text }) } catch { /* user cancelled the share sheet */ }
+    return
+  }
+  // No Web Share API at all (very old browser) — the only way left to hand the picture off is a
+  // manual download, so that's reserved for exactly this last-resort case.
   if (file) {
     const url = URL.createObjectURL(file)
     const link = document.createElement('a')
@@ -62,11 +58,7 @@ async function shareItem(item, secrets, frontNode) {
     document.body.appendChild(link); link.click(); link.remove()
     URL.revokeObjectURL(url)
   }
-  if (typeof navigator !== 'undefined' && navigator.share) {
-    try { await navigator.share({ title: item.label, text }) } catch { /* user cancelled the share sheet */ }
-  } else {
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank')
-  }
+  window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank')
 }
 
 // Same flip mechanism as features/credit-cards/CreditCardFlip.jsx (pure CSS 3D transform, no
@@ -154,7 +146,12 @@ export function VaultCardFlip({ item, onEdit, onDelete }) {
           )}
         </div>
 
-        <div className="absolute inset-0 flex flex-col justify-between overflow-hidden rounded-2xl border border-white/10 bg-[#141a28] p-3.5 shadow-lg" style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}>
+        {/* The rounded corners/border/overflow-hidden live on this inner div, kept separate from
+            the outer one carrying the 3D rotation + backface-visibility — putting both on the
+            same element is what left a thin anti-aliasing seam at the card's top/bottom edge on
+            some mobile browsers once the flip settled. */}
+        <div className="absolute inset-0" style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}>
+        <div className="flex h-full w-full flex-col justify-between overflow-hidden rounded-2xl border border-white/10 bg-[#141a28] p-3.5 shadow-lg">
           <div className="min-h-0 flex-1 overflow-y-auto">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
@@ -206,6 +203,7 @@ export function VaultCardFlip({ item, onEdit, onDelete }) {
             <button type="button" onClick={stop(() => onEdit(item))} className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-white/[.06] py-1.5 text-[11px] font-semibold text-white hover:bg-white/[.1]"><Pencil size={12} />Edit</button>
             <button type="button" onClick={stop(() => onDelete(item))} className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-rose-300/20 py-1.5 text-[11px] font-semibold text-rose-300 hover:bg-rose-300/10"><Trash2 size={12} />Delete</button>
           </div>
+        </div>
         </div>
       </div>
     </div>

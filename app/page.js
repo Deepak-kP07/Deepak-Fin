@@ -2162,6 +2162,22 @@ function Shell({ user, onLogout }) {
     return () => { window.removeEventListener('outbox:sync-issue', onSyncIssue); cleanup() }
   }, [])
 
+  // Service worker updates take over silently (skipWaiting + clientsClaim in app/sw.js) — without
+  // this, a tab left open across a deploy just keeps running the old JS with no sign a new version
+  // shipped. `hadController` tells a genuine update (this tab already had a worker controlling it)
+  // apart from the very first-ever visit, where clientsClaim also fires `controllerchange` once
+  // but there's nothing to "update" from yet.
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return
+    const hadController = !!navigator.serviceWorker.controller
+    const onControllerChange = () => {
+      if (!hadController) return
+      toast.push('A new version is available.', 'info', { persist: true, action: { label: 'Refresh', onClick: () => window.location.reload() } })
+    }
+    navigator.serviceWorker.addEventListener('controllerchange', onControllerChange)
+    return () => navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange)
+  }, [])
+
   const openTxForm = (t = null, defaultAccountId = '', defaultRepayment = null) => { setTxEditing(t); setTxDefaultAccountId(defaultAccountId); setTxDefaultRepayment(defaultRepayment); setTxFormOpen(true) }
   const closeTxForm = () => { setTxFormOpen(false); setTxEditing(null); setTxDefaultAccountId(''); setTxDefaultRepayment(null) }
   const onTxSaved = async () => { closeTxForm(); await refresh() }
@@ -2512,6 +2528,11 @@ function Shell({ user, onLogout }) {
     const { queued } = await mutate({ table: 'money_profiles', method: 'PATCH', id: p.id, body: { status: nextStatus } })
     toast.push((nextStatus === 'closed' ? 'Profile closed' : 'Profile reactivated') + (queued ? ' — will sync when back online' : ''))
   }
+  const syncMoneyProfileBalance = async (profile, targetBalance) => {
+    const response = await fetch(`/api/finance/money_profiles/${profile.id}/sync_balance`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ target_balance: targetBalance }) })
+    const data = await response.json()
+    if (response.ok) { toast.push('Balance synced'); await refresh() } else { toast.push(data.error || 'Sync failed', 'error') }
+  }
   const openManageAccess = (p) => { setManageAccessProfile(p); setManageAccessOpen(true) }
   const closeManageAccess = () => { setManageAccessOpen(false); setManageAccessProfile(null) }
   // Money rules
@@ -2809,7 +2830,7 @@ function Shell({ user, onLogout }) {
               {view === 'scholarships' && <ScholarshipsView data={data} onAdd={() => openScholarshipForm()} onEdit={openScholarshipForm} onDelete={deleteScholarship} onPay={openScholarshipPay} onRefresh={refresh} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} toast={toast} onDetailChange={setActiveDetailId} />}
               {view === 'loans' && <LoansView data={data} onAdd={() => openLoanForm()} onEdit={openLoanForm} onDelete={deleteLoan} onPay={openLoanPay} onDeletePayment={deleteLoanPayment} onSync={syncLoanOutstanding} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onDetailChange={setActiveDetailId} />}
               {view === 'lend' && <LendBorrowView data={data} onAdd={() => openLendForm()} onEdit={openLendForm} onDelete={deleteLend} onDeleteTx={deleteTx} onLogRepayment={(record) => openTxForm(null, '', { value: `lend:${record.id}`, type: record.type === 'lent' ? 'income' : 'expense' })} onManageAccess={openManageLendAccess} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} toast={toast} onDetailChange={setActiveDetailId} />}
-              {view === 'family_company' && <FamilyCompanyView data={data} onAddProfile={() => openMoneyProfileForm()} onEditProfile={openMoneyProfileForm} onDeleteProfile={deleteMoneyProfile} onAddEntry={openMoneyProfileEntryForm} onEditEntry={openMoneyProfileEntryEdit} onDeleteEntry={deleteMoneyProfileEntry} onBulkImport={openMoneyProfileBulkImport} onToggleStatus={toggleMoneyProfileStatus} onManageAccess={openManageAccess} onDetailChange={setActiveDetailId} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
+              {view === 'family_company' && <FamilyCompanyView data={data} onAddProfile={() => openMoneyProfileForm()} onEditProfile={openMoneyProfileForm} onDeleteProfile={deleteMoneyProfile} onAddEntry={openMoneyProfileEntryForm} onEditEntry={openMoneyProfileEntryEdit} onDeleteEntry={deleteMoneyProfileEntry} onBulkImport={openMoneyProfileBulkImport} onToggleStatus={toggleMoneyProfileStatus} onManageAccess={openManageAccess} onSyncBalance={syncMoneyProfileBalance} onDetailChange={setActiveDetailId} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'bucket' && <BucketListView data={data} onAdd={() => openBucketForm()} onEdit={openBucketForm} onDelete={deleteBucket} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'insights' && <InsightsView data={data} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'profile' && (

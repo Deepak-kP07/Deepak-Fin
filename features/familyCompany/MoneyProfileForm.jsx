@@ -9,7 +9,7 @@ import { todayISO } from '@/lib/format'
 import { BottomSheet } from '@/components/shared/BottomSheet'
 import { useIsMobile } from '@/hooks/use-mobile'
 
-function MoneyProfileFormFields({ form, setForm, editing, accounts, linkedAccount }) {
+function MoneyProfileFormFields({ form, setForm, editing, accounts }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2">
       <label className="text-sm text-slate-300 light:text-slate-700 sm:col-span-2">Name
@@ -36,22 +36,20 @@ function MoneyProfileFormFields({ form, setForm, editing, accounts, linkedAccoun
         </>
       )}
       <div className="text-[11px] text-slate-500 sm:col-span-2">
-        The opening balance is your real total as of that date. Entries dated before it are only for your own records — they won't change this profile's balance. Anything on or after it does.
+        The current balance is always opening balance plus every entry logged here, regardless of date — so if you're backfilling old entries, add the real total as of before your earliest entry here to avoid double-counting.
       </div>
 
-      {editing ? (
-        <div className="rounded-xl border border-white/10 light:border-black/10 bg-white/[.02] light:bg-black/[.02] px-3 py-2.5 text-xs text-slate-400 light:text-slate-500 sm:col-span-2">
-          {linkedAccount ? <>Linked to <span className="text-white light:text-slate-900">{linkedAccount.name}</span> — every entry here reflects in your Transactions module.</> : 'Not linked to a bank account — entries here stay only in this module.'} Linking can only be set when a profile is created, not changed afterward.
-        </div>
-      ) : (
-        <label className="text-sm text-slate-300 light:text-slate-700 sm:col-span-2">Link to a bank account <span className="text-xs text-slate-500">(optional — can't be changed later)</span>
-          <Select value={form.linked_account_id} onChange={(e) => setForm({ ...form, linked_account_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-[#101621] light:bg-white px-3 py-3 text-white light:text-slate-900 outline-none">
-            <option value="">Don't link — keep this separate</option>
-            {accounts.filter((a) => a.type !== 'debit_card').map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-          </Select>
-          <p className="mt-1.5 text-[11px] text-slate-500">{form.linked_account_id ? 'Every income/capital/expense entry here will also post as a transaction on this account.' : "Entries here won't show up anywhere outside this module."}</p>
-        </label>
-      )}
+      <label className="text-sm text-slate-300 light:text-slate-700 sm:col-span-2">Link to a bank account <span className="text-xs text-slate-500">(optional)</span>
+        <Select value={form.linked_account_id} onChange={(e) => setForm({ ...form, linked_account_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-[#101621] light:bg-white px-3 py-3 text-white light:text-slate-900 outline-none">
+          <option value="">Don't link — keep this separate</option>
+          {accounts.filter((a) => a.type !== 'debit_card').map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+        </Select>
+        <p className="mt-1.5 text-[11px] text-slate-500">
+          {editing
+            ? 'Changing this only affects entries you add from now on — transactions already mirrored from past entries stay exactly as they are, under whichever account was linked when they were logged.'
+            : form.linked_account_id ? 'Every income/capital/expense entry here will also post as a transaction on this account.' : "Entries here won't show up anywhere outside this module."}
+        </p>
+      </label>
 
       <label className="text-sm text-slate-300 light:text-slate-700 sm:col-span-2">Notes <span className="text-xs text-slate-500">(optional)</span>
         <input value={form.notes || ''} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
@@ -70,20 +68,18 @@ export function MoneyProfileForm({ open, onClose, onSaved, editing, accounts, to
   useEffect(() => { setForm(initial) }, [editing, open])
   if (!open) return null
 
-  const linkedAccount = accounts.find((a) => a.id === form.linked_account_id)
-
   const save = async (e) => {
     e.preventDefault(); setBusy(true)
     try {
       const payload = editing
-        ? { name: form.name, profile_type: form.profile_type, opening_balance_date: form.opening_balance_date, notes: form.notes || null }
+        ? { name: form.name, profile_type: form.profile_type, opening_balance_date: form.opening_balance_date, linked_account_id: form.linked_account_id || null, notes: form.notes || null }
         : { ...form, linked_account_id: form.linked_account_id || null, opening_balance: Number(form.opening_balance || 0) }
       const { queued } = await mutate({ table: 'money_profiles', method: editing ? 'PATCH' : 'POST', id: editing?.id, body: payload })
       toast.push((editing ? 'Profile updated' : 'Profile created') + (queued ? ' — will sync when back online' : '')); onSaved()
     } catch (err) { toast.push(err.message, 'error') } finally { setBusy(false) }
   }
 
-  const fieldsProps = { form, setForm, editing, accounts, linkedAccount }
+  const fieldsProps = { form, setForm, editing, accounts }
   const submitButton = <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : editing ? 'Update profile' : 'Create profile'}</button>
 
   if (isMobile) {

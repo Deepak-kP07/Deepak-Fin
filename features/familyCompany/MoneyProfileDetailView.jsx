@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { ChevronRight, Download, Eye, EyeOff, Link2, Lock, MoreVertical, Pencil, Trash2, Unlock, UserPlus, Upload, Users, Wallet } from 'lucide-react'
+import { ChevronRight, Download, Eye, EyeOff, Landmark, Link2, Lock, MoreVertical, Pencil, RefreshCw, Trash2, Unlock, UserPlus, Upload, Users, Wallet } from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { HeroStatTile } from '@/components/shared/HeroStatTile'
 import { MonthCursor } from '@/components/shared/MonthCursor'
@@ -11,16 +11,31 @@ import { downloadFamilyCompanyExport } from '@/lib/exportFamilyCompany'
 import { MONTH_NAMES, capitalizeFirst, formatDate, money } from '@/lib/format'
 
 export function MoneyProfileDetailView({
-  profile, entries, accounts, categories = [], onBack, onEdit, onDelete,
-  onAddEntry, onEditEntry, onDeleteEntry, onBulkImport, onToggleStatus, onManageAccess,
+  profile, entries, accounts, categories = [], transactions = [], onBack, onEdit, onDelete,
+  onAddEntry, onEditEntry, onDeleteEntry, onBulkImport, onToggleStatus, onManageAccess, onSyncBalance,
   showMoney, onToggleMoney,
 }) {
   const categoryById = (id) => categories.find((c) => c.id === id)
+  // Resolved per entry rather than just showing the profile's *current* linked account — a
+  // relinked profile's older entries stay mirrored to whichever account they actually posted to
+  // (see moneyProfileCrud.js's mirror function), so this can genuinely differ entry to entry.
+  const bankForEntry = (e) => {
+    if (!e.linked_transaction_id) return null
+    const tx = transactions.find((t) => t.id === e.linked_transaction_id)
+    return tx ? accounts.find((a) => a.id === tx.account_id) : null
+  }
   const role = roleFor(profile)
+  const [syncOpen, setSyncOpen] = useState(false)
+  const [syncValue, setSyncValue] = useState('')
+  const [syncBusy, setSyncBusy] = useState(false)
   // Stat cards below always use every entry (life-to-date totals), same split
   // PortfolioDetailView uses for cash activity — but the Entries table AND the Export button
   // both follow the month cursor, so what you export always matches what's on screen.
   const { opening, income, capital, expense, balance } = profileTotals(profile, entries)
+  const now = new Date()
+  const thisMonthEntries = entries.filter((e) => { const d = new Date(e.date); return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() })
+  const thisMonthIncome = thisMonthEntries.reduce((s, e) => s + (e.entry_type === 'income' ? Number(e.amount) : 0), 0)
+  const thisMonthExpense = thisMonthEntries.reduce((s, e) => s + (e.entry_type === 'expense' ? Number(e.amount) : 0), 0)
   const linkedAccount = accounts.find((a) => a.id === profile.linked_account_id)
   const sorted = [...entries].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
   const isClosed = profile.status === 'closed'
@@ -100,6 +115,9 @@ export function MoneyProfileDetailView({
             {moreOpen && (
               <div className="absolute right-0 z-30 mt-2 w-56 rounded-xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-1 shadow-2xl">
                 {canWriteEntries(role) && (
+                  <button type="button" disabled={isClosed} onClick={() => { setMoreOpen(false); setSyncOpen((o) => !o) }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-slate-300 light:text-slate-700 hover:bg-white/5 disabled:opacity-40"><RefreshCw size={14} />Sync</button>
+                )}
+                {canWriteEntries(role) && (
                   <button type="button" disabled={isClosed} onClick={() => { setMoreOpen(false); onBulkImport(profile) }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-slate-300 light:text-slate-700 hover:bg-white/5 disabled:opacity-40"><Download size={14} />Bulk import</button>
                 )}
                 <button type="button" disabled={monthEntries.length === 0} onClick={() => { setMoreOpen(false); exportThisProfile() }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-slate-300 light:text-slate-700 hover:bg-white/5 disabled:opacity-50"><Upload size={14} />Export</button>
@@ -127,6 +145,9 @@ export function MoneyProfileDetailView({
           )}
           {/* Desktop: every secondary action stays inline; mobile reaches them via the "..." menu above */}
           <div className="hidden sm:contents">
+            {canWriteEntries(role) && (
+              <button onClick={() => setSyncOpen((o) => !o)} disabled={isClosed} title={isClosed ? 'Reactivate this profile to sync its balance' : undefined} className={`flex items-center gap-1.5 rounded-xl border px-3 py-2.5 text-sm font-medium transition disabled:opacity-40 ${syncOpen ? 'border-accent-300/40 bg-accent-400/10 text-accent-200 light:text-accent-700' : 'border-white/10 light:border-black/10 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900'}`}><RefreshCw size={15} /><span className="hidden sm:inline">Sync</span></button>
+            )}
             {canWriteEntries(role) && (
               <button onClick={() => onBulkImport(profile)} disabled={isClosed} title={isClosed ? 'Reactivate this profile to add entries' : undefined} className="flex items-center gap-2 rounded-xl border border-white/10 light:border-black/10 px-4 py-2.5 text-sm font-medium text-slate-300 light:text-slate-700 hover:bg-white/5 disabled:opacity-40"><Download size={14} />Bulk import</button>
             )}
@@ -157,9 +178,52 @@ export function MoneyProfileDetailView({
         </div>
       </div>
 
+      {syncOpen && (
+        <div className="rounded-xl border border-accent-300/20 bg-accent-400/[.03] p-4">
+          <div className="text-sm text-slate-300 light:text-slate-700">Sync with the real balance</div>
+          <div className="mt-1 text-[11px] text-slate-500">If the real balance (a bank statement, or however you're tracking this outside the app) shows a different number, enter it here and it'll be reconciled with a labeled entry — no need to hunt for what's missing.</div>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <input type="number" step="0.01" value={syncValue} onChange={(e) => setSyncValue(e.target.value)} placeholder={String(Math.round(balance))} className="w-40 rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-2 text-sm text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
+            <button
+              type="button"
+              disabled={syncBusy || !syncValue}
+              onClick={async () => {
+                setSyncBusy(true)
+                await onSyncBalance(profile, Number(syncValue))
+                setSyncBusy(false); setSyncOpen(false); setSyncValue('')
+              }}
+              className="rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-4 py-2 text-sm font-semibold text-[#07101c] disabled:opacity-50"
+            >{syncBusy ? 'Syncing…' : 'Sync'}</button>
+            {syncValue && (
+              <span className="text-[11px] text-slate-500">
+                {Number(syncValue) < balance ? `${money(balance - Number(syncValue))} lower than tracked` : Number(syncValue) > balance ? `${money(Number(syncValue) - balance)} higher than tracked` : 'Matches already'}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
       <DismissibleBanner id={`money-profile-linked-${profile.id}-${linkedAccount?.id || 'none'}`} tone="cyan">
         {linkedAccount ? <>Linked to <b>{linkedAccount.name}</b> — every entry here also posts as a transaction on that account and counts toward your net worth.</> : 'Not linked to a bank account — entries here stay only in this module and never affect your other totals.'}
       </DismissibleBanner>
+
+      {/* Desktop only for now — the linked account's own details (bank, last 4, its own current
+          balance), not just the name in the banner above. */}
+      {linkedAccount && (
+        <div className="hidden items-center gap-4 rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card p-5 sm:flex">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl" style={{ background: `${linkedAccount.color || '#22d3ee'}22`, color: linkedAccount.color || '#22d3ee' }}>
+            {linkedAccount.type === 'cash' ? <Wallet size={20} /> : <Landmark size={20} />}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-semibold text-white light:text-slate-900">{linkedAccount.name}</div>
+            <div className="truncate text-xs capitalize text-slate-500">{linkedAccount.type.replace('_', ' ')}{linkedAccount.bank_name ? ` · ${linkedAccount.bank_name}` : ''}{linkedAccount.account_number_last4 ? ` · •${linkedAccount.account_number_last4}` : ''}</div>
+          </div>
+          <div className="shrink-0 text-right">
+            <div className="text-xs text-slate-500">Account balance</div>
+            <div className="text-sm font-semibold text-white light:text-slate-900">{showMoney ? money(linkedAccount.current_balance) : '••••'}</div>
+          </div>
+        </div>
+      )}
 
       {isClosed && (
         <DismissibleBanner id={`money-profile-closed-${profile.id}`} tone="amber">
@@ -171,10 +235,22 @@ export function MoneyProfileDetailView({
         <div className="text-xs uppercase tracking-widest text-slate-500">Current balance</div>
         <div className="mt-1 text-[clamp(2rem,6vw,3rem)] font-semibold leading-[1.1] tracking-[-0.01em] text-white light:text-slate-900">{showMoney ? money(balance) : '••••••'}</div>
         <div className="mt-1 text-sm text-slate-500">Opening {showMoney ? money(opening) : '••••'}</div>
-        <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
+
+        {/* Mobile: Total capital dropped (least glanceable of the five) so the remaining four
+            fit two-per-row, same shape as the mobile dashboard's own stat rows. Desktop: all
+            five inline, capital included. */}
+        <div className="mt-5 grid grid-cols-2 gap-3 sm:hidden">
+          <HeroStatTile label="Total income" value={showMoney ? money(income) : '••••'} valueTone="text-emerald-300 light:text-emerald-700" />
+          <HeroStatTile label="Total expense" value={showMoney ? money(expense) : '••••'} valueTone="text-rose-300 light:text-rose-700" />
+          <HeroStatTile label="This month income" value={showMoney ? money(thisMonthIncome) : '••••'} valueTone="text-emerald-300 light:text-emerald-700" />
+          <HeroStatTile label="This month expense" value={showMoney ? money(thisMonthExpense) : '••••'} valueTone="text-rose-300 light:text-rose-700" />
+        </div>
+        <div className="mt-5 hidden gap-3 sm:grid sm:grid-cols-3 lg:grid-cols-5">
           <HeroStatTile label="Total income" value={showMoney ? money(income) : '••••'} valueTone="text-emerald-300 light:text-emerald-700" />
           <HeroStatTile label="Total capital" value={showMoney ? money(capital) : '••••'} valueTone="text-accent-300 light:text-accent-700" />
           <HeroStatTile label="Total expense" value={showMoney ? money(expense) : '••••'} valueTone="text-rose-300 light:text-rose-700" />
+          <HeroStatTile label="This month income" value={showMoney ? money(thisMonthIncome) : '••••'} valueTone="text-emerald-300 light:text-emerald-700" />
+          <HeroStatTile label="This month expense" value={showMoney ? money(thisMonthExpense) : '••••'} valueTone="text-rose-300 light:text-rose-700" />
         </div>
       </div>
 
@@ -225,6 +301,7 @@ export function MoneyProfileDetailView({
                     <th className="px-3 py-3 text-left">Category</th>
                     <th className="px-3 py-3 text-left">Description</th>
                     <th className="px-3 py-3 text-left">Paid to / Received from</th>
+                    <th className="px-3 py-3 text-left">Bank</th>
                     <th className="px-3 py-3 text-right">Amount</th>
                     <th className="px-5 py-3" />
                   </tr>
@@ -239,6 +316,7 @@ export function MoneyProfileDetailView({
                       </td>
                       <td className="px-3 py-3 text-white light:text-slate-900">{capitalizeFirst(e.description)}{e.notes && <div className="text-[11px] text-slate-500">{capitalizeFirst(e.notes)}</div>}</td>
                       <td className="px-3 py-3 text-slate-400 light:text-slate-500">{capitalizeFirst(e.paid_party) || '—'}</td>
+                      <td className="px-3 py-3 text-slate-400 light:text-slate-500">{bankForEntry(e)?.name || '—'}</td>
                       <td className={`px-3 py-3 text-right font-semibold ${e.entry_type === 'expense' ? 'text-rose-300 light:text-rose-700' : 'text-emerald-300 light:text-emerald-700'}`}>{showMoney ? `${e.entry_type === 'expense' ? '−' : '+'}${money(e.amount)}` : '••••'}</td>
                       <td className="px-5 py-3">
                         <div className="flex justify-end gap-1">
