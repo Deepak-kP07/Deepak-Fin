@@ -74,6 +74,8 @@ import { MoneyProfileEntryForm } from '@/features/familyCompany/MoneyProfileEntr
 import { MoneyProfileBulkImport } from '@/features/familyCompany/MoneyProfileBulkImport'
 import { FamilyCompanyView } from '@/features/familyCompany/FamilyCompanyView'
 import { ManageAccessSheet } from '@/features/familyCompany/ManageAccessSheet'
+import { RecurringEntryManager } from '@/features/familyCompany/RecurringEntryManager'
+import { RecurringEntryForm } from '@/features/familyCompany/RecurringEntryForm'
 import { categoriesFor } from '@/lib/moneyProfiles'
 import { VaultItemForm } from '@/features/vault/VaultItemForm'
 import { InsightsView } from '@/features/insights/InsightsView'
@@ -1990,7 +1992,18 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTx
 
 /* ---------------- Shell (nav + main) ---------------- */
 function Shell({ user, onLogout }) {
-  const [view, setView] = useState('dashboard')
+  // Read once per Shell mount (i.e. once per hard refresh or fresh login), never again —
+  // navigating around normally during the session must not re-trigger a restore. Parsed
+  // synchronously so `view`/`settingsSection` start at their restored values on the very first
+  // render, with no flash of the Dashboard before correcting.
+  const initialNavState = useRef(null)
+  if (initialNavState.current === null) {
+    initialNavState.current = (() => {
+      try { return JSON.parse(localStorage.getItem('financeNavState') || 'null') || {} }
+      catch { return {} }
+    })()
+  }
+  const [view, setView] = useState(() => initialNavState.current.view || 'dashboard')
   const [showMoney, setShowMoney] = useState(true)
   // "Welcome back, X" shows on open, then crossfades to just "X" a couple seconds later — a
   // timer, not a nav-triggered flip, so the transition is actually visible on the dashboard
@@ -2008,7 +2021,16 @@ function Shell({ user, onLogout }) {
   // id from the previous module can't leak into the new one before it reports its own state.
   const [activeDetailId, setActiveDetailId] = useState(null)
   useEffect(() => { setActiveDetailId(null) }, [view])
-  const [data, setData] = useState({ accounts: [], categories: [], transactions: [], budgets: [], portfolios: [], holdings: [], sips: [], other_investments: [], kite_orders: [], loans: [], loan_payments: [], bucket_list: [], lend_borrow: [], lend_repayments: [], credit_cards: [], credit_card_transactions: [], scholarships: [], scholarship_payments: [], money_rules: [], recurring_transactions: [], money_profiles: [], money_profile_entries: [], budget_months: [], budget_month_categories: [], vault_items: [], profile: null })
+  // Every view that supports a drill-down reports its selection back through this wrapper —
+  // besides feeding the FAB logic above, the first report after a restore also consumes
+  // initialNavState's seeded detailId (see the 7 view render sites below), so navigating away
+  // and back to the same module later in this session starts it fresh instead of re-restoring a
+  // now-stale id every time that view remounts.
+  const onDetailChange = (id) => {
+    setActiveDetailId(id)
+    if (initialNavState.current.detailId != null) initialNavState.current = { ...initialNavState.current, detailId: null }
+  }
+  const [data, setData] = useState({ accounts: [], categories: [], transactions: [], budgets: [], portfolios: [], holdings: [], sips: [], other_investments: [], kite_orders: [], loans: [], loan_payments: [], bucket_list: [], lend_borrow: [], lend_repayments: [], credit_cards: [], credit_card_transactions: [], scholarships: [], scholarship_payments: [], money_rules: [], recurring_transactions: [], money_profiles: [], money_profile_entries: [], recurring_money_profile_entries: [], budget_months: [], budget_month_categories: [], vault_items: [], profile: null })
   const [loading, setLoading] = useState(true)
   const [pendingCount, setPendingCount] = useState(0)
   const mutate = useMemo(() => createMutate(setData, setPendingCount), [])
@@ -2086,10 +2108,23 @@ function Shell({ user, onLogout }) {
   const [moneyProfileEntryProfileId, setMoneyProfileEntryProfileId] = useState(null)
   const [moneyProfileBulkImportOpen, setMoneyProfileBulkImportOpen] = useState(false)
   const [moneyProfileBulkImportProfile, setMoneyProfileBulkImportProfile] = useState(null)
+  const [recurringEntryManagerOpen, setRecurringEntryManagerOpen] = useState(false)
+  const [recurringEntryManagerProfile, setRecurringEntryManagerProfile] = useState(null)
+  const [recurringEntryFormOpen, setRecurringEntryFormOpen] = useState(false)
+  const [recurringEntryEditing, setRecurringEntryEditing] = useState(null)
   const [manageAccessOpen, setManageAccessOpen] = useState(false)
   const [manageAccessProfile, setManageAccessProfile] = useState(null)
-  const [settingsSection, setSettingsSection] = useState('profile')
+  const [settingsSection, setSettingsSection] = useState(() => initialNavState.current.settingsSection || 'profile')
   const [moreOpen, setMoreOpen] = useState(false)
+  // Persists whichever module/section/detail-item is current so a hard refresh restores it
+  // instead of always bouncing back to Dashboard — read once at mount above. Keyed off the
+  // resulting state rather than each individual setView/setSettingsSection call site (sidebar,
+  // mobile nav, the More sheet, in-page CTA links, openSettings(), the disabled-module fallback
+  // below), so every way of navigating is covered for free.
+  useEffect(() => {
+    try { localStorage.setItem('financeNavState', JSON.stringify({ view, settingsSection, detailId: activeDetailId })) }
+    catch { /* private browsing / quota — same tolerance as every other localStorage write in this app */ }
+  }, [view, settingsSection, activeDetailId])
   // Forces the spotlight tour back open even though tour_completed_at is already set — flipped on
   // by "Replay tour" in Settings > User guide, flipped back off once the tour closes so it doesn't loop.
   const [forceTour, setForceTour] = useState(false)
@@ -2535,6 +2570,20 @@ function Shell({ user, onLogout }) {
   }
   const openManageAccess = (p) => { setManageAccessProfile(p); setManageAccessOpen(true) }
   const closeManageAccess = () => { setManageAccessOpen(false); setManageAccessProfile(null) }
+  const openRecurringEntryManager = (p) => { setRecurringEntryManagerProfile(p); setRecurringEntryManagerOpen(true) }
+  const closeRecurringEntryManager = () => { setRecurringEntryManagerOpen(false); setRecurringEntryManagerProfile(null) }
+  const openRecurringEntryForm = (r = null) => { setRecurringEntryEditing(r); setRecurringEntryFormOpen(true) }
+  const closeRecurringEntryForm = () => { setRecurringEntryFormOpen(false); setRecurringEntryEditing(null) }
+  const onRecurringEntrySaved = async () => { closeRecurringEntryForm(); await refresh() }
+  const toggleRecurringEntry = async (r) => {
+    const response = await fetch(`/api/finance/recurring_money_profile_entries/${r.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_active: !r.is_active }) })
+    if (response.ok) await refresh(); else toast.push('Update failed', 'error')
+  }
+  const deleteRecurringEntry = async (r) => {
+    if (!(await confirm.ask(`Stop "${r.description}"? Past entries it already created stay put.`, { confirmLabel: 'Stop' }))) return
+    const response = await fetch(`/api/finance/recurring_money_profile_entries/${r.id}`, { method: 'DELETE' })
+    if (response.ok) { toast.push('Recurring rule removed'); await refresh() } else { toast.push('Delete failed', 'error') }
+  }
   // Money rules
   const addRule = async (rule_text) => {
     const nextOrder = (data.money_rules?.[data.money_rules.length - 1]?.order_index ?? 0) + 1
@@ -2823,14 +2872,14 @@ function Shell({ user, onLogout }) {
             <div className={fitScreen ? 'min-h-0 flex-1 lg:overflow-y-auto' : ''}>
               {view === 'dashboard' && <DashboardView data={data} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onOpenTxForm={() => openTxForm()} setView={setView} onManageMoneyRules={() => openSettings('money_rules')} onPayCardBill={openCardPay} />}
               {view === 'transactions' && <TransactionsView data={data} onOpenTxForm={() => openTxForm()} onEditTx={openTxForm} onDeleteTx={deleteTx} onDeleteTxBulk={deleteTxBulk} onImport={() => setCsvOpen(true)} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onOpenRecurring={openRecurringManager} onPayCardBill={openCardPay} />}
-              {view === 'accounts' && <AccountsView data={data} onAdd={() => openAccForm()} onEdit={openAccForm} onDelete={deleteAccount} onDeleteTx={deleteTx} onAddTransaction={(accountId) => openTxForm(null, accountId)} onSyncBalance={syncAccountBalance} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onDetailChange={setActiveDetailId} />}
+              {view === 'accounts' && <AccountsView data={data} onAdd={() => openAccForm()} onEdit={openAccForm} onDelete={deleteAccount} onDeleteTx={deleteTx} onAddTransaction={(accountId) => openTxForm(null, accountId)} onSyncBalance={syncAccountBalance} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onDetailChange={onDetailChange} initialSelectedId={initialNavState.current.detailId} />}
               {view === 'budgets' && <BudgetsView data={data} onSetMonth={openBudgetMonthForm} onCloseMonth={closeBudgetMonth} onReopenMonth={reopenBudgetMonth} onDeleteMonth={deleteBudgetMonth} onAddYearly={() => openBudgetForm()} onEditYearly={openBudgetForm} onDeleteYearly={deleteBudget} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
-              {view === 'investments' && <InvestmentsView data={data} onAddPortfolio={() => openPortfolioForm()} onEditPortfolio={openPortfolioForm} onDeletePortfolio={deletePortfolio} onAddHolding={openHoldingForm} onBulkImport={openBulkImport} onEditHolding={openHoldingEdit} onDeleteHolding={deleteHolding} onRefreshRowPrice={onRefreshRowPrice} onManualPriceEntry={onManualPriceEntry} onRefreshAll={refreshAllPrices} pricesLoading={pricesLoading} onAddFunds={openFundsForm} onWithdrawFunds={openWithdrawForm} onConnectKite={connectKite} onLinkKite={linkPortfolioKite} onUnlinkKite={unlinkPortfolioKite} onSyncKite={syncPortfolioKite} kiteSyncBusy={kiteSyncBusy} onAddSip={openSipForm} onEditSip={openSipForm} onDeleteSip={deleteSip} onSyncSipsKite={syncSipsKite} onAddOtherInvestment={openOtherInvestmentForm} onEditOtherInvestment={openOtherInvestmentEdit} onDeleteOtherInvestment={deleteOtherInvestment} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onDetailChange={setActiveDetailId} />}
-              {view === 'cards' && <CreditCardsView data={data} onAdd={() => openCardForm()} onEdit={openCardForm} onDelete={deleteCard} onSpend={openCardSpend} onPay={openCardPay} onDeleteSpend={deleteCardSpend} onDeleteTx={deleteTx} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onDetailChange={setActiveDetailId} />}
-              {view === 'scholarships' && <ScholarshipsView data={data} onAdd={() => openScholarshipForm()} onEdit={openScholarshipForm} onDelete={deleteScholarship} onPay={openScholarshipPay} onRefresh={refresh} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} toast={toast} onDetailChange={setActiveDetailId} />}
-              {view === 'loans' && <LoansView data={data} onAdd={() => openLoanForm()} onEdit={openLoanForm} onDelete={deleteLoan} onPay={openLoanPay} onDeletePayment={deleteLoanPayment} onSync={syncLoanOutstanding} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onDetailChange={setActiveDetailId} />}
-              {view === 'lend' && <LendBorrowView data={data} onAdd={() => openLendForm()} onEdit={openLendForm} onDelete={deleteLend} onDeleteTx={deleteTx} onLogRepayment={(record) => openTxForm(null, '', { value: `lend:${record.id}`, type: record.type === 'lent' ? 'income' : 'expense' })} onManageAccess={openManageLendAccess} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} toast={toast} onDetailChange={setActiveDetailId} />}
-              {view === 'family_company' && <FamilyCompanyView data={data} onAddProfile={() => openMoneyProfileForm()} onEditProfile={openMoneyProfileForm} onDeleteProfile={deleteMoneyProfile} onAddEntry={openMoneyProfileEntryForm} onEditEntry={openMoneyProfileEntryEdit} onDeleteEntry={deleteMoneyProfileEntry} onBulkImport={openMoneyProfileBulkImport} onToggleStatus={toggleMoneyProfileStatus} onManageAccess={openManageAccess} onSyncBalance={syncMoneyProfileBalance} onDetailChange={setActiveDetailId} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
+              {view === 'investments' && <InvestmentsView data={data} onAddPortfolio={() => openPortfolioForm()} onEditPortfolio={openPortfolioForm} onDeletePortfolio={deletePortfolio} onAddHolding={openHoldingForm} onBulkImport={openBulkImport} onEditHolding={openHoldingEdit} onDeleteHolding={deleteHolding} onRefreshRowPrice={onRefreshRowPrice} onManualPriceEntry={onManualPriceEntry} onRefreshAll={refreshAllPrices} pricesLoading={pricesLoading} onAddFunds={openFundsForm} onWithdrawFunds={openWithdrawForm} onConnectKite={connectKite} onLinkKite={linkPortfolioKite} onUnlinkKite={unlinkPortfolioKite} onSyncKite={syncPortfolioKite} kiteSyncBusy={kiteSyncBusy} onAddSip={openSipForm} onEditSip={openSipForm} onDeleteSip={deleteSip} onSyncSipsKite={syncSipsKite} onAddOtherInvestment={openOtherInvestmentForm} onEditOtherInvestment={openOtherInvestmentEdit} onDeleteOtherInvestment={deleteOtherInvestment} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onDetailChange={onDetailChange} initialSelectedId={initialNavState.current.detailId} />}
+              {view === 'cards' && <CreditCardsView data={data} onAdd={() => openCardForm()} onEdit={openCardForm} onDelete={deleteCard} onSpend={openCardSpend} onPay={openCardPay} onDeleteSpend={deleteCardSpend} onDeleteTx={deleteTx} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onDetailChange={onDetailChange} initialSelectedId={initialNavState.current.detailId} />}
+              {view === 'scholarships' && <ScholarshipsView data={data} onAdd={() => openScholarshipForm()} onEdit={openScholarshipForm} onDelete={deleteScholarship} onPay={openScholarshipPay} onRefresh={refresh} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} toast={toast} onDetailChange={onDetailChange} initialSelectedId={initialNavState.current.detailId} />}
+              {view === 'loans' && <LoansView data={data} onAdd={() => openLoanForm()} onEdit={openLoanForm} onDelete={deleteLoan} onPay={openLoanPay} onDeletePayment={deleteLoanPayment} onSync={syncLoanOutstanding} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onDetailChange={onDetailChange} initialSelectedId={initialNavState.current.detailId} />}
+              {view === 'lend' && <LendBorrowView data={data} onAdd={() => openLendForm()} onEdit={openLendForm} onDelete={deleteLend} onDeleteTx={deleteTx} onLogRepayment={(record) => openTxForm(null, '', { value: `lend:${record.id}`, type: record.type === 'lent' ? 'income' : 'expense' })} onManageAccess={openManageLendAccess} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} toast={toast} onDetailChange={onDetailChange} initialSelectedId={initialNavState.current.detailId} />}
+              {view === 'family_company' && <FamilyCompanyView data={data} onAddProfile={() => openMoneyProfileForm()} onEditProfile={openMoneyProfileForm} onDeleteProfile={deleteMoneyProfile} onAddEntry={openMoneyProfileEntryForm} onEditEntry={openMoneyProfileEntryEdit} onDeleteEntry={deleteMoneyProfileEntry} onBulkImport={openMoneyProfileBulkImport} onToggleStatus={toggleMoneyProfileStatus} onManageAccess={openManageAccess} onSyncBalance={syncMoneyProfileBalance} onOpenRecurring={openRecurringEntryManager} onDetailChange={onDetailChange} initialSelectedId={initialNavState.current.detailId} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'bucket' && <BucketListView data={data} onAdd={() => openBucketForm()} onEdit={openBucketForm} onDelete={deleteBucket} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'insights' && <InsightsView data={data} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'profile' && (
@@ -2928,6 +2977,18 @@ function Shell({ user, onLogout }) {
       <MoneyProfileEntryForm open={moneyProfileEntryFormOpen} onClose={closeMoneyProfileEntryForm} onSaved={onMoneyProfileEntrySaved} editing={moneyProfileEntryEditing} profile={data.money_profiles?.find((p) => p.id === moneyProfileEntryProfileId)} accounts={data.accounts} categories={categoriesFor(data.money_profiles?.find((p) => p.id === moneyProfileEntryProfileId) || {}, data.categories)} onAddCategory={(data.money_profiles?.find((p) => p.id === moneyProfileEntryProfileId)?.my_role || 'owner') === 'owner' ? () => openCatForm() : undefined} toast={toast} />
       <MoneyProfileBulkImport open={moneyProfileBulkImportOpen} onClose={closeMoneyProfileBulkImport} onImported={onMoneyProfileBulkImported} profile={moneyProfileBulkImportProfile} categories={categoriesFor(moneyProfileBulkImportProfile || {}, data.categories)} toast={toast} />
       <ManageAccessSheet open={manageAccessOpen} onClose={closeManageAccess} profile={manageAccessProfile} toast={toast} />
+      <RecurringEntryManager
+        open={recurringEntryManagerOpen} onClose={closeRecurringEntryManager} profile={recurringEntryManagerProfile}
+        rules={(data.recurring_money_profile_entries || []).filter((r) => r.profile_id === recurringEntryManagerProfile?.id)}
+        onAdd={() => openRecurringEntryForm()} onEdit={openRecurringEntryForm} onToggle={toggleRecurringEntry} onDelete={deleteRecurringEntry}
+        showMoney={showMoney}
+      />
+      <RecurringEntryForm
+        open={recurringEntryFormOpen} onClose={closeRecurringEntryForm} onSaved={onRecurringEntrySaved} editing={recurringEntryEditing}
+        profile={recurringEntryManagerProfile} accounts={data.accounts}
+        categories={categoriesFor(recurringEntryManagerProfile || {}, data.categories)}
+        toast={toast}
+      />
     </div>
   )
 }
@@ -2977,7 +3038,7 @@ function AppInner() {
   }, [])
   if (user === undefined) return <LoadingScreen />
   if (!user) return <AuthScreen onAuth={setUser} initialError={authError} />
-  return <Shell user={user} onLogout={async () => { await fetch('/api/auth/logout', { method: 'POST' }); await clearSnapshot().catch(() => {}); setTheme('dark'); setUser(null) }} />
+  return <Shell user={user} onLogout={async () => { await fetch('/api/auth/logout', { method: 'POST' }); await clearSnapshot().catch(() => {}); setTheme('dark'); try { localStorage.removeItem('financeNavState') } catch {}; setUser(null) }} />
 }
 
 // Respects prefers-reduced-motion for every Framer Motion animation in the app (pulse loading,

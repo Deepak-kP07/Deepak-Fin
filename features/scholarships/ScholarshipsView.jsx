@@ -8,9 +8,9 @@ import { capitalizeFirst, formatDate, money } from '@/lib/format'
 import { scholarshipDisplayStatus } from '@/lib/scholarships'
 import { ScholarshipDetailView } from '@/features/scholarships/ScholarshipDetailView'
 
-export function ScholarshipsView({ data, onAdd, onEdit, onDelete, onPay, onRefresh, showMoney, onToggleMoney, toast, onDetailChange }) {
+export function ScholarshipsView({ data, onAdd, onEdit, onDelete, onPay, onRefresh, showMoney, onToggleMoney, toast, onDetailChange, initialSelectedId }) {
   const { scholarships, scholarship_payments, transactions, accounts } = data
-  const [selectedId, setSelectedId] = useState(null)
+  const [selectedId, setSelectedId] = useState(initialSelectedId ?? null)
   const selected = scholarships.find((s) => s.id === selectedId)
   useEffect(() => { onDetailChange?.(selectedId) }, [selectedId])
 

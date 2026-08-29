@@ -10,11 +10,11 @@ import { MoneyProfileDetailView } from '@/features/familyCompany/MoneyProfileDet
 
 export function FamilyCompanyView({
   data, onAddProfile, onEditProfile, onDeleteProfile,
-  onAddEntry, onEditEntry, onDeleteEntry, onBulkImport, onToggleStatus, onManageAccess, onSyncBalance, onDetailChange,
-  showMoney, onToggleMoney,
+  onAddEntry, onEditEntry, onDeleteEntry, onBulkImport, onToggleStatus, onManageAccess, onSyncBalance, onOpenRecurring, onDetailChange,
+  showMoney, onToggleMoney, initialSelectedId,
 }) {
   const { money_profiles: profiles = [], money_profile_entries: entries = [], accounts = [], categories = [], transactions = [] } = data
-  const [selectedProfileId, setSelectedProfileId] = useState(null)
+  const [selectedProfileId, setSelectedProfileId] = useState(initialSelectedId ?? null)
   const selectedProfile = profiles.find((p) => p.id === selectedProfileId)
   useEffect(() => { onDetailChange?.(selectedProfileId) }, [selectedProfileId])
 
@@ -36,6 +36,7 @@ export function FamilyCompanyView({
         onToggleStatus={onToggleStatus}
         onManageAccess={onManageAccess}
         onSyncBalance={onSyncBalance}
+        onOpenRecurring={onOpenRecurring}
         showMoney={showMoney}
         onToggleMoney={onToggleMoney}
       />

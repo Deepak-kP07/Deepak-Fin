@@ -232,6 +232,14 @@
           "features/familyCompany/MoneyProfileBulkImport.jsx"
         ],
         "createdAt": "2026-08-27T14:57:15.199Z"
+      },
+      {
+        "rule": "gray-on-color",
+        "value": "text-rose-300/70 on transparent (delete icon button)",
+        "files": [
+          "features/familyCompany/RecurringEntryManager.jsx"
+        ],
+        "createdAt": "2026-08-28T03:37:00.390Z"
       }
     ]
   }

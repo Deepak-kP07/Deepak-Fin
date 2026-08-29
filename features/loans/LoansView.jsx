@@ -7,9 +7,9 @@ import { EmptyState } from '@/components/shared/EmptyState'
 import { HeroStatTile } from '@/components/shared/HeroStatTile'
 import { LoanDetailView } from '@/features/loans/LoanDetailView'
 
-export function LoansView({ data, onAdd, onEdit, onDelete, onPay, onDeletePayment, onSync, showMoney, onToggleMoney, onDetailChange }) {
+export function LoansView({ data, onAdd, onEdit, onDelete, onPay, onDeletePayment, onSync, showMoney, onToggleMoney, onDetailChange, initialSelectedId }) {
   const { loans, loan_payments, accounts } = data
-  const [selectedLoanId, setSelectedLoanId] = useState(null)
+  const [selectedLoanId, setSelectedLoanId] = useState(initialSelectedId ?? null)
   const selectedLoan = loans.find((l) => l.id === selectedLoanId)
   useEffect(() => { onDetailChange?.(selectedLoanId) }, [selectedLoanId])
 

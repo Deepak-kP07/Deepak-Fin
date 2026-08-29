@@ -7,11 +7,11 @@ import { HeroStatTile } from '@/components/shared/HeroStatTile'
 import { capitalizeFirst, formatDate, money } from '@/lib/format'
 import { LendBorrowDetailView } from '@/features/lend-borrow/LendBorrowDetailView'
 
-export function LendBorrowView({ data, onAdd, onEdit, onDelete, onDeleteTx, onLogRepayment, onManageAccess, showMoney, onToggleMoney, toast, onDetailChange }) {
+export function LendBorrowView({ data, onAdd, onEdit, onDelete, onDeleteTx, onLogRepayment, onManageAccess, showMoney, onToggleMoney, toast, onDetailChange, initialSelectedId }) {
   const { lend_borrow, lend_repayments, accounts, transactions } = data
   const now = new Date()
   const [showHistory, setShowHistory] = useState(false)
-  const [selectedId, setSelectedId] = useState(null)
+  const [selectedId, setSelectedId] = useState(initialSelectedId ?? null)
   const selected = lend_borrow.find((l) => l.id === selectedId)
   useEffect(() => { onDetailChange?.(selectedId) }, [selectedId])
 

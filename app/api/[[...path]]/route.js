@@ -9,6 +9,7 @@ import { applyOrder } from '@/lib/server/applyOrder'
 import { ensureDefaults, ensureCategory } from '@/lib/server/services/categories'
 import { applyLendRepayment, reverseLendRepayment } from '@/lib/server/services/lendRepayment'
 import { addInterval, generateDueRecurring } from '@/lib/server/services/recurring'
+import { generateDueRecurringMoneyProfileEntries } from '@/lib/server/services/recurringMoneyProfileEntries'
 import { syncProfileFromAuth } from '@/lib/server/services/profile'
 import { syncPortfolioFromKite, syncMutualFundsFromKite, syncKiteOrders, isKiteTokenFresh } from '@/lib/server/services/kiteSync'
 import { encryptVaultPayload, decryptVaultPayload } from '@/lib/server/vaultCrypto'
@@ -129,7 +130,7 @@ async function handleRoute(request, { params }) {
       // A single indexed UPDATE, no-op when nothing's stale — cheap enough to run unconditionally
       // on every load rather than gating it behind a staleness check like the Kite syncs below.
       await closeStaleBudgetMonths(supabase, user.id).catch(() => {})
-      let [accounts, categories, transactions, budgets, portfolios, holdings, sips, other_investments, kite_orders, loans, loan_payments, bucket_list, lend_borrow, lend_repayments, credit_cards, credit_card_transactions, scholarships, scholarship_payments, money_rules, recurring_transactions, money_profiles, money_profile_entries, budget_months, budget_month_categories, vault_items, profile] = await Promise.all([
+      let [accounts, categories, transactions, budgets, portfolios, holdings, sips, other_investments, kite_orders, loans, loan_payments, bucket_list, lend_borrow, lend_repayments, credit_cards, credit_card_transactions, scholarships, scholarship_payments, money_rules, recurring_transactions, money_profiles, money_profile_entries, recurring_money_profile_entries, budget_months, budget_month_categories, vault_items, profile] = await Promise.all([
         readAll('accounts'),
         readAll('categories'),
         readAll('transactions'),
@@ -157,6 +158,7 @@ async function handleRoute(request, { params }) {
         // money_profiles/money_profile_entries routes use (lib/server/moneyProfileCrud.js).
         listMoneyProfiles(supabase, user),
         listMoneyProfileEntries(supabase),
+        readAll('recurring_money_profile_entries'),
         readAll('budget_months'),
         readAll('budget_month_categories'),
         readAll('vault_items'),
@@ -175,6 +177,10 @@ async function handleRoute(request, { params }) {
       if (recurring_transactions.some((r) => r.is_active && r.next_due_date <= today)) {
         await generateDueRecurring(supabase, user.id).catch(() => {})
         ;[transactions, recurring_transactions] = await Promise.all([readAll('transactions'), readAll('recurring_transactions')])
+      }
+      if (recurring_money_profile_entries.some((r) => r.is_active && r.next_due_date <= today)) {
+        await generateDueRecurringMoneyProfileEntries(supabase, user.id).catch(() => {})
+        ;[money_profile_entries, recurring_money_profile_entries, transactions] = await Promise.all([listMoneyProfileEntries(supabase), readAll('recurring_money_profile_entries'), readAll('transactions')])
       }
       const kiteTokenFresh = isKiteTokenFresh(profile?.kite_access_token, profile?.kite_access_token_at)
       const staleSince = (iso) => !iso || Date.now() - new Date(iso).getTime() > 30 * 60 * 1000
@@ -216,7 +222,7 @@ async function handleRoute(request, { params }) {
       // Ciphertext never needs to reach the browser on a bulk load — only the dedicated reveal
       // route decrypts a single item, on demand, when its card is actually flipped.
       const vaultItemsSafe = vault_items.map(({ encrypted_payload, ...rest }) => rest)
-      return cors(NextResponse.json({ accounts, categories, transactions, budgets, portfolios, holdings, sips, other_investments, kite_orders, loans, loan_payments, bucket_list, lend_borrow, lend_repayments, credit_cards, credit_card_transactions, scholarships, scholarship_payments, money_rules, recurring_transactions, money_profiles, money_profile_entries, budget_months, budget_month_categories, vault_items: vaultItemsSafe, profile: profileSafe }))
+      return cors(NextResponse.json({ accounts, categories, transactions, budgets, portfolios, holdings, sips, other_investments, kite_orders, loans, loan_payments, bucket_list, lend_borrow, lend_repayments, credit_cards, credit_card_transactions, scholarships, scholarship_payments, money_rules, recurring_transactions, money_profiles, money_profile_entries, recurring_money_profile_entries, budget_months, budget_month_categories, vault_items: vaultItemsSafe, profile: profileSafe }))
     }
 
     // ---- PRICES: Yahoo Finance fallback (public); Kite when creds set ----

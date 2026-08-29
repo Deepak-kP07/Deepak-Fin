@@ -18,10 +18,10 @@ export function InvestmentsView({
   onLinkKite, onUnlinkKite, onSyncKite, kiteSyncBusy,
   onAddSip, onEditSip, onDeleteSip, onSyncSipsKite,
   onAddOtherInvestment, onEditOtherInvestment, onDeleteOtherInvestment,
-  showMoney, onToggleMoney, onDetailChange,
+  showMoney, onToggleMoney, onDetailChange, initialSelectedId,
 }) {
   const { portfolios, holdings, sips = [], other_investments: otherInvestments = [], transactions, kite_orders = [], profile } = data
-  const [selectedPortfolioId, setSelectedPortfolioId] = useState(null)
+  const [selectedPortfolioId, setSelectedPortfolioId] = useState(initialSelectedId ?? null)
   useEffect(() => { onDetailChange?.(selectedPortfolioId) }, [selectedPortfolioId])
   const [linkChoice, setLinkChoice] = useState('')
   // Below xl:, New portfolio/Refresh prices/Export collapse into this one menu instead of

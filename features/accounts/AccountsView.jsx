@@ -8,13 +8,13 @@ import { StatCard } from '@/components/shared/StatCard'
 import { money } from '@/lib/format'
 import { AccountDetailView } from '@/features/accounts/AccountDetailView'
 
-export function AccountsView({ data, onAdd, onEdit, onDelete, onDeleteTx, onDeleteTxBulk, onAddTransaction, onSyncBalance, showMoney, onToggleMoney, onDetailChange }) {
+export function AccountsView({ data, onAdd, onEdit, onDelete, onDeleteTx, onDeleteTxBulk, onAddTransaction, onSyncBalance, showMoney, onToggleMoney, onDetailChange, initialSelectedId }) {
   const { accounts, transactions, categories } = data
   // Debit cards aren't a separate balance — they draw from their linked bank account, so they
   // never get their own tile here; the account they're linked to is where their card face shows.
   const visibleAccounts = accounts.filter((a) => a.type !== 'debit_card')
   const debitCardFor = (accountId) => accounts.find((d) => d.type === 'debit_card' && d.linked_account_id === accountId)
-  const [selectedAccountId, setSelectedAccountId] = useState(null)
+  const [selectedAccountId, setSelectedAccountId] = useState(initialSelectedId ?? null)
   const selectedAccount = visibleAccounts.find((a) => a.id === selectedAccountId)
   useEffect(() => { onDetailChange?.(selectedAccountId) }, [selectedAccountId])
 

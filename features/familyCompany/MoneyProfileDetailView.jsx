@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { ChevronRight, Download, Eye, EyeOff, Landmark, Link2, Lock, MoreVertical, Pencil, RefreshCw, Trash2, Unlock, UserPlus, Upload, Users, Wallet } from 'lucide-react'
+import { ChevronRight, Download, Eye, EyeOff, Landmark, Link2, Lock, MoreVertical, Pencil, RefreshCw, Repeat, Trash2, Unlock, UserPlus, Upload, Users, Wallet } from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { HeroStatTile } from '@/components/shared/HeroStatTile'
 import { MonthCursor } from '@/components/shared/MonthCursor'
@@ -10,9 +10,21 @@ import { ENTRY_TYPE_STYLE, profileTotals, roleFor, canWriteEntries, canDeleteEnt
 import { downloadFamilyCompanyExport } from '@/lib/exportFamilyCompany'
 import { MONTH_NAMES, capitalizeFirst, formatDate, money } from '@/lib/format'
 
+// The tail of the "..." menu (profile-level actions, not entry-level) is identical between the
+// mobile and desktop dropdowns — Sync/Recurring/Bulk import/Export stay individually coded in
+// each since their surrounding context differs slightly (desktop keeps Bulk import/Export inline
+// instead of in the menu), but this shared bit avoids maintaining two copies of the same four.
+function ProfileMenuTail({ items, onDone }) {
+  return items.map((it) => (
+    <button key={it.key} type="button" disabled={it.disabled} onClick={() => { onDone(); it.onClick() }} className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-white/5 disabled:opacity-40 ${it.danger ? 'text-rose-300/70 light:text-rose-700 hover:bg-rose-300/10' : 'text-slate-300 light:text-slate-700'}`}>
+      <it.icon size={14} />{it.label}
+    </button>
+  ))
+}
+
 export function MoneyProfileDetailView({
   profile, entries, accounts, categories = [], transactions = [], onBack, onEdit, onDelete,
-  onAddEntry, onEditEntry, onDeleteEntry, onBulkImport, onToggleStatus, onManageAccess, onSyncBalance,
+  onAddEntry, onEditEntry, onDeleteEntry, onBulkImport, onToggleStatus, onManageAccess, onSyncBalance, onOpenRecurring,
   showMoney, onToggleMoney,
 }) {
   const categoryById = (id) => categories.find((c) => c.id === id)
@@ -66,16 +78,30 @@ export function MoneyProfileDetailView({
     if (canWriteEntries(role)) onEditEntry(e)
   }
 
-  // Mobile header: every secondary action (bulk import, export, manage access, close/reactivate,
-  // edit, delete) collapses into this "..." menu at the top right instead of a second row of
-  // icon buttons — desktop keeps them all inline (see the `hidden sm:contents` block below).
+  // Mobile header: every secondary action (sync, recurring, bulk import, export, manage access,
+  // close/reactivate, edit, delete) collapses into this "..." menu at the top right instead of a
+  // second row of icon buttons. Desktop now does the same for the less-frequently-used tail of
+  // that list (see moreOpenDesktop below) — Bulk import/Export stay inline there since they're
+  // used often enough to warrant one click instead of two.
   const [moreOpen, setMoreOpen] = useState(false)
   const moreRef = useRef(null)
+  const [moreOpenDesktop, setMoreOpenDesktop] = useState(false)
+  const moreRefDesktop = useRef(null)
   useEffect(() => {
-    const onDocClick = (ev) => { if (moreRef.current && !moreRef.current.contains(ev.target)) setMoreOpen(false) }
+    const onDocClick = (ev) => {
+      if (moreRef.current && !moreRef.current.contains(ev.target)) setMoreOpen(false)
+      if (moreRefDesktop.current && !moreRefDesktop.current.contains(ev.target)) setMoreOpenDesktop(false)
+    }
     document.addEventListener('mousedown', onDocClick)
     return () => document.removeEventListener('mousedown', onDocClick)
   }, [])
+  // Shared between both dropdowns — see ProfileMenuTail above.
+  const menuTailItems = [
+    canManageShares(role) && { key: 'access', icon: UserPlus, label: 'Manage access', onClick: () => onManageAccess(profile) },
+    canEditProfile(role) && { key: 'status', icon: isClosed ? Unlock : Lock, label: isClosed ? 'Reactivate profile' : 'Close profile', onClick: () => onToggleStatus(profile) },
+    canEditProfile(role) && { key: 'edit', icon: Pencil, label: 'Edit profile', onClick: () => onEdit(profile) },
+    canDeleteProfile(role) && { key: 'delete', icon: Trash2, label: 'Delete profile', danger: true, onClick: () => onDelete(profile) },
+  ].filter(Boolean)
   const exportThisProfile = () => downloadFamilyCompanyExport(
     { profiles: [profile], entries: monthEntries, categories },
     showAllMonths ? profile.name : `${profile.name} ${MONTH_NAMES[monthCursor.month]} ${monthCursor.year}`,
@@ -118,36 +144,27 @@ export function MoneyProfileDetailView({
                   <button type="button" disabled={isClosed} onClick={() => { setMoreOpen(false); setSyncOpen((o) => !o) }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-slate-300 light:text-slate-700 hover:bg-white/5 disabled:opacity-40"><RefreshCw size={14} />Sync</button>
                 )}
                 {canWriteEntries(role) && (
+                  <button type="button" disabled={isClosed} onClick={() => { setMoreOpen(false); onOpenRecurring(profile) }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-slate-300 light:text-slate-700 hover:bg-white/5 disabled:opacity-40"><Repeat size={14} />Recurring entries</button>
+                )}
+                {canWriteEntries(role) && (
                   <button type="button" disabled={isClosed} onClick={() => { setMoreOpen(false); onBulkImport(profile) }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-slate-300 light:text-slate-700 hover:bg-white/5 disabled:opacity-40"><Download size={14} />Bulk import</button>
                 )}
                 <button type="button" disabled={monthEntries.length === 0} onClick={() => { setMoreOpen(false); exportThisProfile() }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-slate-300 light:text-slate-700 hover:bg-white/5 disabled:opacity-50"><Upload size={14} />Export</button>
-                {canManageShares(role) && (
-                  <button type="button" onClick={() => { setMoreOpen(false); onManageAccess(profile) }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-slate-300 light:text-slate-700 hover:bg-white/5"><UserPlus size={14} />Manage access</button>
-                )}
-                {canEditProfile(role) && (
-                  <button type="button" onClick={() => { setMoreOpen(false); onToggleStatus(profile) }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-slate-300 light:text-slate-700 hover:bg-white/5">{isClosed ? <Unlock size={14} /> : <Lock size={14} />}{isClosed ? 'Reactivate profile' : 'Close profile'}</button>
-                )}
-                {canEditProfile(role) && (
-                  <button type="button" onClick={() => { setMoreOpen(false); onEdit(profile) }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-slate-300 light:text-slate-700 hover:bg-white/5"><Pencil size={14} />Edit profile</button>
-                )}
-                {canDeleteProfile(role) && (
-                  <button type="button" onClick={() => { setMoreOpen(false); onDelete(profile) }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-rose-300/70 light:text-rose-700 hover:bg-rose-300/10"><Trash2 size={14} />Delete profile</button>
-                )}
+                <ProfileMenuTail items={menuTailItems} onDone={() => setMoreOpen(false)} />
               </div>
             )}
           </div>
           </div>
         </div>
 
-        <div className="flex w-full min-w-0 flex-wrap gap-2 sm:w-auto">
+        <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto">
           {canWriteEntries(role) && (
             <button onClick={() => onAddEntry(profile.id)} disabled={isClosed} title={isClosed ? 'Reactivate this profile to add entries' : undefined} className="hidden rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-4 py-2.5 text-sm font-semibold text-[#07101c] disabled:opacity-40 lg:inline-block">+ Add entry</button>
           )}
-          {/* Desktop: every secondary action stays inline; mobile reaches them via the "..." menu above */}
+          {/* Desktop: only the frequently-used actions stay inline (Bulk import, Export, the eye
+              toggle) — Sync, Recurring, Manage access, Close/Reactivate, Edit, and Delete moved
+              into this "..." menu, rightmost in the row, mirroring the mobile menu above. */}
           <div className="hidden sm:contents">
-            {canWriteEntries(role) && (
-              <button onClick={() => setSyncOpen((o) => !o)} disabled={isClosed} title={isClosed ? 'Reactivate this profile to sync its balance' : undefined} className={`flex items-center gap-1.5 rounded-xl border px-3 py-2.5 text-sm font-medium transition disabled:opacity-40 ${syncOpen ? 'border-accent-300/40 bg-accent-400/10 text-accent-200 light:text-accent-700' : 'border-white/10 light:border-black/10 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900'}`}><RefreshCw size={15} /><span className="hidden sm:inline">Sync</span></button>
-            )}
             {canWriteEntries(role) && (
               <button onClick={() => onBulkImport(profile)} disabled={isClosed} title={isClosed ? 'Reactivate this profile to add entries' : undefined} className="flex items-center gap-2 rounded-xl border border-white/10 light:border-black/10 px-4 py-2.5 text-sm font-medium text-slate-300 light:text-slate-700 hover:bg-white/5 disabled:opacity-40"><Download size={14} />Bulk import</button>
             )}
@@ -157,23 +174,25 @@ export function MoneyProfileDetailView({
               title={showAllMonths ? 'Export every entry in this profile' : `Export only ${MONTH_NAMES[monthCursor.month]} ${monthCursor.year}`}
               className="flex items-center gap-2 rounded-xl border border-white/10 light:border-black/10 px-4 py-2.5 text-sm font-medium text-slate-300 light:text-slate-700 hover:bg-white/5 disabled:opacity-50"
             ><Upload size={14} />Export</button>
-            {canManageShares(role) && (
-              <button onClick={() => onManageAccess(profile)} title="Manage who has access" className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900"><UserPlus size={15} /></button>
-            )}
-            {canEditProfile(role) && (
-              <button onClick={() => onToggleStatus(profile)} title={isClosed ? 'Reactivate profile' : 'Close profile'} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900">
-                {isClosed ? <Unlock size={15} /> : <Lock size={15} />}
-              </button>
-            )}
-            {canEditProfile(role) && (
-              <button onClick={() => onEdit(profile)} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900"><Pencil size={15} /></button>
-            )}
-            {canDeleteProfile(role) && (
-              <button onClick={() => onDelete(profile)} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-rose-300/70 light:text-rose-700 hover:bg-rose-300/10"><Trash2 size={15} /></button>
-            )}
             <button onClick={onToggleMoney} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
               {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
             </button>
+            <div ref={moreRefDesktop} className="relative">
+              <button type="button" onClick={() => setMoreOpenDesktop((o) => !o)} className={`rounded-xl border p-2.5 transition ${moreOpenDesktop ? 'border-accent-300/40 bg-accent-400/10 text-accent-200 light:text-accent-700' : 'border-white/10 light:border-black/10 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900'}`} title="More options">
+                <MoreVertical size={16} />
+              </button>
+              {moreOpenDesktop && (
+                <div className="absolute right-0 z-30 mt-2 w-56 rounded-xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-1 shadow-2xl">
+                  {canWriteEntries(role) && (
+                    <button type="button" disabled={isClosed} onClick={() => { setMoreOpenDesktop(false); setSyncOpen((o) => !o) }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-slate-300 light:text-slate-700 hover:bg-white/5 disabled:opacity-40"><RefreshCw size={14} />Sync</button>
+                  )}
+                  {canWriteEntries(role) && (
+                    <button type="button" disabled={isClosed} onClick={() => { setMoreOpenDesktop(false); onOpenRecurring(profile) }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-slate-300 light:text-slate-700 hover:bg-white/5 disabled:opacity-40"><Repeat size={14} />Recurring entries</button>
+                  )}
+                  <ProfileMenuTail items={menuTailItems} onDone={() => setMoreOpenDesktop(false)} />
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

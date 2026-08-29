@@ -585,6 +585,34 @@ export const moneyProfileEntries = pgTable('money_profile_entries', {
   index('money_profile_entries_user_idx').on(t.userId),
 ])
 
+// A recurring rule for a Money Profile — same "generate missed occurrences lazily on next
+// summary fetch" model as recurringTransactions, just landing in money_profile_entries instead
+// of transactions directly (and mirroring onward from there via the existing per-entry account
+// override, when one applies). Kept owner-only (no sharing) — a collaborator can log entries
+// but managing automation for a profile stays the owner's call, same as canDeleteProfile.
+export const recurringMoneyProfileEntries = pgTable('recurring_money_profile_entries', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  profileId: uuid('profile_id').notNull().references(() => moneyProfiles.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
+  entryType: text('entry_type').notNull().default('expense'),
+  categoryId: uuid('category_id').references(() => categories.id, { onDelete: 'set null' }),
+  accountId: uuid('account_id').references(() => accounts.id, { onDelete: 'set null' }),
+  description: text('description').notNull(),
+  amount: numeric('amount', { precision: 14, scale: 2 }).notNull(),
+  notes: text('notes'),
+  paidParty: text('paid_party'),
+  frequency: recurringFrequency('frequency').notNull().default('monthly'),
+  nextDueDate: date('next_due_date').notNull(),
+  isActive: boolean('is_active').notNull().default(true),
+  lastGeneratedDate: date('last_generated_date'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  check('recurring_money_profile_entries_type_check', sql`${t.entryType} in ('income','expense','capital')`),
+  check('recurring_money_profile_entries_amount_check', sql`${t.amount} > 0`),
+  index('recurring_money_profile_entries_profile_idx').on(t.profileId),
+  index('recurring_money_profile_entries_user_idx').on(t.userId),
+])
+
 // A pending or accepted invite for someone else to access a money_profiles row that isn't
 // theirs, at a fixed permission tier. One row's status lifecycle covers both the invite and the
 // resulting share ('pending' -> 'accepted'/'revoked'/'declined') — see
