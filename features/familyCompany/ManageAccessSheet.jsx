@@ -1,12 +1,14 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Mail, UserMinus, X } from 'lucide-react'
+import { Check, Copy, Mail, UserMinus, X } from 'lucide-react'
 import { Select } from '@/components/shared/Select'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { BottomSheet } from '@/components/shared/BottomSheet'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { roleFor } from '@/lib/moneyProfiles'
+import { copyToClipboard } from '@/lib/clipboard'
+import { buildProfileInviteMessage } from '@/lib/inviteMessage'
 
 const ROLE_OPTIONS = [
   { value: 'read', label: 'Read — view only' },
@@ -28,9 +30,20 @@ function statusLabel(share) {
   return map[share.status] || map.revoked
 }
 
-function ManageAccessBody({ profile, shares, loading, viewerRole, email, setEmail, role, setRole, busy, onInvite, onRoleChange, onRevoke }) {
+function ManageAccessBody({ profile, shares, loading, viewerRole, email, setEmail, role, setRole, busy, onInvite, onRoleChange, onRevoke, toast }) {
   const canGrantAdmin = viewerRole === 'owner'
   const live = shares.filter((s) => s.status === 'pending' || s.status === 'accepted')
+  const [copiedId, setCopiedId] = useState(null)
+
+  const onCopy = async (s) => {
+    const acceptUrl = `${window.location.origin}/invite/${s.invite_token}`
+    const message = buildProfileInviteMessage({ profileName: profile.name, role: s.role, invitedEmail: s.invited_email, acceptUrl })
+    const ok = await copyToClipboard(message)
+    if (!ok) { toast.push('Could not copy — try again', 'error'); return }
+    setCopiedId(s.id)
+    toast.push('Invite message copied — paste it anywhere')
+    setTimeout(() => setCopiedId((id) => (id === s.id ? null : id)), 1500)
+  }
 
   return (
     <>
@@ -55,6 +68,7 @@ function ManageAccessBody({ profile, shares, loading, viewerRole, email, setEmai
             {shares.map((s) => {
               const status = statusLabel(s)
               const isAccepted = s.status === 'accepted'
+              const isPendingLive = s.status === 'pending' && status.text === 'Pending'
               // Only the owner can touch (revoke, or change the role of) an existing admin-tier
               // row — an admin collaborator managing this same list can act on read/edit rows only.
               const canTouch = viewerRole === 'owner' || s.role !== 'admin'
@@ -70,6 +84,11 @@ function ManageAccessBody({ profile, shares, loading, viewerRole, email, setEmai
                     </Select>
                   ) : isAccepted && (
                     <span className="rounded-lg border border-white/10 light:border-black/10 px-2.5 py-2 text-xs capitalize text-slate-400 light:text-slate-500">{s.role}</span>
+                  )}
+                  {isPendingLive && (
+                    <button onClick={() => onCopy(s)} title="Copy invite message" className="rounded-lg p-2 text-accent-200 light:text-accent-700 hover:bg-accent-400/10">
+                      {copiedId === s.id ? <Check size={15} /> : <Copy size={15} />}
+                    </button>
                   )}
                   {(s.status === 'pending' || s.status === 'accepted') && canTouch && (
                     <button onClick={() => onRevoke(s)} title="Revoke access" className="rounded-lg p-2 text-rose-300/70 light:text-rose-700 hover:bg-rose-300/10"><UserMinus size={15} /></button>
@@ -135,7 +154,7 @@ export function ManageAccessSheet({ open, onClose, profile, toast }) {
     toast.push('Access revoked'); await load()
   }
 
-  const bodyProps = { profile, shares, loading, viewerRole, email, setEmail, role, setRole, busy, onInvite, onRoleChange, onRevoke }
+  const bodyProps = { profile, shares, loading, viewerRole, email, setEmail, role, setRole, busy, onInvite, onRoleChange, onRevoke, toast }
 
   if (isMobile) {
     return (

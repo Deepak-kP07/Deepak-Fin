@@ -445,6 +445,23 @@ export const lendRepayments = pgTable('lend_repayments', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [check('lend_repayments_amount_check', sql`${t.amount} > 0`), index('lend_repayments_lb_idx').on(t.lendBorrowId), index('lend_repayments_user_idx').on(t.userId)])
 
+// The reverse of lend_repayments — logging that MORE was lent/borrowed against an existing
+// record instead of creating a brand-new one, so a running relationship with the same person
+// stays as one card with a full dated history rather than fragmenting into a separate card per
+// top-up. Bumps lend_borrow.amount up (see lib/server/services/lendAddition.js), the mirror
+// image of how a repayment bumps amount_repaid up toward it.
+export const lendBorrowAdditions = pgTable('lend_borrow_additions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  lendBorrowId: uuid('lend_borrow_id').notNull().references(() => lendBorrow.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
+  amount: numeric('amount', { precision: 14, scale: 2 }).notNull(),
+  date: date('date').notNull().defaultNow(),
+  accountId: uuid('account_id').references(() => accounts.id, { onDelete: 'set null' }),
+  linkedTransactionId: uuid('linked_transaction_id').references(() => transactions.id, { onDelete: 'set null' }),
+  notes: text('notes'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [check('lend_borrow_additions_amount_check', sql`${t.amount} > 0`), index('lend_borrow_additions_lb_idx').on(t.lendBorrowId), index('lend_borrow_additions_user_idx').on(t.userId)])
+
 // Per-record sharing for a single lend_borrow row — same invite/accept/revoke lifecycle as
 // money_profile_shares (see its comment), but only two tiers ('read'/'admin', no 'edit'): logging
 // a repayment stays a real side-effecting write (mirrors a transaction, can touch a credit
@@ -576,6 +593,11 @@ export const moneyProfileEntries = pgTable('money_profile_entries', {
   // profile goes through the same account. Lets a specific entry post to a different account
   // than the profile's usual link without requiring the whole profile to be relinked.
   accountId: uuid('account_id').references(() => accounts.id, { onDelete: 'set null' }),
+  // Alternative funding source to accountId — mutually exclusive with it (the form only lets one
+  // be picked at a time). When set, the mirror function posts the transaction with no account_id
+  // instead, tagged linked_module='credit_card' so it bumps the card's outstanding balance and
+  // shows up in that card's own activity feed, exactly like a regular expense funded by a card.
+  creditCardId: uuid('credit_card_id').references(() => creditCards.id, { onDelete: 'set null' }),
   linkedTransactionId: uuid('linked_transaction_id').references(() => transactions.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
@@ -597,6 +619,7 @@ export const recurringMoneyProfileEntries = pgTable('recurring_money_profile_ent
   entryType: text('entry_type').notNull().default('expense'),
   categoryId: uuid('category_id').references(() => categories.id, { onDelete: 'set null' }),
   accountId: uuid('account_id').references(() => accounts.id, { onDelete: 'set null' }),
+  creditCardId: uuid('credit_card_id').references(() => creditCards.id, { onDelete: 'set null' }),
   description: text('description').notNull(),
   amount: numeric('amount', { precision: 14, scale: 2 }).notNull(),
   notes: text('notes'),

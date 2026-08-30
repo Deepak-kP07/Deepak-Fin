@@ -59,7 +59,12 @@ export function CategoryForm({ open, onClose, onSaved, editing, defaultType, toa
   }
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={onClose}>
+    // z-50, not the usual z-40 — this form is always opened from inside another already-open
+    // z-40 modal (Transaction/Money-profile-entry/Budget-month's own "Add new category" pencil),
+    // so it needs to out-rank that parent rather than tie with it (a z-index tie falls back to
+    // DOM order, and this form's own place in app/page.js's JSX happens to render before those
+    // parents, leaving it stuck behind them).
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={onClose}>
       <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-3xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-6">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-white light:text-slate-900">{editing ? 'Edit category' : 'Add category'}</h2>

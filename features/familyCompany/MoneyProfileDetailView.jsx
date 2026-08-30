@@ -23,7 +23,7 @@ function ProfileMenuTail({ items, onDone }) {
 }
 
 export function MoneyProfileDetailView({
-  profile, entries, accounts, categories = [], transactions = [], onBack, onEdit, onDelete,
+  profile, entries, accounts, creditCards = [], categories = [], transactions = [], onBack, onEdit, onDelete,
   onAddEntry, onEditEntry, onDeleteEntry, onBulkImport, onToggleStatus, onManageAccess, onSyncBalance, onOpenRecurring,
   showMoney, onToggleMoney,
 }) {
@@ -31,10 +31,17 @@ export function MoneyProfileDetailView({
   // Resolved per entry rather than just showing the profile's *current* linked account — a
   // relinked profile's older entries stay mirrored to whichever account they actually posted to
   // (see moneyProfileCrud.js's mirror function), so this can genuinely differ entry to entry.
+  // A card-funded entry's mirrored transaction has no account_id (linked_module='credit_card'
+  // instead) — resolved from creditCards in that case rather than accounts.
   const bankForEntry = (e) => {
     if (!e.linked_transaction_id) return null
     const tx = transactions.find((t) => t.id === e.linked_transaction_id)
-    return tx ? accounts.find((a) => a.id === tx.account_id) : null
+    if (!tx) return null
+    if (tx.linked_module === 'credit_card') {
+      const card = creditCards.find((c) => c.id === tx.linked_module_id)
+      return card ? `${card.name} (card)` : null
+    }
+    return accounts.find((a) => a.id === tx.account_id)?.name || null
   }
   const role = roleFor(profile)
   const [syncOpen, setSyncOpen] = useState(false)
@@ -335,7 +342,7 @@ export function MoneyProfileDetailView({
                       </td>
                       <td className="px-3 py-3 text-white light:text-slate-900">{capitalizeFirst(e.description)}{e.notes && <div className="text-[11px] text-slate-500">{capitalizeFirst(e.notes)}</div>}</td>
                       <td className="px-3 py-3 text-slate-400 light:text-slate-500">{capitalizeFirst(e.paid_party) || '—'}</td>
-                      <td className="px-3 py-3 text-slate-400 light:text-slate-500">{bankForEntry(e)?.name || '—'}</td>
+                      <td className="px-3 py-3 text-slate-400 light:text-slate-500">{bankForEntry(e) || '—'}</td>
                       <td className={`px-3 py-3 text-right font-semibold ${e.entry_type === 'expense' ? 'text-rose-300 light:text-rose-700' : 'text-emerald-300 light:text-emerald-700'}`}>{showMoney ? `${e.entry_type === 'expense' ? '−' : '+'}${money(e.amount)}` : '••••'}</td>
                       <td className="px-5 py-3">
                         <div className="flex justify-end gap-1">

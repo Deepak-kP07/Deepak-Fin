@@ -8,6 +8,7 @@ import { safeFields, pickFields } from '@/lib/server/safeFields'
 import { applyOrder } from '@/lib/server/applyOrder'
 import { ensureDefaults, ensureCategory } from '@/lib/server/services/categories'
 import { applyLendRepayment, reverseLendRepayment } from '@/lib/server/services/lendRepayment'
+import { applyLendAddition, reverseLendAddition } from '@/lib/server/services/lendAddition'
 import { addInterval, generateDueRecurring } from '@/lib/server/services/recurring'
 import { generateDueRecurringMoneyProfileEntries } from '@/lib/server/services/recurringMoneyProfileEntries'
 import { syncProfileFromAuth } from '@/lib/server/services/profile'
@@ -16,7 +17,7 @@ import { encryptVaultPayload, decryptVaultPayload } from '@/lib/server/vaultCryp
 import { closeStaleBudgetMonths } from '@/lib/server/services/budgets'
 import { randomUUID } from '@/lib/server/randomUUID'
 import { listMoneyProfiles, listMoneyProfileEntries } from '@/lib/server/moneyProfileCrud'
-import { listLendBorrow, listLendRepayments } from '@/lib/server/lendBorrowCrud'
+import { listLendBorrow, listLendRepayments, listLendAdditions } from '@/lib/server/lendBorrowCrud'
 import { sendWelcomeEmail } from '@/lib/email'
 
 // Shared by /kite/login and /kite/callback — both are full-page browser navigations (Zerodha's
@@ -130,7 +131,7 @@ async function handleRoute(request, { params }) {
       // A single indexed UPDATE, no-op when nothing's stale — cheap enough to run unconditionally
       // on every load rather than gating it behind a staleness check like the Kite syncs below.
       await closeStaleBudgetMonths(supabase, user.id).catch(() => {})
-      let [accounts, categories, transactions, budgets, portfolios, holdings, sips, other_investments, kite_orders, loans, loan_payments, bucket_list, lend_borrow, lend_repayments, credit_cards, credit_card_transactions, scholarships, scholarship_payments, money_rules, recurring_transactions, money_profiles, money_profile_entries, recurring_money_profile_entries, budget_months, budget_month_categories, vault_items, profile] = await Promise.all([
+      let [accounts, categories, transactions, budgets, portfolios, holdings, sips, other_investments, kite_orders, loans, loan_payments, bucket_list, lend_borrow, lend_repayments, lend_borrow_additions, credit_cards, credit_card_transactions, scholarships, scholarship_payments, money_rules, recurring_transactions, money_profiles, money_profile_entries, recurring_money_profile_entries, budget_months, budget_month_categories, vault_items, profile] = await Promise.all([
         readAll('accounts'),
         readAll('categories'),
         readAll('transactions'),
@@ -147,6 +148,7 @@ async function handleRoute(request, { params }) {
         // that, same reasoning as money_profiles above (lib/server/lendBorrowCrud.js).
         listLendBorrow(supabase, user),
         listLendRepayments(supabase),
+        listLendAdditions(supabase),
         readAll('credit_cards'),
         readAll('credit_card_transactions'),
         readAll('scholarships'),
@@ -222,7 +224,7 @@ async function handleRoute(request, { params }) {
       // Ciphertext never needs to reach the browser on a bulk load — only the dedicated reveal
       // route decrypts a single item, on demand, when its card is actually flipped.
       const vaultItemsSafe = vault_items.map(({ encrypted_payload, ...rest }) => rest)
-      return cors(NextResponse.json({ accounts, categories, transactions, budgets, portfolios, holdings, sips, other_investments, kite_orders, loans, loan_payments, bucket_list, lend_borrow, lend_repayments, credit_cards, credit_card_transactions, scholarships, scholarship_payments, money_rules, recurring_transactions, money_profiles, money_profile_entries, recurring_money_profile_entries, budget_months, budget_month_categories, vault_items: vaultItemsSafe, profile: profileSafe }))
+      return cors(NextResponse.json({ accounts, categories, transactions, budgets, portfolios, holdings, sips, other_investments, kite_orders, loans, loan_payments, bucket_list, lend_borrow, lend_repayments, lend_borrow_additions, credit_cards, credit_card_transactions, scholarships, scholarship_payments, money_rules, recurring_transactions, money_profiles, money_profile_entries, recurring_money_profile_entries, budget_months, budget_month_categories, vault_items: vaultItemsSafe, profile: profileSafe }))
     }
 
     // ---- PRICES: Yahoo Finance fallback (public); Kite when creds set ----
@@ -757,6 +759,12 @@ async function handleRoute(request, { params }) {
           await applyLendRepayment(supabase, user.id, created.id, body.linked_module_id, created.amount, { date: created.date, account_id: created.account_id, notes: created.notes || null })
         }
 
+        // Side-effect: the reverse of the above — this transaction is logging MORE lent/borrowed
+        // against an existing record, not a repayment of it → record it + bump the record's amount
+        if (table === 'transactions' && created?.id && body.linked_module === 'lend_addition' && body.linked_module_id) {
+          await applyLendAddition(supabase, user.id, created.id, body.linked_module_id, created.amount, { date: created.date, account_id: created.account_id, notes: created.notes || null })
+        }
+
         // Side-effect: a credit-card-linked transaction bumps the card's outstanding
         // (expense increases debt, income/refund reduces it) — no separate
         // credit_card_transactions row needed, this transaction is the record of it.
@@ -805,6 +813,12 @@ async function handleRoute(request, { params }) {
           if (updated.linked_module === 'lend' && updated.linked_module_id) {
             await applyLendRepayment(supabase, user.id, updated.id, updated.linked_module_id, updated.amount, { date: updated.date, account_id: updated.account_id, notes: updated.notes || null })
           }
+          if (oldRow?.linked_module === 'lend_addition' && oldRow.linked_module_id) {
+            await reverseLendAddition(supabase, user.id, id, oldRow.linked_module_id, oldRow.amount)
+          }
+          if (updated.linked_module === 'lend_addition' && updated.linked_module_id) {
+            await applyLendAddition(supabase, user.id, updated.id, updated.linked_module_id, updated.amount, { date: updated.date, account_id: updated.account_id, notes: updated.notes || null })
+          }
           if (oldRow?.linked_module === 'credit_card' && oldRow.linked_module_id) {
             const delta = oldRow.type === 'income' ? Number(oldRow.amount) : -Number(oldRow.amount)
             await supabase.rpc('adjust_credit_card_outstanding', { p_card_id: oldRow.linked_module_id, p_delta: delta })
@@ -835,6 +849,10 @@ async function handleRoute(request, { params }) {
           // Reverse the lend/borrow repayment this transaction had recorded
           if (row?.linked_module === 'lend' && row.linked_module_id) {
             await reverseLendRepayment(supabase, user.id, id, row.linked_module_id, row.amount)
+          }
+          // Reverse the lend/borrow addition this transaction had recorded
+          if (row?.linked_module === 'lend_addition' && row.linked_module_id) {
+            await reverseLendAddition(supabase, user.id, id, row.linked_module_id, row.amount)
           }
         }
         const { error } = await supabase.from(table).delete().eq('id', id).eq('user_id', user.id)
