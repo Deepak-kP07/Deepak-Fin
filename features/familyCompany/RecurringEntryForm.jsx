@@ -8,9 +8,11 @@ import { DateInput } from '@/components/shared/DateInput'
 import { ENTRY_TYPE_STYLE, ENTRY_TYPES } from '@/lib/moneyProfiles'
 import { todayISO } from '@/lib/format'
 
-export function RecurringEntryForm({ open, onClose, onSaved, editing, profile, accounts = [], categories = [], toast }) {
+export function RecurringEntryForm({ open, onClose, onSaved, editing, profile, accounts = [], creditCards = [], categories = [], toast }) {
+  // Mutually-exclusive account_id/credit_card_id collapsed into one `account_id` form field via
+  // the same `cc:<uuid>` sentinel used in MoneyProfileEntryForm/the main Transaction form.
   const initial = editing
-    ? { ...editing, amount: String(editing.amount), account_id: editing.account_id || profile?.linked_account_id || '' }
+    ? { ...editing, amount: String(editing.amount), account_id: editing.credit_card_id ? `cc:${editing.credit_card_id}` : editing.account_id || profile?.linked_account_id || '' }
     : { entry_type: 'expense', category_id: '', account_id: profile?.linked_account_id || '', description: '', amount: '', paid_party: '', notes: '', frequency: 'monthly', next_due_date: todayISO(), is_active: true }
   const [form, setForm] = useState(initial)
   const [busy, setBusy] = useState(false)
@@ -24,8 +26,10 @@ export function RecurringEntryForm({ open, onClose, onSaved, editing, profile, a
     e.preventDefault(); setBusy(true)
     try {
       const endpoint = editing ? `/api/finance/recurring_money_profile_entries/${editing.id}` : '/api/finance/recurring_money_profile_entries'
+      const isCard = typeof form.account_id === 'string' && form.account_id.startsWith('cc:')
       const payload = {
-        profile_id: profile.id, entry_type: form.entry_type, category_id: form.category_id || null, account_id: form.account_id || null,
+        profile_id: profile.id, entry_type: form.entry_type, category_id: form.category_id || null,
+        account_id: isCard ? null : form.account_id || null, credit_card_id: isCard ? form.account_id.slice(3) : null,
         description: form.description, amount: Number(form.amount), paid_party: form.paid_party || null, notes: form.notes || null,
         frequency: form.frequency, next_due_date: form.next_due_date, is_active: form.is_active,
       }
@@ -59,10 +63,11 @@ export function RecurringEntryForm({ open, onClose, onSaved, editing, profile, a
           <label className="text-sm text-slate-300 light:text-slate-700">Category <span className="text-xs text-slate-500">(optional)</span>
             <CategorySelect value={form.category_id || ''} onChange={(e) => setForm({ ...form, category_id: e.target.value })} categories={catsForType} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-[#101621] light:bg-white px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
           </label>
-          <label className="text-sm text-slate-300 light:text-slate-700">Bank account <span className="text-xs text-slate-500">(optional)</span>
+          <label className="text-sm text-slate-300 light:text-slate-700">Bank account or card <span className="text-xs text-slate-500">(optional)</span>
             <Select value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-[#101621] light:bg-white px-3 py-3 text-white light:text-slate-900 outline-none">
               <option value="">Don't post to a bank account</option>
               {accounts.filter((a) => a.type !== 'debit_card').map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+              {creditCards.map((c) => <option key={c.id} value={`cc:${c.id}`}>{c.name} (card)</option>)}
             </Select>
           </label>
           <label className="text-sm text-slate-300 light:text-slate-700">Paid to / Received from <span className="text-xs text-slate-500">(optional)</span>

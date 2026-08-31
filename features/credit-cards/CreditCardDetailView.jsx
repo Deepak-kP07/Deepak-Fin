@@ -7,8 +7,8 @@ import { BankCardFace } from '@/components/shared/BankCardFace'
 import { StatCard } from '@/components/shared/StatCard'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { MonthCursor } from '@/components/shared/MonthCursor'
-import { nextBillDue, utilisationSeverity } from '@/lib/creditCards'
-import { capitalizeFirst, formatDate, formatDateTime, money, monthName, ordinal } from '@/lib/format'
+import { currentSpendingCycle, nextBillDue, utilisationSeverity } from '@/lib/creditCards'
+import { capitalizeFirst, dateToLocalISO, formatDate, formatDateTime, money, monthName, ordinal } from '@/lib/format'
 
 // Bill payments are logged through /finance/credit_cards/:id/pay_bill, which creates a plain
 // transaction with a fixed, app-generated description rather than a linked_module reference —
@@ -42,11 +42,15 @@ export function CreditCardDetailView({ card, cardTransactions, allTransactions, 
 
   const [monthCursor, setMonthCursor] = useState(() => { const d = new Date(); return { year: d.getFullYear(), month: d.getMonth() } })
   const [showAllMonths, setShowAllMonths] = useState(false)
+  const [cycleMode, setCycleMode] = useState(false)
   const shiftMonth = (delta) => { setShowAllMonths(false); setMonthCursor((c) => { const d = new Date(c.year, c.month + delta, 1); return { year: d.getFullYear(), month: d.getMonth() } }) }
   const monthActivity = showAllMonths ? activity : activity.filter((a) => {
     const d = new Date(a.date)
     return d.getFullYear() === monthCursor.year && d.getMonth() === monthCursor.month
   })
+  const cycle = currentSpendingCycle(card)
+  const cycleActivity = activity.filter((a) => { const d = new Date(a.date); return d >= cycle.start && d < cycle.end })
+  const displayedActivity = cycleMode ? cycleActivity : monthActivity
 
   const now = new Date()
   const months = []
@@ -133,7 +137,7 @@ export function CreditCardDetailView({ card, cardTransactions, allTransactions, 
       </div>
 
       <div className={`rounded-xl border px-4 py-3 text-sm ${nd.days <= 4 ? 'border-amber-300/30 bg-amber-300/5 text-amber-200 light:text-amber-700' : 'border-white/10 light:border-black/10 bg-[#141a28] light:bg-black/[.025] glassy:glass-card text-slate-300 light:text-slate-700'}`}>
-        Bill on the {ordinal(card.billing_date)} · Due {nd.days > 0 ? `in ${nd.days} day${nd.days === 1 ? '' : 's'}` : nd.days === 0 ? 'today' : 'overdue'} ({formatDate(nd.due.toISOString().slice(0, 10))})
+        Bill on the {ordinal(card.billing_date)} · Due {nd.days > 0 ? `in ${nd.days} day${nd.days === 1 ? '' : 's'}` : nd.days === 0 ? 'today' : 'overdue'} ({formatDate(dateToLocalISO(nd.due))})
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
@@ -167,12 +171,25 @@ export function CreditCardDetailView({ card, cardTransactions, allTransactions, 
       </div>
 
       <div className="rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card">
-        <div className="flex items-center justify-between gap-3 border-b border-white/10 light:border-black/10 px-5 py-3">
-          <div className="text-xs uppercase tracking-widest text-slate-500">Card activity · {monthActivity.length}</div>
-          <MonthCursor cursor={monthCursor} onShift={shiftMonth} showAll={showAllMonths} onToggleAll={() => setShowAllMonths((v) => !v)} />
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 light:border-black/10 px-5 py-3">
+          <div className="text-xs uppercase tracking-widest text-slate-500">
+            Card activity · {displayedActivity.length}
+            {cycleMode && <span className="normal-case tracking-normal text-slate-600"> · {formatDate(dateToLocalISO(cycle.start))} – {formatDate(dateToLocalISO(cycle.end))}</span>}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setCycleMode((v) => !v)}
+              title={`Spends since the ${ordinal(card.billing_date)} (this cycle's bill)`}
+              className={`rounded-xl border px-3 py-2 text-[11px] font-semibold uppercase tracking-wider transition ${cycleMode ? 'border-accent-300/40 bg-accent-400/15 text-accent-200 light:text-accent-700' : 'border-white/10 light:border-black/10 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900'}`}
+            >This billing cycle</button>
+            <div className={cycleMode ? 'pointer-events-none opacity-40' : ''}>
+              <MonthCursor cursor={monthCursor} onShift={shiftMonth} showAll={showAllMonths} onToggleAll={() => setShowAllMonths((v) => !v)} />
+            </div>
+          </div>
         </div>
-        {monthActivity.length === 0 ? (
-          <EmptyState compact icon={ArrowDownRight} title={showAllMonths ? 'No activity yet' : 'No activity this month'} message="Log a spend, or pay for something with this card, to see it here." cta="Log spend" onCta={() => onSpend(card)} />
+        {displayedActivity.length === 0 ? (
+          <EmptyState compact icon={ArrowDownRight} title={cycleMode ? 'No activity this billing cycle' : showAllMonths ? 'No activity yet' : 'No activity this month'} message="Log a spend, or pay for something with this card, to see it here." cta="Log spend" onCta={() => onSpend(card)} />
         ) : (
           <>
             <div className="hidden grid-cols-[1.4fr_.9fr_.6fr_.6fr_auto] gap-4 border-b border-white/10 light:border-black/10 px-5 py-2.5 text-[10px] uppercase tracking-widest text-slate-600 sm:grid">
@@ -183,7 +200,7 @@ export function CreditCardDetailView({ card, cardTransactions, allTransactions, 
               <span />
             </div>
             <div className="divide-y divide-white/5 light:divide-black/5">
-            {monthActivity.map((a) => {
+            {displayedActivity.map((a) => {
               const cat = categories.find((c) => c.id === a.categoryId)
               const isDebit = a.direction === 'debit'
               const color = isDebit ? 'text-rose-300 light:text-rose-700' : 'text-emerald-300 light:text-emerald-700'

@@ -6,7 +6,7 @@ import {
   Landmark, MoreVertical, Pencil, RefreshCw, Sparkles, Target, Trash2,
 } from 'lucide-react'
 import { nextLoanDueDate, projectSchedule } from '@/lib/amortization'
-import { formatDate, liveOutstanding, money, monthAbbr, ordinal, paymentTypeLabel, todayISO } from '@/lib/format'
+import { dateToLocalISO, formatDate, liveOutstanding, money, monthAbbr, ordinal, paymentTypeLabel, todayISO } from '@/lib/format'
 import { StatCard } from '@/components/shared/StatCard'
 import { DismissibleBanner } from '@/components/shared/DismissibleBanner'
 
@@ -45,7 +45,7 @@ export function LoanDetailView({ loan, payments, accounts, onBack, onPay, onDele
   const schedule = useMemo(() => loan.status === 'closed' ? [] : projectSchedule({ outstanding, annualRatePct: rate, emiAmount: emi, startDate: nextDueDate }), [outstanding, rate, emi, loan.status, nextDueDate])
   const monthsRemaining = schedule.length
   const totalInterestPaid = payments.reduce((s, p) => s + Number(p.interest_portion || 0), 0)
-  const payoffDate = loan.status !== 'closed' && monthsRemaining > 0 ? (() => { const d = new Date(); d.setMonth(d.getMonth() + monthsRemaining); return d.toISOString().slice(0, 10) })() : null
+  const payoffDate = loan.status !== 'closed' && monthsRemaining > 0 ? (() => { const d = new Date(); d.setMonth(d.getMonth() + monthsRemaining); return dateToLocalISO(d) })() : null
 
   // Every one of the originally-sanctioned months, marked paid / still to go / no-longer-needed
   // — the last group only exists because a reduce-tenure prepayment shortened the loan, and
@@ -114,7 +114,7 @@ export function LoanDetailView({ loan, payments, accounts, onBack, onPay, onDele
     const cycleDate = paymentCycleDates.get(p.id)
     if (!cycleDate) return paymentTypeLabel(p)
     const modeSuffix = p.prepay_mode ? ` · ${p.prepay_mode === 'reduce_emi' ? 'Reduce EMI' : 'Reduce tenure'}` : ''
-    return `${monthAbbr(cycleDate.toISOString().slice(0, 10))} EMI${p.prepay_mode ? ` + prepayment${modeSuffix}` : ''}`
+    return `${monthAbbr(dateToLocalISO(cycleDate))} EMI${p.prepay_mode ? ` + prepayment${modeSuffix}` : ''}`
   }
 
   // Mobile payment rows have no visible delete icon — a long press on a row reverses that
@@ -362,7 +362,7 @@ export function LoanDetailView({ loan, payments, accounts, onBack, onPay, onDele
                         {m.status === 'paid' && <CheckCircle2 size={14} className="shrink-0 text-emerald-400 light:text-emerald-700" />}
                         {m.status === 'upcoming' && <Clock size={14} className="shrink-0 text-slate-500" />}
                         {m.status === 'saved' && <Sparkles size={14} className="shrink-0 text-slate-700" />}
-                        <span className={m.status === 'saved' ? 'line-through decoration-slate-700' : ''}>{formatDate(m.date.toISOString().slice(0, 10))}</span>
+                        <span className={m.status === 'saved' ? 'line-through decoration-slate-700' : ''}>{formatDate(dateToLocalISO(m.date))}</span>
                       </div>
                     ))}
                   </div>

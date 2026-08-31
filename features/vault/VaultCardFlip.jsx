@@ -2,9 +2,10 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { toBlob } from 'html-to-image'
-import { Eye, Landmark, Pencil, RotateCcw, Share2, Trash2 } from 'lucide-react'
+import { Check, Copy, Eye, Landmark, Pencil, RotateCcw, Share2, Trash2 } from 'lucide-react'
 import { BankCardFace } from '@/components/shared/BankCardFace'
 import { capitalizeFirst } from '@/lib/format'
+import { copyToClipboard } from '@/lib/clipboard'
 
 const TYPE_LABEL = { bank_account: 'Bank account', debit_card: 'Debit card', credit_card: 'Credit card' }
 
@@ -70,10 +71,17 @@ export function VaultCardFlip({ item, onEdit, onDelete }) {
   const [secrets, setSecrets] = useState(null)
   const [revealing, setRevealing] = useState(false)
   const [sharing, setSharing] = useState(false)
+  const [copied, setCopied] = useState(false)
   const frontRef = useRef(null)
   const stop = (fn) => (e) => { e.stopPropagation(); fn() }
 
   const flipBack = () => { setFlipped(false); setSecrets(null) }
+
+  const copyCardNumber = async () => {
+    const raw = String(secrets?.card_number || '').replace(/\s+/g, '')
+    if (!raw) return
+    if (await copyToClipboard(raw)) { setCopied(true); setTimeout(() => setCopied(false), 1500) }
+  }
 
   const doShare = async () => {
     if (sharing) return
@@ -189,7 +197,14 @@ export function VaultCardFlip({ item, onEdit, onDelete }) {
                   </>
                 ) : (
                   <>
-                    <div className="tracking-[0.15em] text-white">{groupNumber(secrets.card_number) || '—'}</div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="tracking-[0.15em] text-white">{groupNumber(secrets.card_number) || '—'}</span>
+                      {secrets.card_number && (
+                        <button type="button" onClick={stop(copyCardNumber)} title="Copy card number" className="rounded p-0.5 text-slate-500 hover:bg-white/5 hover:text-white">
+                          {copied ? <Check size={11} /> : <Copy size={11} />}
+                        </button>
+                      )}
+                    </div>
                     <div>Expiry: <span className="text-white">{secrets.expiry_month || '--'}/{secrets.expiry_year || '--'}</span> &nbsp; CVV: <span className="text-white">{secrets.cvv || '—'}</span></div>
                     {secrets.pin && <div>PIN: <span className="text-white">{secrets.pin}</span></div>}
                   </>

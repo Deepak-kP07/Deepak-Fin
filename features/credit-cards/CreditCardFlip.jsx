@@ -11,6 +11,9 @@ import { money } from '@/lib/format'
 // route or modal; the flip state is purely local and resets whenever the card list re-renders.
 // Kept to a real card's rough proportions (not stretched to fill the grid column) so it actually
 // reads as a card. Edit/delete live on the full-details page, not here.
+// The back face's content is deliberately tight (thin stripe, one combined bar+% row, compact
+// button padding) — it has to fit inside the SAME 85:54 card box the front face uses, so nothing
+// here can grow the box without also inflating every unflipped card in the grid.
 export function CreditCardFlip({ card, showMoney, onSpend, onPay, onViewDetails }) {
   const [flipped, setFlipped] = useState(false)
   const util = Number(card.credit_limit) > 0 ? Math.min(100, Math.round((Number(card.current_outstanding) / Number(card.credit_limit)) * 100)) : 0
@@ -42,29 +45,32 @@ export function CreditCardFlip({ card, showMoney, onSpend, onPay, onViewDetails 
               </div>
               <button type="button" onClick={stop(() => setFlipped(false))} title="Flip back" className="shrink-0 rounded-lg p-1 text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900"><RotateCcw size={13} /></button>
             </div>
-            {/* A real card's back has a magnetic stripe right below the header — same touch
-                added to the Vault card back for the same reason. */}
-            <div className="-mx-3.5 mt-2 h-6 bg-black/70" />
-            <div className="mt-2 flex items-baseline justify-between">
+            {/* A real card's back has a magnetic stripe right below the header — kept as a thin
+                accent (not the full-size stripe the front's BankCardFace can afford) since every
+                px here competes with the action buttons below for the same fixed-height box. */}
+            <div className="-mx-3.5 mt-1 h-1.5 bg-black/70" />
+            <div className="mt-1.5 flex items-baseline justify-between">
               <div>
-                <div className="text-[11px] text-slate-500">Outstanding</div>
-                <div className="text-lg font-semibold text-white light:text-slate-900">{showMoney ? money(card.current_outstanding) : '••••'}</div>
+                <div className="text-[10px] text-slate-500">Outstanding</div>
+                <div className="text-base font-semibold text-white light:text-slate-900">{showMoney ? money(card.current_outstanding) : '••••'}</div>
               </div>
               <div className="text-right">
-                <div className="text-[11px] text-slate-500">Limit</div>
+                <div className="text-[10px] text-slate-500">Limit</div>
                 <div className="text-xs text-slate-300 light:text-slate-700">{showMoney ? money(card.credit_limit) : '••••'}</div>
               </div>
             </div>
-            <div className="mt-1.5 h-1.5 overflow-hidden rounded-full border border-white/10 light:border-black/10 bg-white/[.08] light:bg-black/[.08]"><div className={`h-full rounded-full ${tone} transition-all`} style={{ width: `${util}%` }} /></div>
-            <div className={`mt-1 text-[10px] ${utilText}`}>{util}% used</div>
+            <div className="mt-1 flex items-center gap-2">
+              <div className="h-1.5 flex-1 overflow-hidden rounded-full border border-white/10 light:border-black/10 bg-white/[.08] light:bg-black/[.08]"><div className={`h-full rounded-full ${tone} transition-all`} style={{ width: `${util}%` }} /></div>
+              <div className={`shrink-0 text-[10px] ${utilText}`}>{util}%</div>
+            </div>
           </div>
 
-          <div className="space-y-1.5">
+          <div className="space-y-1">
             <div className="flex gap-1.5">
-              <button type="button" onClick={stop(() => onSpend(card))} className="flex-1 rounded-lg bg-white/[.06] light:bg-black/[.04] py-1.5 text-[11px] font-semibold text-white light:text-slate-900 hover:bg-white/[.1] hover:light:bg-black/[.06]">+ Log spend</button>
-              <button type="button" onClick={stop(() => onPay(card))} disabled={Number(card.current_outstanding) <= 0} className="flex-1 rounded-lg bg-gradient-to-r from-accent-300 to-accent-600 py-1.5 text-[11px] font-semibold text-[#07101c] disabled:opacity-50">Pay bill</button>
+              <button type="button" onClick={stop(() => onSpend(card))} className="flex-1 rounded-lg bg-white/[.06] light:bg-black/[.04] py-1 text-[11px] font-semibold text-white light:text-slate-900 hover:bg-white/[.1] hover:light:bg-black/[.06]">+ Log spend</button>
+              <button type="button" onClick={stop(() => onPay(card))} disabled={Number(card.current_outstanding) <= 0} className="flex-1 rounded-lg bg-gradient-to-r from-accent-300 to-accent-600 py-1 text-[11px] font-semibold text-[#07101c] disabled:opacity-50">Pay bill</button>
             </div>
-            <button type="button" onClick={stop(() => onViewDetails(card))} className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-white/10 light:border-black/10 py-1.5 text-[11px] font-medium text-accent-200 light:text-accent-700 hover:bg-white/5">View full details <ArrowRight size={12} /></button>
+            <button type="button" onClick={stop(() => onViewDetails(card))} className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-white/10 light:border-black/10 py-1 text-[11px] font-medium text-accent-200 light:text-accent-700 hover:bg-white/5">View full details <ArrowRight size={12} /></button>
           </div>
         </div>
       </div>

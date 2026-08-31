@@ -13,7 +13,7 @@ export function FamilyCompanyView({
   onAddEntry, onEditEntry, onDeleteEntry, onBulkImport, onToggleStatus, onManageAccess, onSyncBalance, onOpenRecurring, onDetailChange,
   showMoney, onToggleMoney, initialSelectedId,
 }) {
-  const { money_profiles: profiles = [], money_profile_entries: entries = [], accounts = [], categories = [], transactions = [] } = data
+  const { money_profiles: profiles = [], money_profile_entries: entries = [], accounts = [], credit_cards: creditCards = [], categories = [], transactions = [] } = data
   const [selectedProfileId, setSelectedProfileId] = useState(initialSelectedId ?? null)
   const selectedProfile = profiles.find((p) => p.id === selectedProfileId)
   useEffect(() => { onDetailChange?.(selectedProfileId) }, [selectedProfileId])
@@ -24,6 +24,7 @@ export function FamilyCompanyView({
         profile={selectedProfile}
         entries={entries.filter((e) => e.profile_id === selectedProfile.id)}
         accounts={accounts}
+        creditCards={creditCards}
         transactions={transactions}
         categories={categoriesFor(selectedProfile, categories)}
         onBack={() => setSelectedProfileId(null)}

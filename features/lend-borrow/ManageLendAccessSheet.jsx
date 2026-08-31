@@ -1,12 +1,14 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Mail, UserMinus, X } from 'lucide-react'
+import { Check, Copy, Mail, UserMinus, X } from 'lucide-react'
 import { Select } from '@/components/shared/Select'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { BottomSheet } from '@/components/shared/BottomSheet'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { roleFor } from '@/lib/lendBorrowSharing'
+import { copyToClipboard } from '@/lib/clipboard'
+import { buildLendInviteMessage } from '@/lib/inviteMessage'
 
 // Only two tiers exist for a lend/borrow record (no 'edit') — logging a repayment stays owner-only
 // regardless of tier, see lib/lendBorrowSharing.js.
@@ -26,9 +28,20 @@ function statusLabel(share) {
   return map[share.status] || map.revoked
 }
 
-function ManageLendAccessBody({ shares, loading, viewerRole, email, setEmail, role, setRole, busy, onInvite, onRoleChange, onRevoke }) {
+function ManageLendAccessBody({ shares, loading, viewerRole, email, setEmail, role, setRole, busy, onInvite, onRoleChange, onRevoke, personName, toast }) {
   const canGrantAdmin = viewerRole === 'owner'
   const live = shares.filter((s) => s.status === 'pending' || s.status === 'accepted')
+  const [copiedId, setCopiedId] = useState(null)
+
+  const onCopy = async (s) => {
+    const acceptUrl = `${window.location.origin}/invite/lend/${s.invite_token}`
+    const message = buildLendInviteMessage({ personName, role: s.role, invitedEmail: s.invited_email, acceptUrl })
+    const ok = await copyToClipboard(message)
+    if (!ok) { toast.push('Could not copy — try again', 'error'); return }
+    setCopiedId(s.id)
+    toast.push('Invite message copied — paste it anywhere')
+    setTimeout(() => setCopiedId((id) => (id === s.id ? null : id)), 1500)
+  }
 
   return (
     <>
@@ -53,6 +66,7 @@ function ManageLendAccessBody({ shares, loading, viewerRole, email, setEmail, ro
             {shares.map((s) => {
               const status = statusLabel(s)
               const isAccepted = s.status === 'accepted'
+              const isPendingLive = s.status === 'pending' && status.text === 'Pending'
               const canTouch = viewerRole === 'owner' || s.role !== 'admin'
               return (
                 <div key={s.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-white/10 light:border-black/10 bg-white/[.02] light:bg-black/[.02] px-4 py-3">
@@ -66,6 +80,11 @@ function ManageLendAccessBody({ shares, loading, viewerRole, email, setEmail, ro
                     </Select>
                   ) : isAccepted && (
                     <span className="rounded-lg border border-white/10 light:border-black/10 px-2.5 py-2 text-xs capitalize text-slate-400 light:text-slate-500">{s.role}</span>
+                  )}
+                  {isPendingLive && (
+                    <button onClick={() => onCopy(s)} title="Copy invite message" className="rounded-lg p-2 text-accent-200 light:text-accent-700 hover:bg-accent-400/10">
+                      {copiedId === s.id ? <Check size={15} /> : <Copy size={15} />}
+                    </button>
                   )}
                   {(s.status === 'pending' || s.status === 'accepted') && canTouch && (
                     <button onClick={() => onRevoke(s)} title="Revoke access" className="rounded-lg p-2 text-rose-300/70 light:text-rose-700 hover:bg-rose-300/10"><UserMinus size={15} /></button>
@@ -131,7 +150,7 @@ export function ManageLendAccessSheet({ open, onClose, record, toast }) {
   }
 
   const title = `Manage access · ${record.person_name}`
-  const bodyProps = { shares, loading, viewerRole, email, setEmail, role, setRole, busy, onInvite, onRoleChange, onRevoke }
+  const bodyProps = { shares, loading, viewerRole, email, setEmail, role, setRole, busy, onInvite, onRoleChange, onRevoke, personName: record.person_name, toast }
 
   if (isMobile) {
     return (

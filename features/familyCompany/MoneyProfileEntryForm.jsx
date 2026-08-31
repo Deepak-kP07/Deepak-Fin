@@ -10,7 +10,7 @@ import { todayISO } from '@/lib/format'
 import { BottomSheet } from '@/components/shared/BottomSheet'
 import { useIsMobile } from '@/hooks/use-mobile'
 
-function MoneyProfileEntryFormFields({ form, setForm, profile, accounts, categoryOptions, onAddCategory }) {
+function MoneyProfileEntryFormFields({ form, setForm, profile, accounts, creditCards, categoryOptions, onAddCategory }) {
   return (
     <>
       <div className="grid grid-cols-3 gap-2">
@@ -41,12 +41,13 @@ function MoneyProfileEntryFormFields({ form, setForm, profile, accounts, categor
         </label>
       </div>
 
-      <label className="mt-4 block text-sm text-slate-300 light:text-slate-700">Bank account <span className="text-xs text-slate-500">(optional)</span>
+      <label className="mt-4 block text-sm text-slate-300 light:text-slate-700">Bank account or card <span className="text-xs text-slate-500">(optional)</span>
         <Select value={form.account_id || ''} onChange={(e) => setForm({ ...form, account_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-[#101621] light:bg-white px-3 py-3 text-white light:text-slate-900 outline-none">
           <option value="">Don't post to a bank account</option>
           {accounts.filter((a) => a.type !== 'debit_card').map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+          {creditCards.map((c) => <option key={c.id} value={`cc:${c.id}`}>{c.name} (card)</option>)}
         </Select>
-        <p className="mt-1.5 text-[11px] text-slate-500">{form.account_id ? 'This entry will also post as a transaction on this account.' : "This entry won't show up anywhere outside this module."}</p>
+        <p className="mt-1.5 text-[11px] text-slate-500">{form.account_id ? 'This entry will also post as a transaction on this account or card.' : "This entry won't show up anywhere outside this module."}</p>
       </label>
     </>
   )
@@ -55,12 +56,14 @@ function MoneyProfileEntryFormFields({ form, setForm, profile, accounts, categor
 // An entry against a linked profile mirrors into `transactions` server-side (plus category
 // auto-creation) — the client can't safely fabricate that second row, so this stays entirely
 // online-only, matching LoanPaymentForm/CardPayForm rather than going through mutate().
-export function MoneyProfileEntryForm({ open, onClose, onSaved, editing, profile, accounts = [], categories = [], onAddCategory, toast }) {
-  // Defaults to the profile's current link — an existing entry's own account_id (if it was ever
-  // set to something else) wins over that default, same precedence the mirror function itself
-  // applies server-side.
+export function MoneyProfileEntryForm({ open, onClose, onSaved, editing, profile, accounts = [], creditCards = [], categories = [], onAddCategory, toast }) {
+  // Defaults to the profile's current link — an existing entry's own account_id/credit_card_id
+  // (if it was ever set to something else) wins over that default, same precedence the mirror
+  // function itself applies server-side. The two are mutually exclusive, so the single `account_id`
+  // form field holds either a plain account uuid or a `cc:<uuid>` sentinel — same convention the
+  // main Transaction form/LoanPaymentForm/LendForm already use for "pay via card".
   const initial = editing
-    ? { ...editing, amount: String(editing.amount), account_id: editing.account_id || profile?.linked_account_id || '' }
+    ? { ...editing, amount: String(editing.amount), account_id: editing.credit_card_id ? `cc:${editing.credit_card_id}` : editing.account_id || profile?.linked_account_id || '' }
     : { profile_id: profile?.id, entry_type: 'expense', category_id: '', description: '', amount: '', date: todayISO(), paid_party: '', notes: '', account_id: profile?.linked_account_id || '' }
   const [form, setForm] = useState(initial)
   const [busy, setBusy] = useState(false)
@@ -83,7 +86,11 @@ export function MoneyProfileEntryForm({ open, onClose, onSaved, editing, profile
     setBusy(true)
     try {
       const endpoint = editing ? `/api/finance/money_profile_entries/${editing.id}` : '/api/finance/money_profile_entries'
-      const payload = { profile_id: profile.id, entry_type: form.entry_type, category_id: form.category_id || null, description: form.description, amount: Number(form.amount), date: form.date, paid_party: form.paid_party || null, notes: form.notes || null, account_id: form.account_id || null }
+      const isCard = typeof form.account_id === 'string' && form.account_id.startsWith('cc:')
+      const payload = {
+        profile_id: profile.id, entry_type: form.entry_type, category_id: form.category_id || null, description: form.description, amount: Number(form.amount), date: form.date, paid_party: form.paid_party || null, notes: form.notes || null,
+        account_id: isCard ? null : form.account_id || null, credit_card_id: isCard ? form.account_id.slice(3) : null,
+      }
       const response = await fetch(endpoint, { method: editing ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || data.message || 'Could not save')
@@ -91,7 +98,7 @@ export function MoneyProfileEntryForm({ open, onClose, onSaved, editing, profile
     } catch (err) { toast.push(err.message, 'error') } finally { setBusy(false) }
   }
 
-  const fieldsProps = { form, setForm, profile, accounts, categoryOptions, onAddCategory }
+  const fieldsProps = { form, setForm, profile, accounts, creditCards, categoryOptions, onAddCategory }
   const submitButton = <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : editing ? 'Update entry' : 'Save entry'}</button>
 
   if (isMobile) {
