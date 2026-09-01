@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/reports/monthly",
       "schedule": "30 2 1 * *"
+    },
+    {
+      "path": "/api/cron/pending_transactions/purge",
+      "schedule": "0 3 * * *"
     }
   ]
 }

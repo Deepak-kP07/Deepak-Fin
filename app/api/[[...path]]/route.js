@@ -15,9 +15,9 @@ import { syncProfileFromAuth } from '@/lib/server/services/profile'
 import { syncPortfolioFromKite, syncMutualFundsFromKite, syncKiteOrders, isKiteTokenFresh } from '@/lib/server/services/kiteSync'
 import { encryptVaultPayload, decryptVaultPayload } from '@/lib/server/vaultCrypto'
 import { closeStaleBudgetMonths } from '@/lib/server/services/budgets'
-import { randomUUID } from '@/lib/server/randomUUID'
 import { listMoneyProfiles, listMoneyProfileEntries } from '@/lib/server/moneyProfileCrud'
 import { listLendBorrow, listLendRepayments, listLendAdditions } from '@/lib/server/lendBorrowCrud'
+import { createTransaction } from '@/lib/server/services/transactions'
 import { sendWelcomeEmail } from '@/lib/email'
 
 // Shared by /kite/login and /kite/callback — both are full-page browser navigations (Zerodha's
@@ -131,7 +131,7 @@ async function handleRoute(request, { params }) {
       // A single indexed UPDATE, no-op when nothing's stale — cheap enough to run unconditionally
       // on every load rather than gating it behind a staleness check like the Kite syncs below.
       await closeStaleBudgetMonths(supabase, user.id).catch(() => {})
-      let [accounts, categories, transactions, budgets, portfolios, holdings, sips, other_investments, kite_orders, loans, loan_payments, bucket_list, lend_borrow, lend_repayments, lend_borrow_additions, credit_cards, credit_card_transactions, scholarships, scholarship_payments, money_rules, recurring_transactions, money_profiles, money_profile_entries, recurring_money_profile_entries, budget_months, budget_month_categories, vault_items, profile] = await Promise.all([
+      let [accounts, categories, transactions, budgets, portfolios, holdings, sips, other_investments, kite_orders, loans, loan_payments, bucket_list, lend_borrow, lend_repayments, lend_borrow_additions, credit_cards, credit_card_transactions, scholarships, scholarship_payments, money_rules, recurring_transactions, money_profiles, money_profile_entries, recurring_money_profile_entries, budget_months, budget_month_categories, vault_items, pending_transactions, sms_parse_patterns, profile] = await Promise.all([
         readAll('accounts'),
         readAll('categories'),
         readAll('transactions'),
@@ -164,6 +164,10 @@ async function handleRoute(request, { params }) {
         readAll('budget_months'),
         readAll('budget_month_categories'),
         readAll('vault_items'),
+        readAll('pending_transactions'),
+        // Global config, no user_id — can't go through readAll's owner-scoped filter. RLS makes
+        // this SELECT-only for every authenticated user regardless (see drizzle/0048).
+        supabase.from('sms_parse_patterns').select('*').eq('is_active', true).then((r) => r.data || []),
         supabase.from('profiles').select('*').eq('id', user.id).maybeSingle().then((r) => r.data),
       ])
       // Both of these are rare-path side effects (first-ever use of the app; a recurring rule
@@ -224,7 +228,11 @@ async function handleRoute(request, { params }) {
       // Ciphertext never needs to reach the browser on a bulk load — only the dedicated reveal
       // route decrypts a single item, on demand, when its card is actually flipped.
       const vaultItemsSafe = vault_items.map(({ encrypted_payload, ...rest }) => rest)
-      return cors(NextResponse.json({ accounts, categories, transactions, budgets, portfolios, holdings, sips, other_investments, kite_orders, loans, loan_payments, bucket_list, lend_borrow, lend_repayments, lend_borrow_additions, credit_cards, credit_card_transactions, scholarships, scholarship_payments, money_rules, recurring_transactions, money_profiles, money_profile_entries, recurring_money_profile_entries, budget_months, budget_month_categories, vault_items: vaultItemsSafe, profile: profileSafe }))
+      // raw_message never needs to reach the browser — the approval card shows the parsed
+      // fields, not the original SMS text; keeping it server-side only limits its exposure
+      // window even before the 7-day purge cron clears it (see app/api/cron/pending_transactions/purge).
+      const pendingTransactionsSafe = pending_transactions.map(({ raw_message, ...rest }) => rest)
+      return cors(NextResponse.json({ accounts, categories, transactions, budgets, portfolios, holdings, sips, other_investments, kite_orders, loans, loan_payments, bucket_list, lend_borrow, lend_repayments, lend_borrow_additions, credit_cards, credit_card_transactions, scholarships, scholarship_payments, money_rules, recurring_transactions, money_profiles, money_profile_entries, recurring_money_profile_entries, budget_months, budget_month_categories, vault_items: vaultItemsSafe, pending_transactions: pendingTransactionsSafe, sms_parse_patterns, profile: profileSafe }))
     }
 
     // ---- PRICES: Yahoo Finance fallback (public); Kite when creds set ----
@@ -724,55 +732,14 @@ async function handleRoute(request, { params }) {
 
       if (method === 'POST') {
         const body = await request.json()
-        // A transaction made against a credit card (not a bank/cash account) — link it via
-        // linked_module instead of account_id, matching the existing generic-link pattern.
-        if (table === 'transactions' && body.credit_card_id) {
-          body.linked_module = 'credit_card'
-          body.linked_module_id = body.credit_card_id
-          body.account_id = null
-        }
-        // Handle transfers: create two paired rows sharing transfer_group_id
-        if (table === 'transactions' && body.type === 'transfer') {
-          const amount = Number(body.amount)
-          if (!body.account_id || !body.to_account_id || body.account_id === body.to_account_id || !(amount > 0)) {
-            return cors(NextResponse.json({ error: 'Invalid transfer: pick two different accounts and a positive amount.' }, { status: 400 }))
-          }
-          const groupId = randomUUID()
-          const nowStr = new Date().toTimeString().slice(0, 5)
-          const base = { amount, type: 'transfer', description: body.description || 'Transfer', date: body.date, time: body.time || nowStr, notes: body.notes || null, transfer_group_id: groupId, user_id: user.id }
-          const rows = [
-            { ...base, account_id: body.account_id, transfer_direction: 'out' },
-            { ...base, account_id: body.to_account_id, transfer_direction: 'in' },
-          ]
-          const { data: created, error } = await supabase.from('transactions').insert(rows).select()
-          if (error) return cors(NextResponse.json({ error: error.message }, { status: 400 }))
+        if (table === 'transactions') {
+          const { created, error } = await createTransaction(supabase, user.id, body)
+          if (error) return cors(NextResponse.json({ error: error.message }, { status: error.status || 400 }))
           return cors(NextResponse.json(created))
         }
         const payload = { ...pickFields(table, body), user_id: user.id }
-        if (table === 'transactions' && !payload.time) payload.time = new Date().toTimeString().slice(0, 5)
         const { data: created, error } = await supabase.from(table).insert(payload).select().single()
         if (error) return cors(NextResponse.json({ error: error.message }, { status: 400 }))
-
-        // Side-effect: a transaction linked to a lend/borrow record is a repayment (income
-        // repaying money lent out, or expense repaying money borrowed) → record it + update pending
-        if (table === 'transactions' && created?.id && body.linked_module === 'lend' && body.linked_module_id) {
-          await applyLendRepayment(supabase, user.id, created.id, body.linked_module_id, created.amount, { date: created.date, account_id: created.account_id, notes: created.notes || null })
-        }
-
-        // Side-effect: the reverse of the above — this transaction is logging MORE lent/borrowed
-        // against an existing record, not a repayment of it → record it + bump the record's amount
-        if (table === 'transactions' && created?.id && body.linked_module === 'lend_addition' && body.linked_module_id) {
-          await applyLendAddition(supabase, user.id, created.id, body.linked_module_id, created.amount, { date: created.date, account_id: created.account_id, notes: created.notes || null })
-        }
-
-        // Side-effect: a credit-card-linked transaction bumps the card's outstanding
-        // (expense increases debt, income/refund reduces it) — no separate
-        // credit_card_transactions row needed, this transaction is the record of it.
-        if (table === 'transactions' && created?.id && body.linked_module === 'credit_card' && body.linked_module_id) {
-          const delta = body.type === 'income' ? -Number(created.amount) : Number(created.amount)
-          await supabase.rpc('adjust_credit_card_outstanding', { p_card_id: body.linked_module_id, p_delta: delta })
-        }
-
         return cors(NextResponse.json(created))
       }
 
