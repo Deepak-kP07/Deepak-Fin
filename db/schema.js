@@ -760,6 +760,11 @@ export const smsParsePatterns = pgTable('sms_parse_patterns', {
   suggestedCategoryType: categoryType('suggested_category_type'),
   isActive: boolean('is_active').notNull().default(true),
   priority: integer('priority').notNull().default(0),
+  // The one broad fallback row (lib/sms/parseEngine.js's parseGeneric) that matches when no
+  // bank/app-specific pattern above does — sender_id_pattern/message_regex/field_mapping are
+  // unused for this row (parseSms bypasses the sender check and runs parseGeneric's own hardcoded
+  // regexes instead). Only meant to ever be true on a single row.
+  isGeneric: boolean('is_generic').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index('sms_parse_patterns_sender_idx').on(t.senderIdPattern)])
 
