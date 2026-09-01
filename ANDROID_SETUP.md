@@ -23,6 +23,15 @@ is Phases E–H of the feature plan.
   "Pending" module is turned on in Settings.
 - `features/settings/SettingsSmsAutoDetect.jsx` — where you'll request the SMS permission and open
   the battery-optimization screen once the app is installed.
+- `lib/auth/nativeGoogleAuth.js` + a `login-callback` intent-filter in `AndroidManifest.xml` —
+  native Google sign-in. The web app's normal Google button (Google Identity Services,
+  `AuthScreen.jsx`) doesn't work inside an embedded WebView — Google routes it out to a separate
+  system browser process with no way back, which is the "opens Chrome, never returns to the app"
+  behavior you hit. Inside the native app, `AuthScreen.jsx` swaps to a plain button that opens
+  Google's consent screen in a Chrome Custom Tab via Supabase's OAuth redirect flow, and the new
+  intent-filter is what hands control back to the app once it completes. **This needs dashboard
+  configuration you'll have to do yourself — see step 2 below — nothing will log in natively
+  until that's done, independent of anything code-related.**
 
 **None of the Kotlin/Gradle code has been compiled or run.** Treat it as a first draft to build
 and debug, not verified-working native code.
@@ -34,7 +43,22 @@ and debug, not verified-working native code.
 - A way to test: an Android device with USB debugging enabled, or an emulator (Android 7.0/API 24+,
   matching `minSdkVersion` in `android/variables.gradle`)
 
-### 2. Open and build in Android Studio
+### 2. Set up native Google sign-in (dashboard config, not code)
+Three things, all outside this repo:
+1. **Supabase Dashboard → Authentication → Providers → Google** — must be enabled with a real
+   Google OAuth **Client ID and Client Secret**. If this was never turned on before (likely, since
+   the web app deliberately avoided this exact flow — see the comment in `AuthScreen.jsx`), you
+   need to create/reuse a Google Cloud OAuth client and paste both values in here.
+2. **Google Cloud Console → your OAuth client → Authorized redirect URIs** — must include your
+   Supabase project's own callback: `https://<your-project-ref>.supabase.co/auth/v1/callback`.
+3. **Supabase Dashboard → Authentication → URL Configuration → Redirect URLs** — add
+   `com.personalfin.app://login-callback` (must match `REDIRECT_URL` in
+   `lib/auth/nativeGoogleAuth.js` and the intent-filter in `AndroidManifest.xml` exactly).
+
+Skip this and native Google sign-in will fail with a Supabase/Google error as soon as you tap the
+button — email/password sign-in is unaffected either way.
+
+### 3. Open and build in Android Studio
 ```
 npx cap open android
 ```
@@ -46,19 +70,19 @@ If Gradle sync fails on the Kotlin plugin, double check `android/build.gradle` h
 were added for you, but version mismatches with your installed Android Studio's bundled Gradle
 are the most likely first build error.
 
-### 3. Verify the plain app first, before trusting SMS detection
+### 4. Verify the plain app first, before trusting SMS detection
 Confirm the app launches and behaves like the normal web app (login, navigate around) *before*
 testing SMS — this isolates "Capacitor wrapper is broken" from "SMS plugin is broken" if something
 doesn't work.
 
-### 4. Turn on SMS Auto-Detect
+### 5. Turn on SMS Auto-Detect
 In the app: Settings → SMS auto-detect → tap **Enable** to grant the SMS permission (Android will
 show its own permission dialog), then **Open settings** to exempt the app from battery
 optimization (recommended, especially on Xiaomi/Oppo/Vivo devices — see the PRD's note on OEMs
 aggressively killing background apps). Also turn on the "Pending" module under Settings → Modules
 if you haven't already — that's the master switch.
 
-### 5. Test with a real SMS
+### 6. Test with a real SMS
 Have a bank or UPI app send you a real transaction SMS (or trigger a small real transaction).
 Expect it to show up within a few seconds, pre-filled with amount/type/merchant — either as a
 "Detected from SMS" banner right at the top of the **Transactions** tab (one-tap approve/reject
@@ -72,7 +96,7 @@ before approving. If it doesn't show up:
 - Check `adb logcat` filtered to your app's package (`com.personalfin.app`) for errors from
   `SmsReceiver`/`SmsListenerPlugin`.
 
-### 6. Sign and distribute
+### 7. Sign and distribute
 This ships as a sideloaded APK, not the Play Store (Play policy restricts `READ_SMS`/`RECEIVE_SMS`
 to apps whose core function is SMS handling). In Android Studio: **Build → Generate Signed Bundle
 / APK**, create/use a keystore, build a release APK, and share the `.apk` file directly (a link,
