@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { App } from '@capacitor/app'
 import { BatteryWarning, CheckCircle2, Inbox, Smartphone } from 'lucide-react'
 import { ToggleSwitch } from '@/components/shared/ToggleSwitch'
 import { checkSmsPermission, isNativeSmsAvailable, openBatteryOptimizationSettings, requestSmsPermission } from '@/lib/sms/nativeBridge'
@@ -18,7 +19,16 @@ function NativePermissionCard({ toast }) {
   useEffect(() => {
     const isNative = isNativeSmsAvailable()
     setNative(isNative)
-    if (isNative) checkSmsPermission().then(setGranted)
+    if (!isNative) return
+    checkSmsPermission().then(setGranted)
+    // Denying once and later granting it from Android's own Settings (exactly what the error
+    // toast below tells you to do) never re-ran this check on its own — this screen just kept
+    // showing the stale "not granted" state from the one check at mount. Re-checking whenever
+    // the app comes back to the foreground (e.g. returning from Settings) is what was missing.
+    const listenerPromise = App.addListener('appStateChange', ({ isActive }) => {
+      if (isActive) checkSmsPermission().then(setGranted)
+    })
+    return () => { listenerPromise.then((handle) => handle.remove()) }
   }, [])
 
   if (!native) {

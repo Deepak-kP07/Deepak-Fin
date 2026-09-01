@@ -382,7 +382,11 @@ export function AuthScreen({ onAuth, initialError, initialMode = 'landing', init
 
   return (
     <MotionConfig reducedMotion="user">
-      <main className="relative h-[100dvh] overflow-hidden bg-[#080b12]">
+      {/* Native Android draws edge-to-edge behind the status bar/notch by default (mandatory
+          since Android 15) — safe-area-inset-top is 0 on the web/PWA (no visual change there),
+          so this is scoped padding, not a global body-level one, matching how the bottom nav
+          already handles safe-area-inset-bottom (app/page.js). */}
+      <main className="relative h-[100dvh] overflow-hidden bg-[#080b12]" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
         <div className="pointer-events-none absolute inset-0 z-10 opacity-[0.035] mix-blend-overlay" style={{ backgroundImage: GRAIN_URL }} />
 
         {mode === 'landing' ? (

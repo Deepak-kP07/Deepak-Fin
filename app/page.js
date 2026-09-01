@@ -2887,7 +2887,11 @@ function Shell({ user, onLogout }) {
         </aside>
 
         {/* Main */}
-        <main className={`min-w-0 flex-1 px-5 pb-24 pt-6 lg:px-10 lg:pb-10 ${fitScreen ? 'flex flex-col lg:h-screen' : ''}`}>
+        {/* Native Android draws edge-to-edge behind the status bar/notch by default — inline
+            style (not a pt-6 utility) so it can add to the safe-area inset instead of being
+            replaced by it; 0 on web/PWA, so no visual change there. Same pattern as the bottom
+            nav's existing paddingBottom handling below. */}
+        <main className={`min-w-0 flex-1 px-5 pb-24 lg:px-10 lg:pb-10 ${fitScreen ? 'flex flex-col lg:h-screen' : ''}`} style={{ paddingTop: 'max(1.5rem, calc(env(safe-area-inset-top) + 1.5rem))' }}>
           {view === 'dashboard' && (
             <header className={`flex shrink-0 items-center justify-between ${fitScreen ? 'mb-3' : 'mb-6'}`}>
               {/* Mobile: tappable avatar + name → Settings > Profile (desktop already has this via the sidebar profile button below) */}
