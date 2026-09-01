@@ -39,15 +39,7 @@ export function PendingTransactionCard({ pending, accounts, creditCards = [], ca
         <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/[.05] light:bg-black/[.035] ${isIncome ? 'text-emerald-300 light:text-emerald-700' : 'text-rose-300 light:text-rose-700'}`}>
           {isIncome ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}
         </div>
-        <div className="min-w-0 flex-1">
-          <input
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Description"
-            className="w-full truncate bg-transparent text-sm font-medium text-white light:text-slate-900 outline-none"
-          />
-          <div className="truncate text-[11px] text-slate-500">{capitalizeFirst(pending.sender_id)} · {relativeTime(pending.created_at)}</div>
-        </div>
+        <div className="min-w-0 flex-1 truncate text-[11px] text-slate-500">{capitalizeFirst(pending.sender_id)} · {relativeTime(pending.created_at)}</div>
         <div className={`flex shrink-0 items-center text-sm font-semibold ${isIncome ? 'text-emerald-300 light:text-emerald-700' : 'text-rose-300 light:text-rose-700'}`}>
           {isIncome ? '+' : '-'}
           <input
@@ -57,7 +49,19 @@ export function PendingTransactionCard({ pending, accounts, creditCards = [], ca
         </div>
       </div>
 
-      <div className="mt-3 grid grid-cols-2 gap-2">
+      {/* Pulled out of the header row and given the same visible-field treatment as
+          Category/Account below — a borderless input sitting next to the icon read as a plain
+          heading, not something tappable, which is exactly why it needed correcting. */}
+      <label className="mt-3 block text-xs text-slate-500">Description
+        <input
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="What was this for?"
+          className="mt-1 w-full rounded-lg border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-2.5 py-2 text-sm text-white light:text-slate-900 outline-none focus:border-accent-300/50"
+        />
+      </label>
+
+      <div className="mt-2 grid grid-cols-2 gap-2">
         <Select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} placeholder="Category" className="w-full rounded-lg border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-2.5 py-2 text-xs text-white light:text-slate-900 outline-none">
           <option value="">Uncategorised</option>
           {relevantCategories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
