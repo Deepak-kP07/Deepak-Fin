@@ -5,6 +5,7 @@ import { ArrowDownRight, ArrowUpRight, ChevronRight, Eye, EyeOff, MoreVertical, 
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { BankCardFace } from '@/components/shared/BankCardFace'
 import { StatCard } from '@/components/shared/StatCard'
+import { HeroStatTile } from '@/components/shared/HeroStatTile'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { MonthCursor } from '@/components/shared/MonthCursor'
 import { currentSpendingCycle, nextBillDue, utilisationSeverity } from '@/lib/creditCards'
@@ -140,7 +141,19 @@ export function CreditCardDetailView({ card, cardTransactions, allTransactions, 
         Bill on the {ordinal(card.billing_date)} · Due {nd.days > 0 ? `in ${nd.days} day${nd.days === 1 ? '' : 's'}` : nd.days === 0 ? 'today' : 'overdue'} ({formatDate(dateToLocalISO(nd.due))})
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
+      {/* Mobile: Outstanding as the headline hero figure, Utilisation/Total repaid as a 2-col
+          row below it — same hero-card shape as Accounts/Loans/Scholarships/Lend-borrow detail
+          views. Desktop keeps the original 3-up StatCard grid, unchanged. */}
+      <div className="rounded-3xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-black/[.025] glassy:glass-card p-6 sm:hidden">
+        <div className="text-xs uppercase tracking-widest text-slate-500">Outstanding</div>
+        <div className="mt-1 text-[clamp(2rem,6vw,3rem)] font-semibold leading-[1.1] tracking-[-0.01em] text-rose-300 light:text-rose-700">{showMoney ? money(card.current_outstanding) : '••••••'}</div>
+        <div className="mt-1 text-sm text-slate-500">of {money(card.credit_limit)} limit</div>
+        <div className="mt-5 grid grid-cols-2 gap-3">
+          <HeroStatTile icon={Target} label="Utilisation" value={`${util}%`} valueTone={utilisationSeverity(util).tone} sub={utilisationSeverity(util).label} />
+          <HeroStatTile icon={ArrowUpRight} label="Total repaid" value={showMoney ? money(totalRepaid) : '••••'} valueTone="text-emerald-300 light:text-emerald-700" sub={`${repayments.length} payment${repayments.length === 1 ? '' : 's'}`} />
+        </div>
+      </div>
+      <div className="hidden gap-4 sm:grid sm:grid-cols-3">
         <StatCard label="Outstanding" value={showMoney ? money(card.current_outstanding) : '••••'} icon={ArrowDownRight} accent="bg-rose-400/15 text-rose-200 light:text-rose-700" tone="text-rose-300 light:text-rose-700" sub={<span>of {money(card.credit_limit)} limit</span>} />
         <StatCard label="Utilisation" value={`${util}%`} icon={Target} accent="bg-accent-400/15 text-accent-200 light:text-accent-700" tone={utilisationSeverity(util).tone} sub={<span>{utilisationSeverity(util).label}</span>} />
         <StatCard label="Total repaid" value={showMoney ? money(totalRepaid) : '••••'} icon={ArrowUpRight} accent="bg-emerald-400/15 text-emerald-200 light:text-emerald-700" sub={<span>{repayments.length} payment{repayments.length === 1 ? '' : 's'}</span>} />
