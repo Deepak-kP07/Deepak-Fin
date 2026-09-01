@@ -5,8 +5,10 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.provider.Settings
 import android.net.Uri
+import androidx.core.content.ContextCompat
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
@@ -64,23 +66,31 @@ class SmsListenerPlugin : Plugin() {
     super.handleOnDestroy()
   }
 
+  // Checks both underlying permission strings directly via ContextCompat instead of Capacitor's
+  // own alias-aggregate getPermissionState("sms") — that helper was reporting DENIED even when
+  // Android's own Settings screen (and a direct checkSelfPermission query) showed both RECEIVE_SMS
+  // and READ_SMS as genuinely granted, which is exactly what made "Enable" loop forever showing
+  // "permission was denied" no matter how many times it was tapped. This is a simpler, more
+  // direct check that can't disagree with what the OS itself reports.
+  private fun hasSmsPermission(): Boolean {
+    return ContextCompat.checkSelfPermission(context, Manifest.permission.RECEIVE_SMS) == PackageManager.PERMISSION_GRANTED &&
+      ContextCompat.checkSelfPermission(context, Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED
+  }
+
   @PluginMethod
   fun checkSmsPermission(call: PluginCall) {
-    call.resolve(getSmsPermissionState())
+    call.resolve(JSObject().apply { put("granted", hasSmsPermission()) })
   }
 
   @PluginMethod
   fun requestSmsPermission(call: PluginCall) {
+    if (hasSmsPermission()) { call.resolve(JSObject().apply { put("granted", true) }); return }
     requestPermissionForAlias("sms", call, "smsPermissionCallback")
   }
 
   @PermissionCallback
   private fun smsPermissionCallback(call: PluginCall) {
-    call.resolve(getSmsPermissionState())
-  }
-
-  private fun getSmsPermissionState(): JSObject {
-    return JSObject().apply { put("granted", getPermissionState("sms").toString() == "GRANTED") }
+    call.resolve(JSObject().apply { put("granted", hasSmsPermission()) })
   }
 
   // Android has no direct API to query/toggle battery-optimization exemption status — only to
