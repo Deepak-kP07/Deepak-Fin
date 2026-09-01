@@ -2789,7 +2789,7 @@ function Shell({ user, onLogout }) {
   const firstName = data.profile?.full_name?.split(' ')?.[0] || user?.user_metadata?.full_name?.split(' ')?.[0] || user?.email?.split('@')?.[0] || 'Deepak'
 
   const moduleSettings = resolveModuleSettings(data.profile)
-  const pendingSmsCount = data.pending_transactions.filter((p) => p.status === 'pending').length
+  const pendingSmsCount = (data.pending_transactions || []).filter((p) => p.status === 'pending').length
 
   // Native SMS listener (Android app only — see lib/sms/nativeBridge.js, a no-op on a plain web
   // tab). dataRef exists purely so the listener's closure always reads the current
