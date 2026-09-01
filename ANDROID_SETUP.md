@@ -44,16 +44,21 @@ and debug, not verified-working native code.
   matching `minSdkVersion` in `android/variables.gradle`)
 
 ### 2. Set up native Google sign-in (dashboard config, not code)
-Three things, all outside this repo:
-1. **Supabase Dashboard → Authentication → Providers → Google** — must be enabled with a real
-   Google OAuth **Client ID and Client Secret**. If this was never turned on before (likely, since
-   the web app deliberately avoided this exact flow — see the comment in `AuthScreen.jsx`), you
-   need to create/reuse a Google Cloud OAuth client and paste both values in here.
-2. **Google Cloud Console → your OAuth client → Authorized redirect URIs** — must include your
-   Supabase project's own callback: `https://<your-project-ref>.supabase.co/auth/v1/callback`.
-3. **Supabase Dashboard → Authentication → URL Configuration → Redirect URLs** — add
-   `com.personalfin.app://login-callback` (must match `REDIRECT_URL` in
-   `lib/auth/nativeGoogleAuth.js` and the intent-filter in `AndroidManifest.xml` exactly).
+Reuse the same Google Cloud OAuth client already behind `NEXT_PUBLIC_GOOGLE_CLIENT_ID` in `.env`
+— no need to create a new one. Three things, all outside this repo:
+1. **Google Cloud Console → Credentials → that OAuth client → Client secret** — Google Identity
+   Services (the web flow) only ever used the Client ID, never the secret, so it was never stored
+   anywhere in this repo. Grab/generate it here.
+2. **Google Cloud Console → that same OAuth client → Authorized redirect URIs** — add your
+   Supabase project's own callback: `https://<your-project-ref>.supabase.co/auth/v1/callback`
+   (GIS uses "Authorized JavaScript origins" instead, so this redirect URI almost certainly isn't
+   there yet even though the client itself already exists).
+3. **Supabase Dashboard**:
+   - **Authentication → Providers → Google** — enable it, paste in the existing Client ID +
+     the secret from step 1.
+   - **Authentication → URL Configuration → Redirect URLs** — add
+     `com.personalfin.app://login-callback` (must match `REDIRECT_URL` in
+     `lib/auth/nativeGoogleAuth.js` and the intent-filter in `AndroidManifest.xml` exactly).
 
 Skip this and native Google sign-in will fail with a Supabase/Google error as soon as you tap the
 button — email/password sign-in is unaffected either way.
