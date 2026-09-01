@@ -28,6 +28,7 @@ import { Skeleton } from '@/components/shared/Skeleton'
 import { LoadingScreen } from '@/components/shared/LoadingScreen'
 import { Avatar } from '@/components/shared/Avatar'
 import { CreditCardBillAlert } from '@/components/shared/CreditCardBillAlert'
+import { PendingSmsBanner } from '@/components/shared/PendingSmsBanner'
 import { InstallPrompt } from '@/components/shared/InstallPrompt'
 import { SpotlightTour } from '@/components/shared/SpotlightTour'
 import { TOUR_STEPS } from '@/features/onboarding/tourSteps'
@@ -59,6 +60,8 @@ import { LoanPaymentForm } from '@/features/loans/LoanPaymentForm'
 import { LoansView } from '@/features/loans/LoansView'
 import { BucketForm } from '@/features/buckets/BucketForm'
 import { BucketListView } from '@/features/buckets/BucketListView'
+import { PendingTransactionsView } from '@/features/pending/PendingTransactionsView'
+import { startSmsListener } from '@/lib/sms/nativeBridge'
 import { LendForm } from '@/features/lend-borrow/LendForm'
 import { LendAddMoreForm } from '@/features/lend-borrow/LendAddMoreForm'
 import { LendBorrowView } from '@/features/lend-borrow/LendBorrowView'
@@ -1459,8 +1462,9 @@ function AttachmentViewer({ open, onClose, transaction }) {
   )
 }
 
-function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTxBulk, onImport, showMoney, onToggleMoney, onOpenRecurring, onPayCardBill }) {
-  const { transactions, accounts, categories, credit_cards: creditCards = [] } = data
+function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTxBulk, onImport, showMoney, onToggleMoney, onOpenRecurring, onPayCardBill, onApprovePending, onRejectPending }) {
+  const { transactions, accounts, categories, credit_cards: creditCards = [], pending_transactions: pendingTransactions = [] } = data
+  const pendingSms = useMemo(() => pendingTransactions.filter((p) => p.status === 'pending').sort((a, b) => new Date(b.created_at) - new Date(a.created_at)), [pendingTransactions])
   const [query, setQuery] = useState('')
   // Mobile has no per-row delete icon (removed — see the row markup below); instead, a long press
   // enters selection mode, a plain tap after that toggles a row, and a bulk-delete action appears
@@ -1691,6 +1695,7 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTx
   return (
     <div className="space-y-5">
       <CreditCardBillAlert creditCards={creditCards} transactions={transactions} onPay={onPayCardBill} showMoney={showMoney} />
+      <PendingSmsBanner pending={pendingSms} showMoney={showMoney} onApprove={onApprovePending} onReject={onRejectPending} />
       {/* Everything on the right — date controls, chart toggle, eye — shares one row with the
           title on every breakpoint. Mobile gets its own combined month/range pill (lg:hidden);
           desktop gets the separate month-pill + calendar-icon + chart-toggle group (hidden
@@ -2031,7 +2036,7 @@ function Shell({ user, onLogout }) {
     setActiveDetailId(id)
     if (initialNavState.current.detailId != null) initialNavState.current = { ...initialNavState.current, detailId: null }
   }
-  const [data, setData] = useState({ accounts: [], categories: [], transactions: [], budgets: [], portfolios: [], holdings: [], sips: [], other_investments: [], kite_orders: [], loans: [], loan_payments: [], bucket_list: [], lend_borrow: [], lend_repayments: [], lend_borrow_additions: [], credit_cards: [], credit_card_transactions: [], scholarships: [], scholarship_payments: [], money_rules: [], recurring_transactions: [], money_profiles: [], money_profile_entries: [], recurring_money_profile_entries: [], budget_months: [], budget_month_categories: [], vault_items: [], profile: null })
+  const [data, setData] = useState({ accounts: [], categories: [], transactions: [], budgets: [], portfolios: [], holdings: [], sips: [], other_investments: [], kite_orders: [], loans: [], loan_payments: [], bucket_list: [], lend_borrow: [], lend_repayments: [], lend_borrow_additions: [], credit_cards: [], credit_card_transactions: [], scholarships: [], scholarship_payments: [], money_rules: [], recurring_transactions: [], money_profiles: [], money_profile_entries: [], recurring_money_profile_entries: [], budget_months: [], budget_month_categories: [], vault_items: [], pending_transactions: [], sms_parse_patterns: [], profile: null })
   const [loading, setLoading] = useState(true)
   const [pendingCount, setPendingCount] = useState(0)
   const mutate = useMemo(() => createMutate(setData, setPendingCount), [])
@@ -2162,6 +2167,8 @@ function Shell({ user, onLogout }) {
         money_profiles: result.money_profiles || [], money_profile_entries: result.money_profile_entries || [],
         budget_months: result.budget_months || [], budget_month_categories: result.budget_month_categories || [],
         vault_items: result.vault_items || [],
+        pending_transactions: result.pending_transactions || [],
+        sms_parse_patterns: result.sms_parse_patterns || [],
         profile: result.profile || null,
       }
       setData(snapshot)
@@ -2366,6 +2373,29 @@ function Shell({ user, onLogout }) {
     if (!(await confirm.ask(`Remove "${b.title}" from bucket list?`))) return
     const { queued } = await mutate({ table: 'bucket_list', method: 'DELETE', id: b.id })
     toast.push(queued ? 'Removed — will sync when back online' : 'Removed')
+  }
+
+  // Pending SMS-detected transactions — approve/reject are dedicated action endpoints (not a
+  // generic PATCH), same reasoning as budget_months' close/reopen above: a direct online-only
+  // call, not mutate(), so a queued offline edit can never race the real approval. `overrides`
+  // carries whatever the approval card's inline edit fields hold at the moment Approve is
+  // tapped — there's no separate "save edit" step, editing and approving are the same action.
+  const approvePending = async (p, overrides = {}) => {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      toast.push('Approving needs a connection — try again once you’re back online.', 'error')
+      return
+    }
+    const response = await fetch(`/api/finance/pending_transactions/${p.id}/approve`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(overrides) })
+    const result = await response.json().catch(() => ({}))
+    if (response.ok) { toast.push('Transaction added'); await refresh() } else { toast.push(result.error || 'Could not approve', 'error') }
+  }
+  const rejectPending = async (p) => {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      toast.push('Dismissing needs a connection — try again once you’re back online.', 'error')
+      return
+    }
+    const response = await fetch(`/api/finance/pending_transactions/${p.id}/reject`, { method: 'POST' })
+    if (response.ok) { toast.push('Dismissed'); await refresh() } else { toast.push('Could not dismiss', 'error') }
   }
 
   // Lend/Borrow
@@ -2759,6 +2789,18 @@ function Shell({ user, onLogout }) {
   const firstName = data.profile?.full_name?.split(' ')?.[0] || user?.user_metadata?.full_name?.split(' ')?.[0] || user?.email?.split('@')?.[0] || 'Deepak'
 
   const moduleSettings = resolveModuleSettings(data.profile)
+  const pendingSmsCount = data.pending_transactions.filter((p) => p.status === 'pending').length
+
+  // Native SMS listener (Android app only — see lib/sms/nativeBridge.js, a no-op on a plain web
+  // tab). dataRef exists purely so the listener's closure always reads the current
+  // sms_parse_patterns instead of whatever they were the one time this effect ran.
+  const dataRef = useRef(data)
+  useEffect(() => { dataRef.current = data }, [data])
+  useEffect(() => {
+    if (!moduleSettings.pending_sms?.enabled) return
+    return startSmsListener(() => dataRef.current.sms_parse_patterns, () => refresh({ silent: true }))
+  }, [moduleSettings.pending_sms?.enabled])
+
   const nav = [
     { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { key: 'transactions', label: 'Transactions', icon: ArrowLeftRight },
@@ -2825,6 +2867,7 @@ function Shell({ user, onLogout }) {
             {nav.map((n) => (
               <button key={n.key} data-tour={`nav-${n.key}`} onClick={() => setView(n.key)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition ${view === n.key ? 'bg-white/[.06] light:bg-black/[.04] text-white light:text-slate-900' : 'text-slate-400 light:text-slate-500 hover:bg-white/[.04] hover:light:bg-black/[.03] hover:text-white hover:light:text-slate-900'}`}>
                 <n.icon size={17} />{n.label}
+                {n.key === 'pending' && pendingSmsCount > 0 && <span className="ml-auto rounded-full bg-amber-400/20 px-2 py-0.5 text-[10px] font-semibold text-amber-200 light:text-amber-700">{pendingSmsCount}</span>}
               </button>
             ))}
           </nav>
@@ -2877,7 +2920,7 @@ function Shell({ user, onLogout }) {
           ) : (
             <div className={fitScreen ? 'min-h-0 flex-1 lg:overflow-y-auto' : ''}>
               {view === 'dashboard' && <DashboardView data={data} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onOpenTxForm={() => openTxForm()} setView={setView} onManageMoneyRules={() => openSettings('money_rules')} onPayCardBill={openCardPay} />}
-              {view === 'transactions' && <TransactionsView data={data} onOpenTxForm={() => openTxForm()} onEditTx={openTxForm} onDeleteTx={deleteTx} onDeleteTxBulk={deleteTxBulk} onImport={() => setCsvOpen(true)} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onOpenRecurring={openRecurringManager} onPayCardBill={openCardPay} />}
+              {view === 'transactions' && <TransactionsView data={data} onOpenTxForm={() => openTxForm()} onEditTx={openTxForm} onDeleteTx={deleteTx} onDeleteTxBulk={deleteTxBulk} onImport={() => setCsvOpen(true)} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onOpenRecurring={openRecurringManager} onPayCardBill={openCardPay} onApprovePending={approvePending} onRejectPending={rejectPending} />}
               {view === 'accounts' && <AccountsView data={data} onAdd={() => openAccForm()} onEdit={openAccForm} onDelete={deleteAccount} onDeleteTx={deleteTx} onAddTransaction={(accountId) => openTxForm(null, accountId)} onSyncBalance={syncAccountBalance} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onDetailChange={onDetailChange} initialSelectedId={initialNavState.current.detailId} />}
               {view === 'budgets' && <BudgetsView data={data} onSetMonth={openBudgetMonthForm} onCloseMonth={closeBudgetMonth} onReopenMonth={reopenBudgetMonth} onDeleteMonth={deleteBudgetMonth} onAddYearly={() => openBudgetForm()} onEditYearly={openBudgetForm} onDeleteYearly={deleteBudget} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'investments' && <InvestmentsView data={data} onAddPortfolio={() => openPortfolioForm()} onEditPortfolio={openPortfolioForm} onDeletePortfolio={deletePortfolio} onAddHolding={openHoldingForm} onBulkImport={openBulkImport} onEditHolding={openHoldingEdit} onDeleteHolding={deleteHolding} onRefreshRowPrice={onRefreshRowPrice} onManualPriceEntry={onManualPriceEntry} onRefreshAll={refreshAllPrices} pricesLoading={pricesLoading} onAddFunds={openFundsForm} onWithdrawFunds={openWithdrawForm} onConnectKite={connectKite} onLinkKite={linkPortfolioKite} onUnlinkKite={unlinkPortfolioKite} onSyncKite={syncPortfolioKite} kiteSyncBusy={kiteSyncBusy} onAddSip={openSipForm} onEditSip={openSipForm} onDeleteSip={deleteSip} onSyncSipsKite={syncSipsKite} onAddOtherInvestment={openOtherInvestmentForm} onEditOtherInvestment={openOtherInvestmentEdit} onDeleteOtherInvestment={deleteOtherInvestment} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onDetailChange={onDetailChange} initialSelectedId={initialNavState.current.detailId} />}
@@ -2887,6 +2930,7 @@ function Shell({ user, onLogout }) {
               {view === 'lend' && <LendBorrowView data={data} onAdd={() => openLendForm()} onEdit={openLendForm} onDelete={deleteLend} onDeleteTx={deleteTx} onLogRepayment={(record) => openTxForm(null, '', { value: `lend:${record.id}`, type: record.type === 'lent' ? 'income' : 'expense' })} onAddMore={openLendAddForm} onManageAccess={openManageLendAccess} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} toast={toast} onDetailChange={onDetailChange} initialSelectedId={initialNavState.current.detailId} />}
               {view === 'family_company' && <FamilyCompanyView data={data} onAddProfile={() => openMoneyProfileForm()} onEditProfile={openMoneyProfileForm} onDeleteProfile={deleteMoneyProfile} onAddEntry={openMoneyProfileEntryForm} onEditEntry={openMoneyProfileEntryEdit} onDeleteEntry={deleteMoneyProfileEntry} onBulkImport={openMoneyProfileBulkImport} onToggleStatus={toggleMoneyProfileStatus} onManageAccess={openManageAccess} onSyncBalance={syncMoneyProfileBalance} onOpenRecurring={openRecurringEntryManager} onDetailChange={onDetailChange} initialSelectedId={initialNavState.current.detailId} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'bucket' && <BucketListView data={data} onAdd={() => openBucketForm()} onEdit={openBucketForm} onDelete={deleteBucket} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
+              {view === 'pending' && <PendingTransactionsView data={data} onApprove={approvePending} onReject={rejectPending} />}
               {view === 'insights' && <InsightsView data={data} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'profile' && (
                 <SettingsShell
@@ -2921,12 +2965,16 @@ function Shell({ user, onLogout }) {
       <nav className="fixed bottom-0 left-0 right-0 z-20 border-t border-white/10 light:border-black/10 bg-[#0b0f18]/95 light:bg-white/90 backdrop-blur-xl lg:hidden glassy:glass-nav" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         <div className="mx-auto grid max-w-md grid-cols-4">
           {primaryMobileNav.map((n) => (
-            <button key={n.key} data-tour={`nav-${n.key}`} onClick={() => setView(n.key)} className={`flex flex-col items-center gap-1 py-3 text-[11px] ${view === n.key ? 'text-accent-300 light:text-accent-700' : 'text-slate-500'}`}>
-              <n.icon size={18} /><span className="max-w-full truncate px-1">{n.label}</span>
+            <button key={n.key} data-tour={`nav-${n.key}`} onClick={() => setView(n.key)} className={`relative flex flex-col items-center gap-1 py-3 text-[11px] ${view === n.key ? 'text-accent-300 light:text-accent-700' : 'text-slate-500'}`}>
+              <n.icon size={18} />
+              {n.key === 'pending' && pendingSmsCount > 0 && <span className="absolute right-[calc(50%-18px)] top-1.5 h-2 w-2 rounded-full bg-amber-300" />}
+              <span className="max-w-full truncate px-1">{n.label}</span>
             </button>
           ))}
-          <button onClick={() => setMoreOpen(true)} className={`flex flex-col items-center gap-1 py-3 text-[11px] ${isMoreActive ? 'text-accent-300 light:text-accent-700' : 'text-slate-500'}`}>
-            <MoreHorizontal size={18} />More
+          <button onClick={() => setMoreOpen(true)} className={`relative flex flex-col items-center gap-1 py-3 text-[11px] ${isMoreActive ? 'text-accent-300 light:text-accent-700' : 'text-slate-500'}`}>
+            <MoreHorizontal size={18} />
+            {pendingSmsCount > 0 && !primaryMobileNav.some((n) => n.key === 'pending') && <span className="absolute right-[calc(50%-18px)] top-1.5 h-2 w-2 rounded-full bg-amber-300" />}
+            More
           </button>
         </div>
       </nav>
@@ -2938,8 +2986,9 @@ function Shell({ user, onLogout }) {
               key={n.key}
               data-tour={`nav-${n.key}`}
               onClick={() => { setView(n.key); setMoreOpen(false) }}
-              className={`flex flex-col items-center gap-2 rounded-xl border p-4 text-center text-xs transition glassy:glass-pill ${view === n.key ? 'border-accent-300/30 bg-accent-400/10 text-accent-200 light:text-accent-700' : 'border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] text-slate-300 light:text-slate-700 hover:bg-white/[.06] hover:light:bg-black/[.04]'}`}
+              className={`relative flex flex-col items-center gap-2 rounded-xl border p-4 text-center text-xs transition glassy:glass-pill ${view === n.key ? 'border-accent-300/30 bg-accent-400/10 text-accent-200 light:text-accent-700' : 'border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] text-slate-300 light:text-slate-700 hover:bg-white/[.06] hover:light:bg-black/[.04]'}`}
             >
+              {n.key === 'pending' && pendingSmsCount > 0 && <span className="absolute right-2.5 top-2.5 rounded-full bg-amber-400/20 px-1.5 py-0.5 text-[10px] font-semibold text-amber-200 light:text-amber-700">{pendingSmsCount}</span>}
               <n.icon size={20} />
               <span>{n.label}</span>
             </button>

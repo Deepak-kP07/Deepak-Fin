@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Youtube } from 'lucide-react'
+import { ExternalLink, Youtube } from 'lucide-react'
+import { ZERODHA_SIGNUP_URL } from '@/lib/constants/links'
 
 export function SettingsKite({ data, onSaveKiteCredentials, onRemoveKiteCredentials }) {
   const { profile } = data
@@ -40,11 +41,19 @@ export function SettingsKite({ data, onSaveKiteCredentials, onRemoveKiteCredenti
             href="https://youtu.be/r88L9AqnNaE?si=Rgx9I3-92aXc1KX_&t=68"
             target="_blank"
             rel="noreferrer"
-            className="flex shrink-0 items-center gap-1.5 rounded-xl border border-white/10 light:border-black/10 px-3 py-1.5 text-xs text-slate-400 light:text-slate-500 hover:bg-white/5"
+            className="flex shrink-0 items-center gap-1.5 rounded-xl border border-[#FF0000]/30 bg-[#FF0000]/10 px-3 py-1.5 text-xs font-medium text-[#FF0000] hover:bg-[#FF0000]/20"
           >
             <Youtube size={13} />Watch how-to video
           </a>
         </div>
+        <a
+          href={ZERODHA_SIGNUP_URL}
+          target="_blank"
+          rel="noreferrer"
+          className="mb-3 flex w-full items-center justify-center gap-2 rounded-xl border border-accent-300/25 bg-accent-400/10 px-4 py-2.5 text-sm font-medium text-accent-200 light:text-accent-700 hover:bg-accent-400/20 sm:w-auto"
+        >
+          Don't have a Zerodha account? Create one<ExternalLink size={13} />
+        </a>
         <p className="text-sm leading-6 text-slate-400 light:text-slate-600">
           Connecting Kite already works out of the box using the app's default Kite Connect app — you
           don't need to do anything here unless you want to use your own instead. If you do, register a

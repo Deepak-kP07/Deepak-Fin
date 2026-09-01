@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { ArrowDownRight, ArrowUpRight, Eye, EyeOff, Layers, Link2, MoreVertical, PiggyBank, Pencil, Plus, RefreshCw, Sparkles, Target, Trash2, TrendingUp, Upload, Wallet } from 'lucide-react'
+import { ArrowDownRight, ArrowUpRight, ExternalLink, Eye, EyeOff, Layers, Link2, MoreVertical, PiggyBank, Pencil, Plus, RefreshCw, Sparkles, Target, Trash2, TrendingUp, Upload, Wallet } from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { HeroStatTile } from '@/components/shared/HeroStatTile'
 import { StatCard } from '@/components/shared/StatCard'
@@ -10,6 +10,7 @@ import { DismissibleBanner } from '@/components/shared/DismissibleBanner'
 import { currentValueOf, CATEGORY_BADGE_STYLE } from '@/lib/otherInvestments'
 import { downloadInvestmentsExport } from '@/lib/exportInvestments'
 import { formatDateTime, money, money2, relativeTime } from '@/lib/format'
+import { ZERODHA_SIGNUP_URL } from '@/lib/constants/links'
 import { PortfolioDetailView } from '@/features/investments/PortfolioDetailView'
 
 export function InvestmentsView({
@@ -38,6 +39,7 @@ export function InvestmentsView({
   const selectedPortfolio = portfolios.find((p) => p.id === selectedPortfolioId)
   const kiteConnected = !!profile?.kite_connected
   const kiteBroken = !!profile?.kite_broken
+  const hasOwnKiteKey = !!profile?.kite_api_key
   const anyPortfolioLinked = portfolios.some((p) => p.kite_linked)
   const emptyPortfolios = portfolios.filter((p) => !holdings.some((h) => h.portfolio_id === p.id))
 
@@ -279,6 +281,27 @@ export function InvestmentsView({
             <button onClick={onConnectKite} className={`ml-auto rounded-lg px-3 py-1 text-[11px] font-semibold ${kiteBroken ? 'bg-amber-400/20 text-amber-100 light:text-amber-800 hover:bg-amber-400/30' : 'bg-accent-300/20 text-accent-100 light:text-accent-700 hover:bg-accent-300/30'}`}>{kiteBroken ? 'Reconnect Kite' : 'Connect Kite'}</button>
           )}
         </div>
+        {/* Zerodha's Kite Connect only ever authenticates the ONE account that registered the
+            API key being used — the shared app key belongs to this app's owner, so anyone else
+            trying to connect a different Zerodha account through it hits a hard "user is not
+            enabled for the app" rejection from Zerodha itself. Surfacing this before they hit
+            that error (rather than only in the failure message) saves the confused round trip. */}
+        {!kiteConnected && (
+          <div className="mt-2.5 space-y-2 border-t border-accent-300/10 pt-2.5 text-accent-200/70 light:text-accent-700">
+            {!hasOwnKiteKey && (
+              <div>Connecting will use this app's shared Kite app, which only works for its owner's Zerodha account. For your own Zerodha account, add your own key first in <b>Settings → Kite Sync</b> — otherwise Zerodha will reject the login.</div>
+            )}
+            <a
+              href={ZERODHA_SIGNUP_URL}
+              target="_blank"
+              rel="noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="flex w-fit items-center gap-1.5 text-accent-200/70 light:text-accent-700 hover:text-accent-200 hover:light:text-accent-800 hover:underline"
+            >
+              Don't have a Zerodha account? Create one<ExternalLink size={11} />
+            </a>
+          </div>
+        )}
         {kiteConnected && !anyPortfolioLinked && (
           <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-accent-300/10 pt-2.5">
             {emptyPortfolios.length === 0 ? (

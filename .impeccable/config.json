@@ -240,6 +240,36 @@
           "features/familyCompany/RecurringEntryManager.jsx"
         ],
         "createdAt": "2026-08-28T03:37:00.390Z"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#facc15",
+        "createdAt": "2026-09-01T08:48:23.266Z",
+        "reason": "pre-existing categorical asset-class legend swatch (Gold/Silver/Land/Bonds/Cash), unrelated to current Zerodha-referral-link task"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#a3a3a3",
+        "createdAt": "2026-09-01T08:48:23.295Z",
+        "reason": "pre-existing categorical asset-class legend swatch (Gold/Silver/Land/Bonds/Cash), unrelated to current Zerodha-referral-link task"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#84cc16",
+        "createdAt": "2026-09-01T08:48:23.319Z",
+        "reason": "pre-existing categorical asset-class legend swatch (Gold/Silver/Land/Bonds/Cash), unrelated to current Zerodha-referral-link task"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#818cf8",
+        "createdAt": "2026-09-01T08:48:23.343Z",
+        "reason": "pre-existing categorical asset-class legend swatch (Gold/Silver/Land/Bonds/Cash), unrelated to current Zerodha-referral-link task"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#34d399",
+        "createdAt": "2026-09-01T08:48:23.368Z",
+        "reason": "pre-existing categorical asset-class legend swatch (Gold/Silver/Land/Bonds/Cash), unrelated to current Zerodha-referral-link task"
       }
     ]
   }

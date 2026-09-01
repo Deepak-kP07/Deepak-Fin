@@ -413,6 +413,11 @@ export const profiles = pgTable('profiles', {
   // it from auto-starting again. Unlike the report timestamps above, this one IS client-settable
   // (see safeFields.js): the user finishes/skips it themselves, there's no dedup risk to guard.
   tourCompletedAt: timestamp('tour_completed_at', { withTimezone: true }),
+  // SMS auto-detect (features/settings/SettingsSmsAutoDetect.jsx) — the "Pending" nav module
+  // itself (module_settings.pending_sms.enabled) is the master on/off switch; this is the
+  // separate power-user opt-in to skip the approval card entirely for senders already matched
+  // by an active sms_parse_patterns row. Off by default, per the PRD.
+  smsAutoApproveTrusted: boolean('sms_auto_approve_trusted').notNull().default(false),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
@@ -734,4 +739,61 @@ export const notificationEvents = pgTable('notification_events', {
   check('notification_events_type_check', sql`${t.type} in ('card_due','loan_due','recurring_generated','budget_overspend')`),
   unique('notification_events_dedup_key').on(t.userId, t.type, t.entityId, t.periodKey),
   index('notification_events_user_idx').on(t.userId),
+])
+
+// Global, shared across every user — NOT owned by anyone, so it has no user_id (unlike every
+// other table in this file). Managed only through migrations/an admin path, never a client write
+// (see drizzle/0048's RLS: read-only for `authenticated`, no insert/update/delete grant at all).
+// suggested_category_id is deliberately NOT stored here as an FK, unlike almost every other
+// category reference in this file — categories are strictly per-user (see `categories` above),
+// so a global config row can't point at one specific user's category row. A name/type pair is
+// resolved to the approving user's own category (via ensureCategory) at ingestion time instead —
+// see lib/server/genericCrud.js's pending_transactions branch.
+export const smsParsePatterns = pgTable('sms_parse_patterns', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  bankOrApp: text('bank_or_app').notNull(),
+  senderIdPattern: text('sender_id_pattern').notNull(),
+  messageRegex: text('message_regex').notNull(),
+  fieldMapping: jsonb('field_mapping').notNull(),
+  txnType: transactionType('txn_type'),
+  suggestedCategoryName: text('suggested_category_name'),
+  suggestedCategoryType: categoryType('suggested_category_type'),
+  isActive: boolean('is_active').notNull().default(true),
+  priority: integer('priority').notNull().default(0),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index('sms_parse_patterns_sender_idx').on(t.senderIdPattern)])
+
+// One row per SMS the parsing engine successfully matched, awaiting the user's approve/reject —
+// see lib/sms/parseEngine.js (the pure matcher) and lib/server/services/pendingTransactions.js
+// (approve/reject, which reuses createTransaction() so an approved row becomes a real transaction
+// through identical logic to manual entry). type is deliberately income/expense only — an SMS can
+// never reliably imply a transfer between two of the user's own accounts.
+export const pendingTransactions = pgTable('pending_transactions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
+  status: text('status').notNull().default('pending'),
+  amount: numeric('amount', { precision: 14, scale: 2 }),
+  type: transactionType('type'),
+  merchant: text('merchant'),
+  description: text('description'),
+  date: date('date'),
+  time: time('time'),
+  suggestedCategoryId: uuid('suggested_category_id').references(() => categories.id, { onDelete: 'set null' }),
+  accountId: uuid('account_id').references(() => accounts.id, { onDelete: 'set null' }),
+  creditCardId: uuid('credit_card_id').references(() => creditCards.id, { onDelete: 'set null' }),
+  senderId: text('sender_id').notNull(),
+  matchedPatternId: uuid('matched_pattern_id').references(() => smsParsePatterns.id, { onDelete: 'set null' }),
+  // Cleared immediately on approve/reject (see approvePendingTransaction/rejectPendingTransaction)
+  // and, as a backstop, purged for anything still 'pending' after 7 days by a cron route — never
+  // kept around once a decision no longer needs it. Also never sent to the browser at all (see
+  // the /finance/summary handler's pendingTransactionsSafe mapping).
+  rawMessage: text('raw_message'),
+  last4Hint: text('last4_hint'),
+  resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+  linkedTransactionId: uuid('linked_transaction_id').references(() => transactions.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  check('pending_transactions_amount_check', sql`${t.amount} is null or ${t.amount} >= 0`),
+  check('pending_transactions_status_check', sql`${t.status} in ('pending','approved','rejected')`),
+  index('pending_transactions_user_status_idx').on(t.userId, t.status),
 ])
