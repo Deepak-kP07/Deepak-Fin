@@ -22,6 +22,19 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- Native Google sign-in redirect (see lib/auth/nativeGoogleAuth.js) — Google
+                 Identity Services doesn't work inside an embedded WebView, so native sign-in
+                 goes through Supabase's OAuth redirect flow instead, opened in a Chrome Custom
+                 Tab; this is what hands control back to the app once it completes. Must match
+                 REDIRECT_URL in that file, and be added to Supabase's Authentication > URL
+                 Configuration > Redirect URLs allowlist. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="com.personalfin.app" android:host="login-callback" />
+            </intent-filter>
+
         </activity>
 
         <provider

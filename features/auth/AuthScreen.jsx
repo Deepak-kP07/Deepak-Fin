@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import Script from 'next/script'
 import { MotionConfig, motion, useMotionValue, useTransform } from 'framer-motion'
 import { createClient } from '@/lib/supabase/browser'
+import { isNativePlatform, listenForNativeGoogleCallback, startNativeGoogleSignIn } from '@/lib/auth/nativeGoogleAuth'
 import {
   ArrowLeft, Banknote, ChevronRight, CreditCard, Eye, EyeOff, Landmark, LayoutDashboard,
   LineChart, Repeat, ShieldCheck, Sparkle, Wifi,
@@ -273,6 +274,10 @@ export function AuthScreen({ onAuth, initialError, initialMode = 'landing', init
   const [busy, setBusy] = useState(false)
   const [googleBusy, setGoogleBusy] = useState(false)
   const [googleScriptReady, setGoogleScriptReady] = useState(false)
+  // Read after mount, not during render, so the server-rendered markup (which never knows it'll
+  // end up in a native shell) matches the client's first paint — avoids a hydration mismatch.
+  const [isNative, setIsNative] = useState(false)
+  useEffect(() => { setIsNative(isNativePlatform()) }, [])
   const googleButtonRef = useRef(null)
   const googleNonceRef = useRef(null)
   const heroX = useMotionValue(0)
@@ -309,7 +314,7 @@ export function AuthScreen({ onAuth, initialError, initialMode = 'landing', init
   // "<project-ref>.supabase.co" address in front of users on Google's account chooser. The ID
   // token that button produces is handed to Supabase directly, with no redirect involved.
   useEffect(() => {
-    if (!googleScriptReady || mode === 'landing') return
+    if (isNative || !googleScriptReady || mode === 'landing') return
     const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
     if (!clientId || !window.google?.accounts?.id || !googleButtonRef.current) return
     let cancelled = false
@@ -356,7 +361,22 @@ export function AuthScreen({ onAuth, initialError, initialMode = 'landing', init
       }
     })()
     return () => { cancelled = true }
-  }, [googleScriptReady, mode])
+  }, [isNative, googleScriptReady, mode])
+
+  // Native-only: listen for the OS handing the OAuth redirect back to the app (see
+  // lib/auth/nativeGoogleAuth.js) — no-op on web (isNativePlatform() guards it internally too).
+  useEffect(() => {
+    if (!isNative) return
+    return listenForNativeGoogleCallback(
+      (user) => { setGoogleBusy(false); fetch('/api/auth/google_welcome', { method: 'POST' }).catch(() => {}); onAuth(user) },
+      (err) => { setGoogleBusy(false); setFeedback({ type: 'error', message: err.message }) }
+    )
+  }, [isNative])
+
+  const nativeGoogleSignIn = async () => {
+    setFeedback(null); setGoogleBusy(true)
+    try { await startNativeGoogleSignIn() } catch (err) { setGoogleBusy(false); setFeedback({ type: 'error', message: err.message }) }
+  }
 
   const goToAuth = (nextMode) => { setFeedback(null); setMode(nextMode) }
 
@@ -483,11 +503,22 @@ export function AuthScreen({ onAuth, initialError, initialMode = 'landing', init
                 </button>
               </form>
               <div className="my-8 flex items-center gap-3 text-xs text-slate-600"><div className="h-px flex-1 bg-white/10" />OR<div className="h-px flex-1 bg-white/10" /></div>
-              <div ref={googleButtonRef} aria-busy={googleBusy} className="flex min-h-[52px] w-full justify-center [&>div]:!w-full" />
-              {!process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID && (
-                <p className="mt-2 text-center text-xs text-rose-300">Google sign-in isn't configured yet.</p>
+              {isNative ? (
+                // Google Identity Services (below) doesn't work inside an embedded Android
+                // WebView — see lib/auth/nativeGoogleAuth.js. A plain button + a Custom Tab
+                // stands in for it here instead of the GIS-rendered one.
+                <button onClick={nativeGoogleSignIn} disabled={googleBusy} className="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[.10] px-4 py-3.5 font-semibold text-white transition hover:border-accent-300 hover:bg-accent-300 hover:text-[#07101c] disabled:opacity-60">
+                  {googleBusy ? 'Waiting for Google…' : 'Continue with Google'}
+                </button>
+              ) : (
+                <>
+                  <div ref={googleButtonRef} aria-busy={googleBusy} className="flex min-h-[52px] w-full justify-center [&>div]:!w-full" />
+                  {!process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID && (
+                    <p className="mt-2 text-center text-xs text-rose-300">Google sign-in isn't configured yet.</p>
+                  )}
+                  <Script src="https://accounts.google.com/gsi/client" strategy="afterInteractive" onReady={() => setGoogleScriptReady(true)} />
+                </>
               )}
-              <Script src="https://accounts.google.com/gsi/client" strategy="afterInteractive" onReady={() => setGoogleScriptReady(true)} />
               <button onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setFeedback(null) }} className="mt-3 w-full rounded-xl border border-white/10 px-4 py-3.5 text-sm font-medium text-slate-300 transition hover:bg-white/5">
                 {mode === 'login' ? 'Create a new account' : 'I already have an account'}
               </button>
