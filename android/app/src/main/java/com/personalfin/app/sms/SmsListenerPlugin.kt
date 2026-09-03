@@ -39,6 +39,7 @@ import com.getcapacitor.annotation.PermissionCallback
 class SmsListenerPlugin : Plugin() {
   companion object {
     const val ACTION_SMS_RECEIVED = "com.personalfin.app.sms.SMS_RECEIVED"
+    const val EXTRA_ID = "id"
     const val EXTRA_SENDER = "sender"
     const val EXTRA_BODY = "body"
     const val EXTRA_TIMESTAMP = "timestamp"
@@ -50,15 +51,32 @@ class SmsListenerPlugin : Plugin() {
     super.load()
     relayReceiver = object : BroadcastReceiver() {
       override fun onReceive(context: Context, intent: Intent) {
+        val id = intent.getStringExtra(EXTRA_ID)
+        if (id != null) SmsQueueStore.remove(context, id)
         val data = JSObject().apply {
           put("sender", intent.getStringExtra(EXTRA_SENDER) ?: "")
           put("body", intent.getStringExtra(EXTRA_BODY) ?: "")
           put("timestamp", intent.getLongExtra(EXTRA_TIMESTAMP, System.currentTimeMillis()))
         }
-        notifyListeners("smsReceived", data)
+        // retainUntilConsumed=true — the JS side's addListener('smsReceived', ...) call happens
+        // after React mounts, which can land a beat after this plugin loads; without retaining,
+        // an event that fires in that gap would be dropped the same way the closed-app case was.
+        notifyListeners("smsReceived", data, true)
       }
     }
     LocalBroadcastManager.getInstance(context).registerReceiver(relayReceiver!!, IntentFilter(ACTION_SMS_RECEIVED))
+
+    // Anything still in the queue at this point necessarily arrived while the app wasn't running
+    // to catch the live relay above — see SmsQueueStore's doc comment. Flush it now so those SMS
+    // aren't lost, which is what was happening for every transaction received while the app was
+    // fully closed (i.e. normal, non-debugging use).
+    for (item in SmsQueueStore.drainAll(context)) {
+      notifyListeners("smsReceived", JSObject().apply {
+        put("sender", item.sender)
+        put("body", item.body)
+        put("timestamp", item.timestamp)
+      }, true)
+    }
   }
 
   override fun handleOnDestroy() {

@@ -15,12 +15,14 @@ import androidx.localbroadcastmanager.content.LocalBroadcastManager
  * step asking the user to exempt this app from battery optimization; some messages will still be
  * missed on those devices no matter what, which is why manual entry stays a permanent fallback.
  *
- * Deliberately does the absolute minimum here: extract sender + body, relay via
- * LocalBroadcastManager to SmsListenerPlugin (only reachable while the app process is alive) and
- * return. All real work — parsing, matching against sms_parse_patterns, and the authenticated
- * fetch() to /api/finance/pending_transactions — happens in JS inside the WebView (see
- * lib/sms/nativeBridge.js), specifically BECAUSE that's the only place the WebView's own session
- * cookies are available; a plain Kotlin/OkHttp call from here would not carry them and would 401.
+ * Deliberately does the absolute minimum here: extract sender + body, persist to SmsQueueStore
+ * (durable — survives this process being torn down right after, which is the common case when the
+ * app wasn't already open) and relay live via LocalBroadcastManager for instant delivery when
+ * SmsListenerPlugin already happens to be loaded. All real work — parsing, matching against
+ * sms_parse_patterns, and the authenticated fetch() to /api/finance/pending_transactions — happens
+ * in JS inside the WebView (see lib/sms/nativeBridge.js), specifically BECAUSE that's the only
+ * place the WebView's own session cookies are available; a plain Kotlin/OkHttp call from here
+ * would not carry them and would 401.
  */
 class SmsReceiver : BroadcastReceiver() {
   override fun onReceive(context: Context, intent: Intent) {
@@ -37,10 +39,14 @@ class SmsReceiver : BroadcastReceiver() {
     }
 
     for ((sender, body) in bySender) {
+      val id = java.util.UUID.randomUUID().toString()
+      val timestamp = System.currentTimeMillis()
+      SmsQueueStore.enqueue(context, id, sender, body.toString(), timestamp)
       val relay = Intent(SmsListenerPlugin.ACTION_SMS_RECEIVED).apply {
+        putExtra(SmsListenerPlugin.EXTRA_ID, id)
         putExtra(SmsListenerPlugin.EXTRA_SENDER, sender)
         putExtra(SmsListenerPlugin.EXTRA_BODY, body.toString())
-        putExtra(SmsListenerPlugin.EXTRA_TIMESTAMP, System.currentTimeMillis())
+        putExtra(SmsListenerPlugin.EXTRA_TIMESTAMP, timestamp)
       }
       LocalBroadcastManager.getInstance(context).sendBroadcast(relay)
     }
