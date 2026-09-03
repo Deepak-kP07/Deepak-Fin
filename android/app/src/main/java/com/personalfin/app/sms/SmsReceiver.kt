@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.provider.Telephony
+import android.util.Log
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 
 /**
@@ -25,10 +26,15 @@ import androidx.localbroadcastmanager.content.LocalBroadcastManager
  * would not carry them and would 401.
  */
 class SmsReceiver : BroadcastReceiver() {
+  companion object {
+    private const val TAG = "PersonalFin-SMS"
+  }
+
   override fun onReceive(context: Context, intent: Intent) {
+    Log.d(TAG, "onReceive fired, action=${intent.action}")
     if (intent.action != Telephony.Sms.Intents.SMS_RECEIVED_ACTION) return
     val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent)
-    if (messages.isNullOrEmpty()) return
+    if (messages.isNullOrEmpty()) { Log.d(TAG, "getMessagesFromIntent returned nothing"); return }
 
     // A single SMS can arrive as multiple concatenated PDU parts — same sender, one logical
     // message body split across parts. Group by sender, join bodies in arrival order.
@@ -39,6 +45,7 @@ class SmsReceiver : BroadcastReceiver() {
     }
 
     for ((sender, body) in bySender) {
+      Log.d(TAG, "queuing SMS from sender=$sender bodyLen=${body.length}")
       val id = java.util.UUID.randomUUID().toString()
       val timestamp = System.currentTimeMillis()
       SmsQueueStore.enqueue(context, id, sender, body.toString(), timestamp)

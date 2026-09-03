@@ -1,30 +1,16 @@
 import { NextResponse } from 'next/server'
-import webpush from 'web-push'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { cardsDueSoon } from '@/lib/creditCards'
 import { budgetInsights } from '@/lib/budgets'
 import { nextLoanDueDate } from '@/lib/amortization'
 import { generateDueRecurring } from '@/lib/server/services/recurring'
 import { generateDueRecurringMoneyProfileEntries } from '@/lib/server/services/recurringMoneyProfileEntries'
-import { sendFcmToUser } from '@/lib/server/services/pushFcm'
+import { sendPushToUser } from '@/lib/server/services/pushSend'
 import { money } from '@/lib/format'
 import { isValidCronSecret } from '@/lib/server/cronAuth'
 
 const DUE_SOON_DAYS = 4
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
-
-// Both web-push (browser/PWA) and FCM (native Android) are independent, optional channels — a
-// user might have devices registered on either, both, or neither, so neither being unconfigured
-// should block the other. VAPID_ENABLED gates the webpush.sendNotification calls below;
-// sendFcmToUser already no-ops on its own when FIREBASE_SERVICE_ACCOUNT_JSON isn't set.
-const VAPID_ENABLED = !!(process.env.VAPID_PRIVATE_KEY && process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY)
-if (VAPID_ENABLED) {
-  webpush.setVapidDetails(
-    process.env.VAPID_SUBJECT || 'mailto:admin@example.com',
-    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
-    process.env.VAPID_PRIVATE_KEY
-  )
-}
 
 // One dedup row per (user, type, entity, period) — checked before sending, written after. A row
 // already existing for this exact key means this exact cycle already notified; a fresh cycle
@@ -36,30 +22,6 @@ async function alreadyNotified(supabase, userId, type, entityId, periodKey) {
 }
 async function recordNotified(supabase, userId, type, entityId, periodKey) {
   await supabase.from('notification_events').insert({ user_id: userId, type, entity_id: entityId, period_key: periodKey }).select().maybeSingle()
-}
-
-async function sendToUser(supabase, userId, payload) {
-  let sent = 0
-  if (VAPID_ENABLED) {
-    const { data: subs } = await supabase.from('push_subscriptions').select('*').eq('user_id', userId)
-    for (const sub of subs || []) {
-      try {
-        await webpush.sendNotification(
-          { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-          JSON.stringify(payload)
-        )
-        sent++
-      } catch (err) {
-        // 404/410 = the browser/OS has dropped this subscription (uninstalled, permission
-        // revoked, endpoint expired) — nothing will ever succeed against it again, so stop trying.
-        if (err.statusCode === 404 || err.statusCode === 410) {
-          await supabase.from('push_subscriptions').delete().eq('id', sub.id)
-        }
-      }
-    }
-  }
-  sent += await sendFcmToUser(supabase, userId, { title: payload.title, body: payload.body, url: payload.url })
-  return sent
 }
 
 async function checkUser(supabase, userId) {
@@ -91,7 +53,9 @@ async function checkUser(supabase, userId) {
 
   // Pending transactions (SMS auto-detect) waiting for review — a digest, not one notification
   // per row, and capped at once a day per user via periodKey=today regardless of how many are
-  // pending or how many cron runs happen today.
+  // pending or how many cron runs happen today. The instant per-detection push
+  // (lib/server/genericCrud.js's pending_transactions ingestion) is the primary signal; this is
+  // just a catch-up for anything still sitting unreviewed.
   const { data: pending } = await supabase.from('pending_transactions').select('id').eq('user_id', userId).eq('status', 'pending')
   if (pending && pending.length > 0) {
     const periodKey = new Date().toISOString().slice(0, 10)
@@ -172,7 +136,7 @@ async function handler(request) {
     const notifications = await checkUser(supabase, user.id)
     let sent = 0
     for (const n of notifications) {
-      const count = await sendToUser(supabase, user.id, { title: n.title, body: n.body, url: `${BASE_URL}${n.url}` })
+      const count = await sendPushToUser(supabase, user.id, { title: n.title, body: n.body, url: `${BASE_URL}${n.url}` })
       if (count > 0) { sent += count; await recordNotified(supabase, user.id, n.type, n.entityId, n.periodKey) }
     }
     if (notifications.length > 0) results.push({ userId: user.id, triggered: notifications.length, sent })

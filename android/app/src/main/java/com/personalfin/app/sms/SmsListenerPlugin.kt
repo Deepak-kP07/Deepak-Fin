@@ -8,6 +8,7 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.provider.Settings
 import android.net.Uri
+import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.getcapacitor.JSObject
@@ -43,14 +44,17 @@ class SmsListenerPlugin : Plugin() {
     const val EXTRA_SENDER = "sender"
     const val EXTRA_BODY = "body"
     const val EXTRA_TIMESTAMP = "timestamp"
+    private const val TAG = "PersonalFin-SMS"
   }
 
   private var relayReceiver: BroadcastReceiver? = null
 
   override fun load() {
     super.load()
+    Log.d(TAG, "SmsListenerPlugin.load() called")
     relayReceiver = object : BroadcastReceiver() {
       override fun onReceive(context: Context, intent: Intent) {
+        Log.d(TAG, "live relay delivering to JS, sender=${intent.getStringExtra(EXTRA_SENDER)}")
         val id = intent.getStringExtra(EXTRA_ID)
         if (id != null) SmsQueueStore.remove(context, id)
         val data = JSObject().apply {
@@ -70,7 +74,10 @@ class SmsListenerPlugin : Plugin() {
     // to catch the live relay above — see SmsQueueStore's doc comment. Flush it now so those SMS
     // aren't lost, which is what was happening for every transaction received while the app was
     // fully closed (i.e. normal, non-debugging use).
-    for (item in SmsQueueStore.drainAll(context)) {
+    val backlog = SmsQueueStore.drainAll(context)
+    Log.d(TAG, "backlog flush found ${backlog.size} queued item(s)")
+    for (item in backlog) {
+      Log.d(TAG, "flushing queued SMS from sender=${item.sender}")
       notifyListeners("smsReceived", JSObject().apply {
         put("sender", item.sender)
         put("body", item.body)
