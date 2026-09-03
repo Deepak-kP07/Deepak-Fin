@@ -62,6 +62,7 @@ import { BucketForm } from '@/features/buckets/BucketForm'
 import { BucketListView } from '@/features/buckets/BucketListView'
 import { PendingTransactionsView } from '@/features/pending/PendingTransactionsView'
 import { startSmsListener } from '@/lib/sms/nativeBridge'
+import { ensureNativePushRegistered } from '@/lib/push/nativeBridge'
 import { LendForm } from '@/features/lend-borrow/LendForm'
 import { LendAddMoreForm } from '@/features/lend-borrow/LendAddMoreForm'
 import { LendBorrowView } from '@/features/lend-borrow/LendBorrowView'
@@ -2800,6 +2801,11 @@ function Shell({ user, onLogout }) {
     if (!moduleSettings.pending_sms?.enabled) return
     return startSmsListener(() => dataRef.current.sms_parse_patterns, () => refresh({ silent: true }))
   }, [moduleSettings.pending_sms?.enabled])
+
+  // Silently re-registers this device's FCM token on every app load if push permission was
+  // already granted — see lib/push/nativeBridge.js's comment on why this can't just rely on the
+  // Settings toggle catching a token that got invalidated/pruned since the last launch.
+  useEffect(() => { ensureNativePushRegistered() }, [])
 
   const nav = [
     { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
