@@ -2217,7 +2217,7 @@ function Shell({ user, onLogout }) {
     const hadController = !!navigator.serviceWorker.controller
     const onControllerChange = () => {
       if (!hadController) return
-      toast.push('A new version is available.', 'info', { persist: true, action: { label: 'Refresh', onClick: () => window.location.reload() } })
+      toast.push('A new version is available.', 'info', { persist: true, action: { label: 'Update', onClick: () => window.location.reload() } })
     }
     navigator.serviceWorker.addEventListener('controllerchange', onControllerChange)
     return () => navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange)
