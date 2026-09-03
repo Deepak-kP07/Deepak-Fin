@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Sampled from the app icon's own bar-chart accent (public/icons/icon-512.png) — tints the
+         white notification silhouette (drawable-*dpi/ic_stat_notification.png) in the status bar
+         and notification shade, since Android renders that icon as alpha-only otherwise. -->
+    <color name="notification_accent_color">#39EAA8</color>
+</resources>

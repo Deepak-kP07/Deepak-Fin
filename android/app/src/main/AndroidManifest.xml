@@ -57,6 +57,18 @@
                 <action android:name="android.provider.Telephony.SMS_RECEIVED" />
             </intent-filter>
         </receiver>
+
+        <!-- Without these, FCM falls back to a generic system icon/tint for any notification-
+             payload push it auto-displays (background/closed app) — see
+             res/drawable-*dpi/ic_stat_notification.png (a white silhouette; Android requires
+             alpha-only icons here, a full-color launcher icon can't be used directly) and
+             res/values/notification_colors.xml for the accent color. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_notification" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/notification_accent_color" />
     </application>
 
     <!-- Permissions -->
