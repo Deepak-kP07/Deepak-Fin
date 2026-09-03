@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
 
     <application
         android:allowBackup="true"
@@ -58,17 +58,31 @@
             </intent-filter>
         </receiver>
 
-        <!-- Without these, FCM falls back to a generic system icon/tint for any notification-
-             payload push it auto-displays (background/closed app) — see
-             res/drawable-*dpi/ic_stat_notification.png (a white silhouette; Android requires
+        <!-- res/drawable-*dpi/ic_stat_notification.png (a white silhouette; Android requires
              alpha-only icons here, a full-color launcher icon can't be used directly) and
-             res/values/notification_colors.xml for the accent color. -->
+             res/values/notification_colors.xml for the accent color — still used as the small
+             status-bar icon by PushMessagingService below. -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
             android:resource="@drawable/ic_stat_notification" />
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_color"
             android:resource="@color/notification_accent_color" />
+
+        <!-- Strip Capacitor's own auto-merged messaging service and replace it with our subclass
+             (android/app/src/main/java/com/personalfin/app/push/PushMessagingService.kt), which
+             adds a full-color large icon (the real logo) that Play Services' own auto-display
+             has no way to show. Only one component may own the MESSAGING_EVENT intent-filter. -->
+        <service
+            android:name="com.capacitorjs.plugins.pushnotifications.MessagingService"
+            tools:node="remove" />
+        <service
+            android:name=".push.PushMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
     </application>
 
     <!-- Permissions -->

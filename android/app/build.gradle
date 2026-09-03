@@ -39,6 +39,11 @@ dependencies {
     // relay a detected SMS from the manifest-registered receiver to the running plugin instance.
     implementation "androidx.localbroadcastmanager:localbroadcastmanager:1.1.0"
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    // firebase-messaging is only a transitive (implementation-scoped) dependency of
+    // capacitor-push-notifications, so it's invisible to :app's own compile classpath by default
+    // — needed directly here since PushMessagingService (android/app/src/main/java/com/
+    // personalfin/app/push) extends FirebaseMessagingService itself, not just Capacitor's plugin.
+    implementation "com.google.firebase:firebase-messaging:25.0.1"
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
     implementation project(':capacitor-android')
     testImplementation "junit:junit:$junitVersion"
