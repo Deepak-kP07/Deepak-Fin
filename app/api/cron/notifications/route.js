@@ -5,17 +5,26 @@ import { cardsDueSoon } from '@/lib/creditCards'
 import { budgetInsights } from '@/lib/budgets'
 import { nextLoanDueDate } from '@/lib/amortization'
 import { generateDueRecurring } from '@/lib/server/services/recurring'
+import { generateDueRecurringMoneyProfileEntries } from '@/lib/server/services/recurringMoneyProfileEntries'
+import { sendFcmToUser } from '@/lib/server/services/pushFcm'
 import { money } from '@/lib/format'
 import { isValidCronSecret } from '@/lib/server/cronAuth'
 
 const DUE_SOON_DAYS = 4
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
 
-webpush.setVapidDetails(
-  process.env.VAPID_SUBJECT || 'mailto:admin@example.com',
-  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
-  process.env.VAPID_PRIVATE_KEY
-)
+// Both web-push (browser/PWA) and FCM (native Android) are independent, optional channels — a
+// user might have devices registered on either, both, or neither, so neither being unconfigured
+// should block the other. VAPID_ENABLED gates the webpush.sendNotification calls below;
+// sendFcmToUser already no-ops on its own when FIREBASE_SERVICE_ACCOUNT_JSON isn't set.
+const VAPID_ENABLED = !!(process.env.VAPID_PRIVATE_KEY && process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY)
+if (VAPID_ENABLED) {
+  webpush.setVapidDetails(
+    process.env.VAPID_SUBJECT || 'mailto:admin@example.com',
+    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
+    process.env.VAPID_PRIVATE_KEY
+  )
+}
 
 // One dedup row per (user, type, entity, period) — checked before sending, written after. A row
 // already existing for this exact key means this exact cycle already notified; a fresh cycle
@@ -30,23 +39,26 @@ async function recordNotified(supabase, userId, type, entityId, periodKey) {
 }
 
 async function sendToUser(supabase, userId, payload) {
-  const { data: subs } = await supabase.from('push_subscriptions').select('*').eq('user_id', userId)
   let sent = 0
-  for (const sub of subs || []) {
-    try {
-      await webpush.sendNotification(
-        { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-        JSON.stringify(payload)
-      )
-      sent++
-    } catch (err) {
-      // 404/410 = the browser/OS has dropped this subscription (uninstalled, permission revoked,
-      // endpoint expired) — nothing will ever succeed against it again, so stop trying.
-      if (err.statusCode === 404 || err.statusCode === 410) {
-        await supabase.from('push_subscriptions').delete().eq('id', sub.id)
+  if (VAPID_ENABLED) {
+    const { data: subs } = await supabase.from('push_subscriptions').select('*').eq('user_id', userId)
+    for (const sub of subs || []) {
+      try {
+        await webpush.sendNotification(
+          { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+          JSON.stringify(payload)
+        )
+        sent++
+      } catch (err) {
+        // 404/410 = the browser/OS has dropped this subscription (uninstalled, permission
+        // revoked, endpoint expired) — nothing will ever succeed against it again, so stop trying.
+        if (err.statusCode === 404 || err.statusCode === 410) {
+          await supabase.from('push_subscriptions').delete().eq('id', sub.id)
+        }
       }
     }
   }
+  sent += await sendFcmToUser(supabase, userId, { title: payload.title, body: payload.body, url: payload.url })
   return sent
 }
 
@@ -63,6 +75,32 @@ async function checkUser(supabase, userId) {
       type: 'recurring_generated', entityId: rule.ruleId, periodKey,
       title: 'Recurring transaction added', body: `${rule.description} — ${rule.count} occurrence${rule.count === 1 ? '' : 's'} generated`, url: '/?view=transactions',
     })
+  }
+
+  // Same idea, for Family/Company (Money Profile) recurring entries — previously only generated
+  // lazily on next summary fetch, with nothing telling the user it happened.
+  const generatedMoneyProfile = await generateDueRecurringMoneyProfileEntries(supabase, userId)
+  for (const rule of generatedMoneyProfile) {
+    const periodKey = rule.lastGenerated
+    if (await alreadyNotified(supabase, userId, 'recurring_money_profile_generated', rule.ruleId, periodKey)) continue
+    notifications.push({
+      type: 'recurring_money_profile_generated', entityId: rule.ruleId, periodKey,
+      title: 'Recurring entry added', body: `${rule.description} — ${rule.count} occurrence${rule.count === 1 ? '' : 's'} generated`, url: '/?view=family_company',
+    })
+  }
+
+  // Pending transactions (SMS auto-detect) waiting for review — a digest, not one notification
+  // per row, and capped at once a day per user via periodKey=today regardless of how many are
+  // pending or how many cron runs happen today.
+  const { data: pending } = await supabase.from('pending_transactions').select('id').eq('user_id', userId).eq('status', 'pending')
+  if (pending && pending.length > 0) {
+    const periodKey = new Date().toISOString().slice(0, 10)
+    if (!(await alreadyNotified(supabase, userId, 'pending_review_digest', userId, periodKey))) {
+      notifications.push({
+        type: 'pending_review_digest', entityId: userId, periodKey,
+        title: 'Transactions waiting for review', body: `${pending.length} detected transaction${pending.length === 1 ? '' : 's'} need${pending.length === 1 ? 's' : ''} your approval`, url: '/?view=pending',
+      })
+    }
   }
 
   // Credit card bills due soon.
@@ -123,9 +161,6 @@ async function checkUser(supabase, userId) {
 async function handler(request) {
   if (!isValidCronSecret(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-  if (!process.env.VAPID_PRIVATE_KEY || !process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY) {
-    return NextResponse.json({ error: 'VAPID keys not configured' }, { status: 500 })
   }
 
   const supabase = createAdminClient()

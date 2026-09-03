@@ -728,6 +728,9 @@ export const pushSubscriptions = pgTable('push_subscriptions', {
 // card/loan/budget/recurring-rule it's about, and the due date or cycle it's about). Checked
 // before sending and written after, so a card due again next cycle notifies again on its own
 // (a fresh periodKey), but the same cycle never double-sends even across multiple cron runs.
+// 'pending_review_digest' uses the user's own id as entity_id (there's no single entity — it's a
+// digest of however many pending_transactions rows are waiting) and today's date as periodKey, so
+// it fires at most once per day regardless of how many are pending.
 export const notificationEvents = pgTable('notification_events', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
@@ -736,9 +739,26 @@ export const notificationEvents = pgTable('notification_events', {
   periodKey: text('period_key').notNull(),
   sentAt: timestamp('sent_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
-  check('notification_events_type_check', sql`${t.type} in ('card_due','loan_due','recurring_generated','budget_overspend')`),
+  check('notification_events_type_check', sql`${t.type} in ('card_due','loan_due','recurring_generated','budget_overspend','recurring_money_profile_generated','pending_review_digest')`),
   unique('notification_events_dedup_key').on(t.userId, t.type, t.entityId, t.periodKey),
   index('notification_events_user_idx').on(t.userId),
+])
+
+// One row per registered native device (a user can have several) — the FCM registration token
+// handed back by @capacitor/push-notifications on the native Android app. Separate from
+// push_subscriptions (Web Push, browser/PWA) because a closed native app doesn't keep the
+// WebView/service-worker context alive to receive a Web Push the way a real browser tab does —
+// FCM instead wakes the app at the OS level. Both channels are tried by the cron trigger route so
+// a user gets notified regardless of which surface (browser tab vs native app) they use.
+export const deviceTokens = pgTable('device_tokens', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
+  token: text('token').notNull(),
+  platform: text('platform').notNull().default('android'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  unique('device_tokens_user_token_key').on(t.userId, t.token),
+  index('device_tokens_user_idx').on(t.userId),
 ])
 
 // Global, shared across every user — NOT owned by anyone, so it has no user_id (unlike every

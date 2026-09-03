@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Bell, BellOff } from 'lucide-react'
 import { ToggleSwitch } from '@/components/shared/ToggleSwitch'
+import { isNativePushAvailable, registerNativePush } from '@/lib/push/nativeBridge'
 
 // Not a profiles column merged through onSaveProfile like the rest of Settings — a push
 // subscription is per-device, not per-user, so its truth lives in this browser's own
@@ -22,6 +23,12 @@ export function SettingsNotifications({ data, onSaveProfile, toast }) {
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
+    if (isNativePushAvailable()) {
+      import('@capacitor/push-notifications').then(({ PushNotifications }) =>
+        PushNotifications.checkPermissions().then(({ receive }) => setEnabled(receive === 'granted'))
+      ).catch(() => {})
+      return
+    }
     if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) {
       setSupported(false)
       return
@@ -32,6 +39,12 @@ export function SettingsNotifications({ data, onSaveProfile, toast }) {
   const enable = async () => {
     setBusy(true)
     try {
+      if (isNativePushAvailable()) {
+        await registerNativePush()
+        setEnabled(true)
+        toast.push('Notifications enabled on this device')
+        return
+      }
       const permission = await Notification.requestPermission()
       if (permission !== 'granted') { toast.push('Notifications permission was denied', 'error'); return }
       const reg = await navigator.serviceWorker.ready
@@ -55,6 +68,17 @@ export function SettingsNotifications({ data, onSaveProfile, toast }) {
   const disable = async () => {
     setBusy(true)
     try {
+      if (isNativePushAvailable()) {
+        // The plugin has no "unregister" call to revoke the token at the OS level — the
+        // reliable stop-sending switch is removing device_tokens server-side. Actual OS
+        // notification permission stays granted; the user can revoke that from system Settings.
+        const response = await fetch('/api/finance/device_tokens')
+        const rows = response.ok ? await response.json() : []
+        await Promise.all(rows.filter((r) => r.platform === 'android').map((r) => fetch(`/api/finance/device_tokens/${r.id}`, { method: 'DELETE' })))
+        setEnabled(false)
+        toast.push('Notifications turned off on this device')
+        return
+      }
       const reg = await navigator.serviceWorker.ready
       const sub = await reg.pushManager.getSubscription()
       if (sub) {
