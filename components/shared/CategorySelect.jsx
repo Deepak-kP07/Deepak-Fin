@@ -73,6 +73,15 @@ export function CategorySelect({ value, onChange, categories, onAddCategory, cla
             minWidth: rect.width,
             maxWidth: panelMaxWidth,
             maxHeight,
+            // vaul's Drawer (BottomSheet) sets `pointer-events: none` directly on
+            // document.body while its modal is open, to block interaction with everything
+            // outside its own content. This panel is portaled straight to document.body —
+            // a sibling of the Drawer's content, not a descendant of it — so it inherits
+            // that `none` with nothing in its own ancestry to re-enable it: every category
+            // button underneath became permanently untappable (confirmed via a real
+            // screen-coordinate hit-test) even though it was visually correct on-screen and
+            // showed the right selection state right up until an actual tap needed to land.
+            pointerEvents: 'auto',
             ...(openUpward ? { bottom: window.innerHeight - rect.top + 4 } : { top: rect.bottom + 4 }),
           }}
           className="z-[60] w-max overflow-y-auto rounded-xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-3 shadow-2xl"
