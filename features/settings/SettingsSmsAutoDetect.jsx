@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { App } from '@capacitor/app'
-import { BatteryWarning, CheckCircle2, Inbox, Smartphone } from 'lucide-react'
+import { BatteryWarning, CheckCircle2, ChevronDown, ChevronRight, Inbox, Mail, Smartphone } from 'lucide-react'
 import { ToggleSwitch } from '@/components/shared/ToggleSwitch'
 import { checkSmsPermission, isNativeSmsAvailable, openBatteryOptimizationSettings, requestSmsPermission } from '@/lib/sms/nativeBridge'
 
@@ -78,9 +78,17 @@ function NativePermissionCard({ toast }) {
   )
 }
 
+// Pre-filled so a report already has the shape we actually need (bank/app name + the raw text) —
+// cuts down on back-and-forth over what to include.
+const SUPPORT_EMAIL = 'deepakperumal09@gmail.com'
+const SUPPORT_MAILTO = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('SMS not detected')}&body=${encodeURIComponent(
+  'Bank / UPI app: \n\nSample credit (money received) SMS text:\n\n\nSample debit (money spent) SMS text:\n\n'
+)}`
+
 export function SettingsSmsAutoDetect({ data, onSaveProfile, toast }) {
   const { profile, sms_parse_patterns: patterns = [] } = data
   const activePatterns = patterns.filter((p) => p.is_active !== false)
+  const [sendersOpen, setSendersOpen] = useState(false)
 
   return (
     <div className="space-y-4">
@@ -105,23 +113,53 @@ export function SettingsSmsAutoDetect({ data, onSaveProfile, toast }) {
       </div>
 
       <div className="rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card">
-        <div className="border-b border-white/10 light:border-black/10 px-5 py-3 text-xs uppercase tracking-widest text-slate-500">Recognized senders · {activePatterns.length}</div>
-        {activePatterns.length === 0 ? (
-          <div className="px-5 py-6 text-sm text-slate-500">No sender patterns configured yet.</div>
-        ) : (
-          <div className="divide-y divide-white/5 light:divide-black/5">
-            {activePatterns.map((p) => (
-              <div key={p.id} className="flex items-center gap-3 px-5 py-3">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/[.05] light:bg-black/[.035] text-slate-400 light:text-slate-500"><Inbox size={14} /></div>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm text-white light:text-slate-900">{p.bank_or_app}</div>
-                  <div className="truncate text-[11px] text-slate-500">{p.sender_id_pattern}</div>
-                </div>
+        <button
+          type="button"
+          onClick={() => setSendersOpen((v) => !v)}
+          className="flex w-full items-center justify-between gap-3 px-5 py-3 text-left"
+        >
+          <span className="text-xs uppercase tracking-widest text-slate-500">Recognized senders · {activePatterns.length}</span>
+          {sendersOpen ? <ChevronDown size={14} className="shrink-0 text-slate-500" /> : <ChevronRight size={14} className="shrink-0 text-slate-500" />}
+        </button>
+        {sendersOpen && (
+          <div className="border-t border-white/10 light:border-black/10">
+            {activePatterns.length === 0 ? (
+              <div className="px-5 py-6 text-sm text-slate-500">No sender patterns configured yet.</div>
+            ) : (
+              <div className="divide-y divide-white/5 light:divide-black/5">
+                {activePatterns.map((p) => (
+                  <div key={p.id} className="flex items-center gap-3 px-5 py-3">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/[.05] light:bg-black/[.035] text-slate-400 light:text-slate-500"><Inbox size={14} /></div>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm text-white light:text-slate-900">{p.bank_or_app}</div>
+                      <div className="truncate text-[11px] text-slate-500">{p.sender_id_pattern}</div>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
+            <p className="px-5 pb-4 pt-3 text-[11px] text-slate-500">This list is managed by the app, not editable here.</p>
           </div>
         )}
-        <p className="px-5 pb-4 text-[11px] text-slate-500">This list is managed by the app, not editable here — let us know if a bank or UPI app you use isn't detected correctly.</p>
+      </div>
+
+      <div className="rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card p-5">
+        <div className="flex items-center gap-3 text-sm font-semibold text-white light:text-slate-900"><Mail size={16} className="text-slate-400 light:text-slate-500" />Not detecting a transaction?</div>
+        <ul className="mt-3 space-y-1.5 text-xs leading-5 text-slate-500">
+          <li>• Make sure you installed this app as a downloaded APK — it doesn't work through a plain browser tab, since only the native Android app can read device SMS.</li>
+          <li>• Turn on <span className="text-slate-300 light:text-slate-700">Autostart</span> for this app in your phone's Security/app-permissions settings.</li>
+          <li>• Set <span className="text-slate-300 light:text-slate-700">Battery restriction</span> for this app to "No restrictions" (separate from the "Battery optimization" toggle above — most phones call it something slightly different).</li>
+        </ul>
+        <p className="mt-3 text-xs leading-5 text-slate-500">
+          Still not picking something up? Email a couple of sample messages (one where money was
+          received, one where it was spent) and we'll add support for it.
+        </p>
+        <a
+          href={SUPPORT_MAILTO}
+          className="mt-3 inline-flex items-center gap-2 rounded-lg bg-accent-300/20 px-3 py-1.5 text-xs font-semibold text-accent-100 light:text-accent-700 hover:bg-accent-300/30"
+        >
+          <Mail size={13} />Email {SUPPORT_EMAIL}
+        </a>
       </div>
     </div>
   )
