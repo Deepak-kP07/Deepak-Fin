@@ -55,6 +55,7 @@ import { WithdrawFundsForm } from '@/features/investments/WithdrawFundsForm'
 import { HoldingsBulkImport } from '@/features/investments/HoldingsBulkImport'
 import { SipForm } from '@/features/investments/SipForm'
 import { InvestmentsView } from '@/features/investments/InvestmentsView'
+import { currentValueOf } from '@/lib/otherInvestments'
 import { LoanForm } from '@/features/loans/LoanForm'
 import { LoanPaymentForm } from '@/features/loans/LoanPaymentForm'
 import { LoansView } from '@/features/loans/LoansView'
@@ -681,20 +682,28 @@ function GlassyCashflowTooltip({ active, payload, showMoney }) {
 
 /* ---------------- Views ---------------- */
 function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, onManageMoneyRules, onPayCardBill }) {
-  const { profile, accounts, transactions, categories, holdings = [], loans = [], loan_payments = [], bucket_list = [], money_rules = [], credit_cards = [], portfolios = [], budget_months = [] } = data
+  const { profile, accounts, transactions, categories, holdings = [], loans = [], loan_payments = [], bucket_list = [], money_rules = [], credit_cards = [], portfolios = [], budget_months = [], sips = [], other_investments: otherInvestments = [] } = data
   // Only the glassy theme gets the glowing area-chart treatment below — dark/light keep the plain
   // bar chart, so this doesn't touch either of their look.
   const { theme } = useTheme()
   const moduleSettings = resolveModuleSettings(profile)
   const widgets = resolveDashboardWidgets(profile)
   const totalBalance = accounts.reduce((s, a) => s + Number(a.current_balance || 0), 0)
+  // Mirrors the Investments page's own totalInvested/totalCurrent exactly (holdings + SIPs/mutual
+  // funds + other investments) — computing just holdings here used to silently undercount net
+  // worth by every rupee sitting in a fund or in gold/land/bonds, the same "must reconcile with
+  // what the other page shows" bug class totalOutstanding/creditCardDebt below already guard
+  // against for loans/cards.
   const invested = holdings.reduce((s, h) => s + Number(h.qty) * Number(h.avg_buy_price), 0)
-  // Holdings-only figure, used for P&L — cash sitting un-invested in a portfolio has no P&L of
-  // its own. `currentInv` below is the cash-inclusive total (real money either way), used for
-  // net worth and the Portfolio tile's headline value, matching the Balances widget below it.
-  const holdingsValue = holdings.reduce((s, h) => s + Number(h.qty) * Number(h.current_price || h.avg_buy_price), 0)
-  const pnl = holdingsValue - invested
-  const currentInv = holdingsValue + portfolios.reduce((s, p) => s + Number(p.cash_balance || 0), 0)
+    + sips.reduce((s, x) => s + Number(x.units_held) * Number(x.average_price ?? x.nav), 0)
+    + otherInvestments.reduce((s, o) => s + Number(o.purchase_value), 0)
+  // `currentInv` below is the cash-inclusive total (real money either way), used for net worth
+  // and the Portfolio tile's headline value, matching the Balances widget below it.
+  const investmentsCurrent = holdings.reduce((s, h) => s + Number(h.qty) * Number(h.current_price || h.avg_buy_price), 0)
+    + sips.reduce((s, x) => s + Number(x.units_held) * Number(x.nav), 0)
+    + otherInvestments.reduce((s, o) => s + currentValueOf(o), 0)
+  const pnl = investmentsCurrent - invested
+  const currentInv = investmentsCurrent + portfolios.reduce((s, p) => s + Number(p.cash_balance || 0), 0)
   // Same live figure (today's not-yet-billed interest included) the Loans module itself shows —
   // using the stale, as-of-last-payment `outstanding` here would make this number silently drift
   // from what the Loans page displays for the same loan.
@@ -721,15 +730,24 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
     icon: a.type === 'cash' ? Wallet : Landmark, color: a.color || '#64748b', debt: false,
   }))
   const linkedPortfolioIds = new Set(portfolios.map((p) => p.id))
+  // Same per-portfolio composition (holdings + SIPs + other investments + cash) as Investments'
+  // own portfolioMix, so each row here reconciles with what that page shows for the same
+  // portfolio — not holdings alone, which is all this used to add up before.
   const investmentItems = [
     ...portfolios.map((p) => {
-      const value = holdings.filter((h) => h.portfolio_id === p.id).reduce((s, h) => s + Number(h.qty) * Number(h.current_price || h.avg_buy_price), 0) + Number(p.cash_balance || 0)
+      const value = holdings.filter((h) => h.portfolio_id === p.id).reduce((s, h) => s + Number(h.qty) * Number(h.current_price || h.avg_buy_price), 0)
+        + sips.filter((x) => x.portfolio_id === p.id).reduce((s, x) => s + Number(x.units_held) * Number(x.nav), 0)
+        + otherInvestments.filter((o) => o.portfolio_id === p.id).reduce((s, o) => s + currentValueOf(o), 0)
+        + Number(p.cash_balance || 0)
       return { id: `port-${p.id}`, name: p.name, sub: 'Investment', amount: value, icon: TrendingUp, color: p.color || '#64748b', debt: false }
     }),
-    // A holding whose portfolio_id doesn't match any live portfolio (data anomaly) still gets a
-    // row, so this section's subtotal keeps reconciling to currentInv exactly even then.
+    // A holding or SIP whose portfolio_id doesn't match any live portfolio (data anomaly, or a
+    // SIP that was never assigned one to begin with) still gets a row, so this section's subtotal
+    // keeps reconciling to currentInv exactly even then. other_investments always has a portfolio
+    // (NOT NULL FK), so it never contributes here.
     ...(() => {
       const unlinkedValue = holdings.filter((h) => !linkedPortfolioIds.has(h.portfolio_id)).reduce((s, h) => s + Number(h.qty) * Number(h.current_price || h.avg_buy_price), 0)
+        + sips.filter((x) => !linkedPortfolioIds.has(x.portfolio_id)).reduce((s, x) => s + Number(x.units_held) * Number(x.nav), 0)
       return unlinkedValue > 0 ? [{ id: 'port-unlinked', name: 'Unlinked holdings', sub: 'Investment', amount: unlinkedValue, icon: TrendingUp, color: '#64748b', debt: false }] : []
     })(),
   ]
@@ -766,7 +784,10 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
       icon: CreditCard, color: c.color || '#64748b', debt: true,
     })) : []),
     ...(moduleSettings.investments.enabled ? portfolios.map((p) => {
-      const value = holdings.filter((h) => h.portfolio_id === p.id).reduce((s, h) => s + Number(h.qty) * Number(h.current_price || h.avg_buy_price), 0) + Number(p.cash_balance || 0)
+      const value = holdings.filter((h) => h.portfolio_id === p.id).reduce((s, h) => s + Number(h.qty) * Number(h.current_price || h.avg_buy_price), 0)
+        + sips.filter((x) => x.portfolio_id === p.id).reduce((s, x) => s + Number(x.units_held) * Number(x.nav), 0)
+        + otherInvestments.filter((o) => o.portfolio_id === p.id).reduce((s, o) => s + currentValueOf(o), 0)
+        + Number(p.cash_balance || 0)
       return { id: `port-${p.id}`, name: p.name, sub: 'Investment', amount: value, icon: TrendingUp, color: p.color || '#64748b', debt: false }
     }) : []),
   ]
