@@ -72,7 +72,6 @@ export function MoneyProfileEntryForm({ open, onClose, onSaved, editing, profile
   // every refresh(), and resetting the form on every unrelated data refresh would wipe out
   // whatever the user had already typed.
   useEffect(() => { setForm(initial) }, [editing, open, profile?.id])
-  if (!open) return null
 
   const catType = form.entry_type === 'expense' ? 'expense' : 'income'
   const categoryOptions = categories.filter((c) => c.type === catType && !(c.hidden_in_modules || []).includes('family_company'))
@@ -101,6 +100,13 @@ export function MoneyProfileEntryForm({ open, onClose, onSaved, editing, profile
   const fieldsProps = { form, setForm, profile, accounts, creditCards, categoryOptions, onAddCategory }
   const submitButton = <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : editing ? 'Update entry' : 'Save entry'}</button>
 
+  // BottomSheet (vaul) must stay mounted across open/close toggles for its own open/close
+  // transition to run at all — vaul animates a real `open` prop change on an already-mounted
+  // Drawer.Root, but mounting it fresh already `open=true` (which unconditionally returning null
+  // here for every render while closed used to do) skips that transition entirely. It's left
+  // permanently transformed to its own closed position (fully below the viewport) despite
+  // data-state="open", which is what made every field below the header — Category included —
+  // impossible to actually tap, even though the underlying state logic was always correct.
   if (isMobile) {
     return (
       <BottomSheet open={open} onOpenChange={(v) => { if (!v) onClose() }} title={editing ? 'Edit entry' : `Add entry · ${profile?.name || ''}`}>
@@ -112,6 +118,7 @@ export function MoneyProfileEntryForm({ open, onClose, onSaved, editing, profile
     )
   }
 
+  if (!open) return null
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={onClose}>
       <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="max-h-[85vh] w-full max-w-xl overflow-y-auto rounded-3xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-6">
