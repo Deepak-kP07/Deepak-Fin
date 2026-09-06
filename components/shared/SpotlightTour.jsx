@@ -60,21 +60,33 @@ export function SpotlightTour({ steps, open, context, onSkip, onFinish }) {
   // On mobile, a step's onEnter can open the "More"/Settings-picker sheet — those slide in over
   // ~200-400ms (vaul's own transition), so the target isn't at its final position for a beat
   // after it appears in the DOM. A single measurement right after mount would catch it mid-slide
-  // and lock the spotlight onto the wrong spot. This polls (up to ~550ms) until two consecutive
-  // reads agree — settling naturally whether the target is instant (desktop, no sheet) or
-  // animated in (mobile sheet) — rather than guessing a fixed delay for either case.
+  // and lock the spotlight onto the wrong spot. This polls until two consecutive reads agree —
+  // settling naturally whether the target is instant (desktop, no sheet) or animated in (mobile
+  // sheet) — rather than guessing a fixed delay for either case.
+  //
+  // The very first time the sheet has to open from fully closed (its first appearance in the
+  // tour), it also has to mount fresh DOM before the slide-in transition even starts — that
+  // mount can itself take a beat, on top of the transition. A short, fixed overall budget starting
+  // from step-entry (as this used to do) could run out mid-transition on exactly that first open,
+  // locking the spotlight onto a stale, wrong position for the rest of the step since nothing
+  // re-measures afterward (a transform-based slide fires no resize/scroll event). So the "settle"
+  // budget below only starts counting once the target has actually been found at least once —
+  // an unbounded mount delay doesn't eat into it — with a separate, generous hard cap in case the
+  // target genuinely never appears at all (e.g. its module is disabled for this profile).
   const measureSettled = useCallback((isCancelled) => {
     if (!step?.targetSelector) { setRect(null); return }
-    let attempts = 0
+    let settleAttempts = 0
+    let totalAttempts = 0
     let last = null
     const closeEnough = (a, b) => a && b && Math.abs(a.top - b.top) < 0.5 && Math.abs(a.left - b.left) < 0.5 && Math.abs(a.width - b.width) < 0.5 && Math.abs(a.height - b.height) < 0.5
     const tick = () => {
       if (isCancelled()) return
       const el = findVisibleTarget(step.targetSelector)
       const r = el ? el.getBoundingClientRect() : null
-      if (closeEnough(r, last) || attempts >= 10) { setRect(r); return }
+      totalAttempts += 1
+      if (r) settleAttempts += 1
+      if ((r && closeEnough(r, last)) || settleAttempts >= 20 || totalAttempts >= 60) { setRect(r); return }
       last = r
-      attempts += 1
       setTimeout(tick, 50)
     }
     tick()

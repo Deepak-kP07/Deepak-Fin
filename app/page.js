@@ -2639,13 +2639,21 @@ function Shell({ user, onLogout }) {
   // /api/kite/login itself falls back to the app owner's Kite app if this user hasn't set up
   // their own (Settings > Kite Connect), so there's always something to try here.
   const connectKite = () => { window.location.href = '/api/kite/login' }
+  // A stale/expired Kite session (Zerodha kills every token at a fixed daily cutoff — see
+  // kiteSync.js) is the one sync failure with a real fix one click away, so it gets its own
+  // persistent toast with a "Reconnect Kite" action instead of just naming the problem and
+  // leaving the user to go find Investments > Connect Kite themselves.
+  const showKiteSyncError = (result) => {
+    if (result.code === 'kite_token_stale') toast.push(result.error, 'error', { persist: true, action: { label: 'Reconnect Kite', onClick: connectKite } })
+    else toast.push(result.error || 'Sync failed', 'error')
+  }
   const linkPortfolioKite = async (p) => {
     setKiteSyncBusy(true)
     try {
       const response = await fetch(`/api/finance/portfolios/${p.id}/link_kite`, { method: 'POST' })
       const result = await response.json()
       if (response.ok) { toast.push(`Linked · ${result.added} holding${result.added === 1 ? '' : 's'} synced from Kite`); await refresh() }
-      else { toast.push(result.error || 'Link failed', 'error'); await refresh() }
+      else { showKiteSyncError(result); await refresh() }
     } finally { setKiteSyncBusy(false) }
   }
   const unlinkPortfolioKite = async (p) => {
@@ -2659,7 +2667,7 @@ function Shell({ user, onLogout }) {
       const response = await fetch(`/api/finance/portfolios/${p.id}/sync_kite`, { method: 'POST' })
       const result = await response.json()
       if (response.ok) { toast.push(`Synced · ${result.added} added, ${result.updated} updated, ${result.removed} removed`); await refresh() }
-      else { toast.push(result.error || 'Sync failed', 'error') }
+      else showKiteSyncError(result)
     } finally { setKiteSyncBusy(false) }
   }
   const syncSipsKite = async () => {
@@ -2668,7 +2676,7 @@ function Shell({ user, onLogout }) {
       const response = await fetch('/api/finance/sips/sync_kite', { method: 'POST' })
       const result = await response.json()
       if (response.ok) { toast.push(`Mutual funds synced · ${result.added} added, ${result.updated} updated, ${result.removed} removed`); await refresh() }
-      else { toast.push(result.error || 'Sync failed', 'error') }
+      else showKiteSyncError(result)
     } finally { setKiteSyncBusy(false) }
   }
 

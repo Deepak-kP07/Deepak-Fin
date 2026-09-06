@@ -2,9 +2,12 @@
 
 import { useEffect, useState } from 'react'
 import { App } from '@capacitor/app'
-import { BatteryWarning, CheckCircle2, ChevronDown, ChevronRight, Inbox, Mail, Smartphone } from 'lucide-react'
+import { BatteryWarning, CheckCircle2, ChevronDown, ChevronRight, Download, Inbox, Mail, Smartphone } from 'lucide-react'
 import { ToggleSwitch } from '@/components/shared/ToggleSwitch'
 import { checkSmsPermission, isNativeSmsAvailable, openBatteryOptimizationSettings, requestSmsPermission } from '@/lib/sms/nativeBridge'
+
+// Sideloaded APK, not the Play Store — see ANDROID_SETUP.md's distribution note.
+const APK_DOWNLOAD_URL = 'https://drive.google.com/drive/folders/14yYawYHVochtQUAP8Knr19mTNx5zC2xO?usp=sharing'
 
 // SMS auto-detect is Android-only, via a separate native-wrapped build of this same app — a
 // plain web/PWA tab can't read device SMS. The "Pending" module toggle (Settings > Modules) is
@@ -33,8 +36,18 @@ function NativePermissionCard({ toast }) {
 
   if (!native) {
     return (
-      <div className="mt-3 flex items-center gap-3 rounded-xl bg-black/20 light:bg-black/[.06] px-4 py-3 text-xs text-slate-500">
-        <Smartphone size={16} className="shrink-0" />You're viewing this in a browser — install the Android app to actually detect SMS. This page still lets you manage the settings below.
+      <div className="mt-3 space-y-2.5">
+        <div className="flex items-center gap-3 rounded-xl bg-black/20 light:bg-black/[.06] px-4 py-3 text-xs text-slate-500">
+          <Smartphone size={16} className="shrink-0" />You're viewing this in a browser — install the Android app to actually detect SMS. This page still lets you manage the settings below.
+        </div>
+        <a
+          href={APK_DOWNLOAD_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center justify-center gap-2 rounded-xl bg-accent-300/20 px-4 py-2.5 text-xs font-semibold text-accent-100 light:text-accent-700 hover:bg-accent-300/30"
+        >
+          <Download size={14} />Download the Android app (APK)
+        </a>
       </div>
     )
   }

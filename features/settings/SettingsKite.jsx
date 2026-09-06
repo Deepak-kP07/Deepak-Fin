@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { ExternalLink, Youtube } from 'lucide-react'
-import { ZERODHA_SIGNUP_URL } from '@/lib/constants/links'
+import { KITE_API_SIGNUP_URL, ZERODHA_SIGNUP_URL } from '@/lib/constants/links'
 
 export function SettingsKite({ data, onSaveKiteCredentials, onRemoveKiteCredentials }) {
   const { profile } = data
@@ -46,19 +46,21 @@ export function SettingsKite({ data, onSaveKiteCredentials, onRemoveKiteCredenti
             <Youtube size={13} />Watch how-to video
           </a>
         </div>
-        <a
-          href={ZERODHA_SIGNUP_URL}
-          target="_blank"
-          rel="noreferrer"
-          className="mb-3 flex w-full items-center justify-center gap-2 rounded-xl border border-accent-300/25 bg-accent-400/10 px-4 py-2.5 text-sm font-medium text-accent-200 light:text-accent-700 hover:bg-accent-400/20 sm:w-auto"
-        >
-          Don't have a Zerodha account? Create one<ExternalLink size={13} />
-        </a>
+        {!profile?.kite_connected && (
+          <a
+            href={ZERODHA_SIGNUP_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="mb-3 flex w-full items-center justify-center gap-2 rounded-xl border border-accent-300/25 bg-accent-400/10 px-4 py-2.5 text-sm font-medium text-accent-200 light:text-accent-700 hover:bg-accent-400/20 sm:w-auto"
+          >
+            Don't have a Zerodha account? Create one<ExternalLink size={13} />
+          </a>
+        )}
         <p className="text-sm leading-6 text-slate-400 light:text-slate-600">
           Connecting Kite already works out of the box using the app's default Kite Connect app — you
           don't need to do anything here unless you want to use your own instead. If you do, register a
           free app at{' '}
-          <a href="https://developers.kite.trade" target="_blank" rel="noreferrer" className="text-accent-300 light:text-accent-700 hover:underline">developers.kite.trade</a>,
+          <a href={KITE_API_SIGNUP_URL} target="_blank" rel="noreferrer" className="text-accent-300 light:text-accent-700 hover:underline">Zerodha's Kite Connect API page</a>,
           set its redirect URL to the address below, then paste the API key and secret it gives you — it'll
           be used for you from then on instead of the default.
         </p>

@@ -23,6 +23,6 @@ export async function POST(request, { params }) {
   if (updateError) return cors(NextResponse.json({ error: 'Another portfolio is already linked to Kite — unlink it first.' }, { status: 400 }))
 
   const result = await syncPortfolioFromKite(supabase, user.id, id)
-  if (result.error) return cors(NextResponse.json({ error: result.error.message }, { status: result.error.status || 400 }))
+  if (result.error) return cors(NextResponse.json({ error: result.error.message, code: result.error.code }, { status: result.error.status || 400 }))
   return cors(NextResponse.json(result))
 }

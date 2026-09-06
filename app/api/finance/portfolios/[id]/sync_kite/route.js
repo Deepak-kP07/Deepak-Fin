@@ -7,6 +7,6 @@ export async function POST(request, { params }) {
   const { supabase, user, cors, response } = await requireUser(request)
   if (response) return response
   const result = await syncPortfolioFromKite(supabase, user.id, id)
-  if (result.error) return cors(NextResponse.json({ error: result.error.message }, { status: result.error.status || 400 }))
+  if (result.error) return cors(NextResponse.json({ error: result.error.message, code: result.error.code }, { status: result.error.status || 400 }))
   return cors(NextResponse.json(result))
 }

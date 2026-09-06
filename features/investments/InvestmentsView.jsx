@@ -42,6 +42,19 @@ export function InvestmentsView({
   const hasOwnKiteKey = !!profile?.kite_api_key
   const anyPortfolioLinked = portfolios.some((p) => p.kite_linked)
   const emptyPortfolios = portfolios.filter((p) => !holdings.some((h) => h.portfolio_id === p.id))
+  // The "set up your own Kite API key" tip only earns its place the very first time someone sees
+  // this screen without Kite connected — once shown it's marked seen immediately, so it never
+  // comes back on later visits (connected or not), instead of re-explaining the same thing on
+  // every single load until they act on it.
+  const [showOwnKeyTip, setShowOwnKeyTip] = useState(false)
+  useEffect(() => {
+    try {
+      if (!localStorage.getItem('seen_kite_own_key_tip')) {
+        setShowOwnKeyTip(true)
+        localStorage.setItem('seen_kite_own_key_tip', '1')
+      }
+    } catch { /* private browsing / quota */ }
+  }, [])
 
   if (selectedPortfolio) {
     return (
@@ -281,15 +294,10 @@ export function InvestmentsView({
             <button onClick={onConnectKite} className={`ml-auto rounded-lg px-3 py-1 text-[11px] font-semibold ${kiteBroken ? 'bg-amber-400/20 text-amber-100 light:text-amber-800 hover:bg-amber-400/30' : 'bg-accent-300/20 text-accent-100 light:text-accent-700 hover:bg-accent-300/30'}`}>{kiteBroken ? 'Reconnect Kite' : 'Connect Kite'}</button>
           )}
         </div>
-        {/* Zerodha's Kite Connect only ever authenticates the ONE account that registered the
-            API key being used — the shared app key belongs to this app's owner, so anyone else
-            trying to connect a different Zerodha account through it hits a hard "user is not
-            enabled for the app" rejection from Zerodha itself. Surfacing this before they hit
-            that error (rather than only in the failure message) saves the confused round trip. */}
         {!kiteConnected && (
           <div className="mt-2.5 space-y-2 border-t border-accent-300/10 pt-2.5 text-accent-200/70 light:text-accent-700">
-            {!hasOwnKiteKey && (
-              <div>Connecting will use this app's shared Kite app, which only works for its owner's Zerodha account. For your own Zerodha account, add your own key first in <b>Settings → Kite Sync</b> — otherwise Zerodha will reject the login.</div>
+            {!hasOwnKiteKey && showOwnKeyTip && (
+              <div>For your own Zerodha account, add your Kite API key first in <b>Settings → Kite Connect</b>.</div>
             )}
             <a
               href={ZERODHA_SIGNUP_URL}
