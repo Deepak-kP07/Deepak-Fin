@@ -53,7 +53,16 @@ async function handleRoute(request, { params }) {
       const { data, error } = await supabase.auth.signUp({
         email: body.email,
         password: body.password,
-        options: { data: { full_name: body.name || '' } },
+        options: {
+          data: { full_name: body.name || '' },
+          // Without this, Supabase falls back to the project's dashboard-configured Site URL —
+          // still left at the original localhost:3000 from initial setup, so every confirmation
+          // email sent a link nobody but a local dev server could open. Pointed at the same
+          // code-exchange callback the native Google flow uses (not just the bare homepage) so
+          // clicking it actually logs the user in — landing on `/` alone leaves the `code` query
+          // param sitting unconsumed in the URL instead of ever being exchanged for a session.
+          emailRedirectTo: `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/auth/oauth_callback`,
+        },
       })
       if (error) return cors(NextResponse.json({ message: error.message }, { status: error.status || 400 }))
       // Best-effort, same as every other non-critical side effect in this app (push
