@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { ArrowDownRight, ArrowUpRight, ChevronRight, Eye, EyeOff, MoreVertical, Pencil, Target, Trash2 } from 'lucide-react'
+import { ArrowDownRight, ArrowUpRight, CheckCircle2, ChevronRight, Eye, EyeOff, MoreVertical, Pencil, Target, Trash2, X } from 'lucide-react'
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { BankCardFace } from '@/components/shared/BankCardFace'
 import { StatCard } from '@/components/shared/StatCard'
@@ -36,7 +36,7 @@ function buildActivity(card, cardTransactions, allTransactions) {
   return [...fromLog, ...fromLinked].sort((a, b) => new Date(b.date) - new Date(a.date) || String(b.time || '').localeCompare(String(a.time || '')))
 }
 
-export function CreditCardDetailView({ card, cardTransactions, allTransactions, categories, onBack, onSpend, onPay, onDeleteSpend, onDeleteTx, onEdit, onDelete, showMoney, onToggleMoney }) {
+export function CreditCardDetailView({ card, cardTransactions, allTransactions, categories, onBack, onSpend, onPay, onDeleteSpend, onDeleteTx, onDeleteActivityBulk, onDeleteTxBulk, onEdit, onDelete, showMoney, onToggleMoney }) {
   const util = Number(card.credit_limit) > 0 ? Math.min(100, Math.round((Number(card.current_outstanding) / Number(card.credit_limit)) * 100)) : 0
   const activity = buildActivity(card, cardTransactions, allTransactions)
   const nd = nextBillDue(card)
@@ -72,20 +72,39 @@ export function CreditCardDetailView({ card, cardTransactions, allTransactions, 
 
   const deleteActivity = (a) => (a.source === 'log' ? onDeleteSpend(a.row) : onDeleteTx(a.row))
 
-  // Mobile rows (card activity + repayments) have no visible delete icon — a long press
-  // reverses/deletes the entry directly, same 500ms timing/suppression pattern as the Loans
-  // and Accounts detail views. Both deleteActivity's targets and onDeleteTx already confirm
-  // before acting, so a direct long-press delete is safe here too.
+  // Mobile: long-press a row to enter multi-select (same pattern as the main ledger/Accounts),
+  // instead of the old long-press-deletes-immediately behavior. `selectSection` names which of
+  // the two lists (activity/repayments) is selecting, same one-at-a-time reasoning as the
+  // Lend/Borrow detail view's two lists.
+  const [selectSection, setSelectSection] = useState(null)
+  const [selectedIds, setSelectedIds] = useState(() => new Set())
   const longPressTimer = useRef(null)
   const longPressFired = useRef(false)
   const LONG_PRESS_MS = 500
   const cancelLongPress = () => { if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null } }
-  const startLongPress = (onDelete) => {
+  const toggleSelect = (id) => setSelectedIds((prev) => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next })
+  const startLongPress = (section, id) => {
     longPressFired.current = false
     cancelLongPress()
-    longPressTimer.current = setTimeout(() => { longPressFired.current = true; onDelete() }, LONG_PRESS_MS)
+    longPressTimer.current = setTimeout(() => { longPressFired.current = true; setSelectSection(section); toggleSelect(id) }, LONG_PRESS_MS)
   }
-  const suppressLongPressTap = () => { longPressFired.current = false }
+  const exitSelectMode = () => { setSelectSection(null); setSelectedIds(new Set()) }
+  const handleRowTap = (section, id) => {
+    if (longPressFired.current) { longPressFired.current = false; return }
+    if (selectSection === section) toggleSelect(id)
+  }
+  // "Card activity" mixes two sources (log spends vs. this-card-linked transactions, see
+  // buildActivity above) — onDeleteActivityBulk splits the selection by source itself, so this
+  // just hands it the full activity rows for whatever got selected.
+  const handleActivityBulkDelete = async () => {
+    const rows = displayedActivity.filter((a) => selectedIds.has(a.id))
+    const didDelete = await onDeleteActivityBulk(rows)
+    if (didDelete) exitSelectMode()
+  }
+  const handleRepaymentsBulkDelete = async () => {
+    const didDelete = await onDeleteTxBulk([...selectedIds])
+    if (didDelete) exitSelectMode()
+  }
 
   // Mobile: Edit/Delete collapse into this "..." menu, same pattern as the other detail views —
   // the eye toggle stays outside it, always visible. Desktop is unchanged.
@@ -184,23 +203,31 @@ export function CreditCardDetailView({ card, cardTransactions, allTransactions, 
       </div>
 
       <div className="rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 light:border-black/10 px-5 py-3">
-          <div className="text-xs uppercase tracking-widest text-slate-500">
-            Card activity · {displayedActivity.length}
-            {cycleMode && <span className="normal-case tracking-normal text-slate-600"> · {formatDate(dateToLocalISO(cycle.start))} – {formatDate(dateToLocalISO(cycle.end))}</span>}
+        {selectSection === 'activity' ? (
+          <div className="flex items-center gap-2 border-b border-white/10 light:border-black/10 px-5 py-3 sm:hidden">
+            <button type="button" onClick={exitSelectMode} className="shrink-0 rounded-xl border border-white/10 light:border-black/10 p-2 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900" title="Cancel selection"><X size={15} /></button>
+            <div className="flex-1 text-sm font-medium text-white light:text-slate-900">{selectedIds.size} selected</div>
+            <button type="button" disabled={selectedIds.size === 0} onClick={handleActivityBulkDelete} className="shrink-0 rounded-xl border border-rose-300/30 bg-rose-300/10 p-2 text-rose-300 light:text-rose-700 hover:bg-rose-300/20 disabled:opacity-40 disabled:pointer-events-none" title="Delete selected"><Trash2 size={15} /></button>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setCycleMode((v) => !v)}
-              title={`Spends since the ${ordinal(card.billing_date)} (this cycle's bill)`}
-              className={`rounded-xl border px-3 py-2 text-[11px] font-semibold uppercase tracking-wider transition ${cycleMode ? 'border-accent-300/40 bg-accent-400/15 text-accent-200 light:text-accent-700' : 'border-white/10 light:border-black/10 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900'}`}
-            >This billing cycle</button>
-            <div className={cycleMode ? 'pointer-events-none opacity-40' : ''}>
-              <MonthCursor cursor={monthCursor} onShift={shiftMonth} showAll={showAllMonths} onToggleAll={() => setShowAllMonths((v) => !v)} />
+        ) : (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 light:border-black/10 px-5 py-3">
+            <div className="text-xs uppercase tracking-widest text-slate-500">
+              Card activity · {displayedActivity.length}
+              {cycleMode && <span className="normal-case tracking-normal text-slate-600"> · {formatDate(dateToLocalISO(cycle.start))} – {formatDate(dateToLocalISO(cycle.end))}</span>}
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setCycleMode((v) => !v)}
+                title={`Spends since the ${ordinal(card.billing_date)} (this cycle's bill)`}
+                className={`rounded-xl border px-3 py-2 text-[11px] font-semibold uppercase tracking-wider transition ${cycleMode ? 'border-accent-300/40 bg-accent-400/15 text-accent-200 light:text-accent-700' : 'border-white/10 light:border-black/10 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900'}`}
+              >This billing cycle</button>
+              <div className={cycleMode ? 'pointer-events-none opacity-40' : ''}>
+                <MonthCursor cursor={monthCursor} onShift={shiftMonth} showAll={showAllMonths} onToggleAll={() => setShowAllMonths((v) => !v)} />
+              </div>
             </div>
           </div>
-        </div>
+        )}
         {displayedActivity.length === 0 ? (
           <EmptyState compact icon={ArrowDownRight} title={cycleMode ? 'No activity this billing cycle' : showAllMonths ? 'No activity yet' : 'No activity this month'} message="Log a spend, or pay for something with this card, to see it here." cta="Log spend" onCta={() => onSpend(card)} />
         ) : (
@@ -223,17 +250,25 @@ export function CreditCardDetailView({ card, cardTransactions, allTransactions, 
                       same icon-bubble + name/subtitle + trailing amount pattern as Accounts/Transactions. */}
                   <button
                     type="button"
-                    onClick={suppressLongPressTap}
-                    onTouchStart={() => startLongPress(() => deleteActivity(a))}
+                    onClick={() => handleRowTap('activity', a.id)}
+                    onTouchStart={() => startLongPress('activity', a.id)}
                     onTouchEnd={cancelLongPress}
                     onTouchMove={cancelLongPress}
                     onTouchCancel={cancelLongPress}
                     onContextMenu={(e) => e.preventDefault()}
                     className="flex w-full min-w-0 items-center gap-3 text-left sm:hidden"
                   >
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/[.05] light:bg-black/[.035]" style={{ color: cat?.color || '#94a3b8' }}>
-                      {isDebit ? <ArrowDownRight size={16} /> : <ArrowUpRight size={16} />}
-                    </div>
+                    {selectSection === 'activity' ? (
+                      selectedIds.has(a.id) ? (
+                        <CheckCircle2 size={22} className="shrink-0 text-accent-400" />
+                      ) : (
+                        <div className="h-[22px] w-[22px] shrink-0 rounded-full border-2 border-white/20 light:border-black/20" />
+                      )
+                    ) : (
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/[.05] light:bg-black/[.035]" style={{ color: cat?.color || '#94a3b8' }}>
+                        {isDebit ? <ArrowDownRight size={16} /> : <ArrowUpRight size={16} />}
+                      </div>
+                    )}
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-sm font-medium text-white light:text-slate-900">{capitalizeFirst(a.description)}</div>
                       <div className="truncate text-[11px] text-slate-500">{cat?.name || 'Uncategorised'} · {formatDateTime(a.date, a.time)}{a.status ? ` · ${a.status}` : ''}</div>
@@ -270,25 +305,42 @@ export function CreditCardDetailView({ card, cardTransactions, allTransactions, 
       </div>
 
       <div className="rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card">
-        <div className="border-b border-white/10 light:border-black/10 px-5 py-3 text-xs uppercase tracking-widest text-slate-500">Repayment history · {repayments.length}</div>
+        {selectSection === 'repayments' ? (
+          <div className="flex items-center gap-2 border-b border-white/10 light:border-black/10 px-5 py-3 sm:hidden">
+            <button type="button" onClick={exitSelectMode} className="shrink-0 rounded-xl border border-white/10 light:border-black/10 p-2 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900" title="Cancel selection"><X size={15} /></button>
+            <div className="flex-1 text-sm font-medium text-white light:text-slate-900">{selectedIds.size} selected</div>
+            <button type="button" disabled={selectedIds.size === 0} onClick={handleRepaymentsBulkDelete} className="shrink-0 rounded-xl border border-rose-300/30 bg-rose-300/10 p-2 text-rose-300 light:text-rose-700 hover:bg-rose-300/20 disabled:opacity-40 disabled:pointer-events-none" title="Delete selected"><Trash2 size={15} /></button>
+          </div>
+        ) : (
+          <div className="border-b border-white/10 light:border-black/10 px-5 py-3 text-xs uppercase tracking-widest text-slate-500">Repayment history · {repayments.length}</div>
+        )}
         {repayments.length === 0 ? (
           <div className="px-5 py-6 text-sm text-slate-500">No payments logged yet.</div>
         ) : (
           <div className="divide-y divide-white/5 light:divide-black/5">
             {repayments.map((r) => (
               <div key={r.id} className="px-5 py-3">
-                {/* Mobile: long-press to delete, no visible delete icon */}
+                {/* Mobile: long-press to multi-select, no visible delete icon */}
                 <button
                   type="button"
-                  onClick={suppressLongPressTap}
-                  onTouchStart={() => startLongPress(() => onDeleteTx(r))}
+                  onClick={() => handleRowTap('repayments', r.id)}
+                  onTouchStart={() => startLongPress('repayments', r.id)}
                   onTouchEnd={cancelLongPress}
                   onTouchMove={cancelLongPress}
                   onTouchCancel={cancelLongPress}
                   onContextMenu={(e) => e.preventDefault()}
                   className="flex w-full items-center justify-between gap-3 text-left text-sm sm:hidden"
                 >
-                  <div className="text-slate-300 light:text-slate-700">{formatDate(r.date)}</div>
+                  <div className="flex items-center gap-2">
+                    {selectSection === 'repayments' && (
+                      selectedIds.has(r.id) ? (
+                        <CheckCircle2 size={18} className="shrink-0 text-accent-400" />
+                      ) : (
+                        <div className="h-[18px] w-[18px] shrink-0 rounded-full border-2 border-white/20 light:border-black/20" />
+                      )
+                    )}
+                    <div className="text-slate-300 light:text-slate-700">{formatDate(r.date)}</div>
+                  </div>
                   <div className="font-medium text-emerald-300 light:text-emerald-700">{showMoney ? `+${money(r.amount)}` : '••••'}</div>
                 </button>
 

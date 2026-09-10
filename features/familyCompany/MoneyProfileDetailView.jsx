@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { ChevronRight, Download, Eye, EyeOff, Landmark, Link2, Lock, MoreVertical, Pencil, RefreshCw, Repeat, Trash2, Unlock, UserPlus, Upload, Users, Wallet } from 'lucide-react'
+import { CheckCircle2, ChevronRight, Download, Eye, EyeOff, Landmark, Link2, Lock, MoreVertical, Pencil, RefreshCw, Repeat, Trash2, Unlock, UserPlus, Upload, Users, Wallet, X } from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { HeroStatTile } from '@/components/shared/HeroStatTile'
 import { MonthCursor } from '@/components/shared/MonthCursor'
@@ -24,7 +24,7 @@ function ProfileMenuTail({ items, onDone }) {
 
 export function MoneyProfileDetailView({
   profile, entries, accounts, creditCards = [], categories = [], transactions = [], onBack, onEdit, onDelete,
-  onAddEntry, onEditEntry, onDeleteEntry, onBulkImport, onToggleStatus, onManageAccess, onSyncBalance, onOpenRecurring,
+  onAddEntry, onEditEntry, onDeleteEntry, onDeleteEntryBulk, onBulkImport, onToggleStatus, onManageAccess, onSyncBalance, onOpenRecurring,
   showMoney, onToggleMoney,
 }) {
   const categoryById = (id) => categories.find((c) => c.id === id)
@@ -68,21 +68,30 @@ export function MoneyProfileDetailView({
   })
 
   // Mobile entry rows have no visible edit/delete icons — a tap opens the entry for editing, a
-  // 500ms long press deletes it directly (onDeleteEntry already confirms before acting), same
-  // pattern as the Loans/Credit Cards/Lend-Borrow detail views.
+  // 500ms long press now enters multi-select (same pattern as the main ledger/Accounts) instead
+  // of deleting that one row immediately.
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState(() => new Set())
   const longPressTimer = useRef(null)
   const longPressFired = useRef(false)
   const LONG_PRESS_MS = 500
   const cancelLongPress = () => { if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null } }
+  const toggleSelect = (id) => setSelectedIds((prev) => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next })
   const startLongPress = (e) => {
     if (!canDeleteEntries(role)) return
     longPressFired.current = false
     cancelLongPress()
-    longPressTimer.current = setTimeout(() => { longPressFired.current = true; onDeleteEntry(e) }, LONG_PRESS_MS)
+    longPressTimer.current = setTimeout(() => { longPressFired.current = true; setSelectMode(true); toggleSelect(e.id) }, LONG_PRESS_MS)
   }
+  const exitSelectMode = () => { setSelectMode(false); setSelectedIds(new Set()) }
   const handleRowTap = (e) => {
     if (longPressFired.current) { longPressFired.current = false; return }
+    if (selectMode) { toggleSelect(e.id); return }
     if (canWriteEntries(role)) onEditEntry(e)
+  }
+  const handleBulkDelete = async () => {
+    const didDelete = await onDeleteEntryBulk([...selectedIds])
+    if (didDelete) exitSelectMode()
   }
 
   // Mobile header: every secondary action (sync, recurring, bulk import, export, manage access,
@@ -281,10 +290,18 @@ export function MoneyProfileDetailView({
       </div>
 
       <div className="rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card">
-        <div className="flex items-center justify-between gap-3 border-b border-white/10 light:border-black/10 px-5 py-3">
-          <div className="text-xs uppercase tracking-widest text-slate-500">Entries · {monthEntries.length}</div>
-          <MonthCursor cursor={monthCursor} onShift={shiftMonth} showAll={showAllMonths} onToggleAll={() => setShowAllMonths((v) => !v)} />
-        </div>
+        {selectMode ? (
+          <div className="flex items-center gap-2 border-b border-white/10 light:border-black/10 px-5 py-3 sm:hidden">
+            <button type="button" onClick={exitSelectMode} className="shrink-0 rounded-xl border border-white/10 light:border-black/10 p-2 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900" title="Cancel selection"><X size={15} /></button>
+            <div className="flex-1 text-sm font-medium text-white light:text-slate-900">{selectedIds.size} selected</div>
+            <button type="button" disabled={selectedIds.size === 0} onClick={handleBulkDelete} className="shrink-0 rounded-xl border border-rose-300/30 bg-rose-300/10 p-2 text-rose-300 light:text-rose-700 hover:bg-rose-300/20 disabled:opacity-40 disabled:pointer-events-none" title="Delete selected"><Trash2 size={15} /></button>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between gap-3 border-b border-white/10 light:border-black/10 px-5 py-3">
+            <div className="text-xs uppercase tracking-widest text-slate-500">Entries · {monthEntries.length}</div>
+            <MonthCursor cursor={monthCursor} onShift={shiftMonth} showAll={showAllMonths} onToggleAll={() => setShowAllMonths((v) => !v)} />
+          </div>
+        )}
         {monthEntries.length === 0 ? (
           <EmptyState compact icon={Wallet} title={entries.length === 0 ? 'No entries yet' : showAllMonths ? 'No entries yet' : 'No entries this month'} message="Log an income, capital, or expense entry to start tracking." cta={isClosed ? undefined : 'Add entry'} onCta={isClosed ? undefined : () => onAddEntry(profile.id)} />
         ) : (
@@ -307,7 +324,15 @@ export function MoneyProfileDetailView({
                     onContextMenu={(ev) => ev.preventDefault()}
                     className="flex w-full min-w-0 items-center gap-3 px-5 py-3 text-left"
                   >
-                    <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-widest ${ENTRY_TYPE_STYLE[e.entry_type]}`}>{e.entry_type}</span>
+                    {selectMode ? (
+                      selectedIds.has(e.id) ? (
+                        <CheckCircle2 size={22} className="shrink-0 text-accent-400" />
+                      ) : (
+                        <div className="h-[22px] w-[22px] shrink-0 rounded-full border-2 border-white/20 light:border-black/20" />
+                      )
+                    ) : (
+                      <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-widest ${ENTRY_TYPE_STYLE[e.entry_type]}`}>{e.entry_type}</span>
+                    )}
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-sm font-medium text-white light:text-slate-900">{capitalizeFirst(e.description)}</div>
                       <div className="truncate text-[11px] text-slate-500">{formatDate(e.date)}{cat ? ` · ${cat.name}` : ''}{e.paid_party ? ` · ${capitalizeFirst(e.paid_party)}` : ''}</div>

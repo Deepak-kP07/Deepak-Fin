@@ -7,7 +7,7 @@ import { EmptyState } from '@/components/shared/EmptyState'
 import { HeroStatTile } from '@/components/shared/HeroStatTile'
 import { LoanDetailView } from '@/features/loans/LoanDetailView'
 
-export function LoansView({ data, onAdd, onEdit, onDelete, onPay, onDeletePayment, onSync, showMoney, onToggleMoney, onDetailChange, initialSelectedId }) {
+export function LoansView({ data, onAdd, onEdit, onDelete, onPay, onDeletePayment, onDeletePaymentBulk, onSync, showMoney, onToggleMoney, onDetailChange, initialSelectedId }) {
   const { loans, loan_payments, accounts } = data
   const [selectedLoanId, setSelectedLoanId] = useState(initialSelectedId ?? null)
   const selectedLoan = loans.find((l) => l.id === selectedLoanId)
@@ -22,6 +22,7 @@ export function LoansView({ data, onAdd, onEdit, onDelete, onPay, onDeletePaymen
         onBack={() => setSelectedLoanId(null)}
         onPay={onPay}
         onDeletePayment={onDeletePayment}
+        onDeletePaymentBulk={onDeletePaymentBulk}
         onEdit={onEdit}
         onDelete={(l) => { onDelete(l); setSelectedLoanId(null) }}
         onSync={onSync}

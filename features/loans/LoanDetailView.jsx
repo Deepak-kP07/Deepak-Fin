@@ -3,14 +3,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowDownRight, ArrowUpRight, CheckCircle2, ChevronDown, ChevronRight, Clock, Eye, EyeOff,
-  Landmark, MoreVertical, Pencil, RefreshCw, Sparkles, Target, Trash2,
+  Landmark, MoreVertical, Pencil, RefreshCw, Sparkles, Target, Trash2, X,
 } from 'lucide-react'
 import { nextLoanDueDate, projectSchedule } from '@/lib/amortization'
 import { dateToLocalISO, formatDate, liveOutstanding, money, monthAbbr, ordinal, paymentTypeLabel, todayISO } from '@/lib/format'
 import { StatCard } from '@/components/shared/StatCard'
 import { DismissibleBanner } from '@/components/shared/DismissibleBanner'
 
-export function LoanDetailView({ loan, payments, accounts, onBack, onPay, onDeletePayment, onEdit, onDelete, onSync, showMoney, onToggleMoney }) {
+export function LoanDetailView({ loan, payments, accounts, onBack, onPay, onDeletePayment, onDeletePaymentBulk, onEdit, onDelete, onSync, showMoney, onToggleMoney }) {
   const [syncOpen, setSyncOpen] = useState(false)
   const [syncValue, setSyncValue] = useState('')
   const [syncBusy, setSyncBusy] = useState(false)
@@ -117,19 +117,39 @@ export function LoanDetailView({ loan, payments, accounts, onBack, onPay, onDele
     return `${monthAbbr(dateToLocalISO(cycleDate))} EMI${p.prepay_mode ? ` + prepayment${modeSuffix}` : ''}`
   }
 
-  // Mobile payment rows have no visible delete icon — a long press on a row reverses that
-  // payment directly (deleteLoanPayment already confirms before it acts, so this is safe).
-  // Same timing/suppression pattern as the main ledger and Account detail view.
+  // Mobile: long-press a payment row to enter multi-select (same pattern as the main ledger/
+  // Accounts) instead of the old long-press-reverses-immediately behavior. Scoped to the
+  // "Payment history" list only (below) — the "Prepayments" summary above shows a filtered view
+  // of the exact same rows, so a select made there would be ambiguous about which list's header
+  // bar it belongs to; it keeps the old single-row long-press-to-reverse behavior instead.
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState(() => new Set())
   const longPressTimer = useRef(null)
   const longPressFired = useRef(false)
   const LONG_PRESS_MS = 500
   const cancelLongPress = () => { if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null } }
+  const toggleSelect = (id) => setSelectedIds((prev) => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next })
   const startLongPress = (p) => {
     longPressFired.current = false
     cancelLongPress()
     longPressTimer.current = setTimeout(() => { longPressFired.current = true; onDeletePayment(p) }, LONG_PRESS_MS)
   }
   const suppressLongPressTap = () => { longPressFired.current = false }
+  const startHistoryLongPress = (id) => {
+    longPressFired.current = false
+    cancelLongPress()
+    longPressTimer.current = setTimeout(() => { longPressFired.current = true; setSelectMode(true); toggleSelect(id) }, LONG_PRESS_MS)
+  }
+  const exitSelectMode = () => { setSelectMode(false); setSelectedIds(new Set()) }
+  const handleHistoryRowTap = (id) => {
+    if (longPressFired.current) { longPressFired.current = false; return }
+    if (selectMode) toggleSelect(id)
+  }
+  const handleBulkDelete = async () => {
+    const rows = [...selectedIds].map((id) => payments.find((p) => p.id === id)).filter(Boolean)
+    const didDelete = await onDeletePaymentBulk(rows)
+    if (didDelete) exitSelectMode()
+  }
 
   const emiDue = (() => {
     if (!loan.emi_due_day || loan.status === 'closed') return null
@@ -278,7 +298,15 @@ export function LoanDetailView({ loan, payments, accounts, onBack, onPay, onDele
       )}
 
       <div className="rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card">
-        <div className="border-b border-white/10 light:border-black/10 px-5 py-3 text-xs uppercase tracking-widest text-slate-500">Payment history · {payments.length}</div>
+        {selectMode ? (
+          <div className="flex items-center gap-2 border-b border-white/10 light:border-black/10 px-5 py-3 sm:hidden">
+            <button type="button" onClick={exitSelectMode} className="shrink-0 rounded-xl border border-white/10 light:border-black/10 p-2 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900" title="Cancel selection"><X size={15} /></button>
+            <div className="flex-1 text-sm font-medium text-white light:text-slate-900">{selectedIds.size} selected</div>
+            <button type="button" disabled={selectedIds.size === 0} onClick={handleBulkDelete} className="shrink-0 rounded-xl border border-rose-300/30 bg-rose-300/10 p-2 text-rose-300 light:text-rose-700 hover:bg-rose-300/20 disabled:opacity-40 disabled:pointer-events-none" title="Reverse selected"><Trash2 size={15} /></button>
+          </div>
+        ) : (
+          <div className="border-b border-white/10 light:border-black/10 px-5 py-3 text-xs uppercase tracking-widest text-slate-500">Payment history · {payments.length}</div>
+        )}
         {payments.length === 0 ? (
           <div className="px-5 py-6 text-sm text-slate-500">No payments logged yet.</div>
         ) : (
@@ -299,17 +327,25 @@ export function LoanDetailView({ loan, payments, accounts, onBack, onPay, onDele
                     {/* Mobile: single compact row, long-press to reverse (no visible delete icon) */}
                     <button
                       type="button"
-                      onClick={suppressLongPressTap}
-                      onTouchStart={() => startLongPress(p)}
+                      onClick={() => handleHistoryRowTap(p.id)}
+                      onTouchStart={() => startHistoryLongPress(p.id)}
                       onTouchEnd={cancelLongPress}
                       onTouchMove={cancelLongPress}
                       onTouchCancel={cancelLongPress}
                       onContextMenu={(e) => e.preventDefault()}
                       className="flex w-full min-w-0 items-center gap-3 text-left sm:hidden"
                     >
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/[.05] light:bg-black/[.035] text-accent-200 light:text-accent-700">
-                        {p.type === 'adjustment' ? <RefreshCw size={16} /> : <ArrowDownRight size={16} />}
-                      </div>
+                      {selectMode ? (
+                        selectedIds.has(p.id) ? (
+                          <CheckCircle2 size={22} className="shrink-0 text-accent-400" />
+                        ) : (
+                          <div className="h-[22px] w-[22px] shrink-0 rounded-full border-2 border-white/20 light:border-black/20" />
+                        )
+                      ) : (
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/[.05] light:bg-black/[.035] text-accent-200 light:text-accent-700">
+                          {p.type === 'adjustment' ? <RefreshCw size={16} /> : <ArrowDownRight size={16} />}
+                        </div>
+                      )}
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-sm font-medium text-white light:text-slate-900">{paymentRowLabel(p)}</div>
                         <div className="truncate text-[11px] text-slate-500">{typeLabel} · {formatDate(p.payment_date)}</div>

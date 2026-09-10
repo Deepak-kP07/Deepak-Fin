@@ -1,13 +1,13 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { ArrowDownRight, ArrowUpRight, ChevronRight, Eye, EyeOff, MoreVertical, Pencil, Plus, Trash2, User, UserPlus } from 'lucide-react'
+import { ArrowDownRight, ArrowUpRight, CheckCircle2, ChevronRight, Eye, EyeOff, MoreVertical, Pencil, Plus, Trash2, User, UserPlus, X } from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { HeroStatTile } from '@/components/shared/HeroStatTile'
 import { capitalizeFirst, formatDate, money } from '@/lib/format'
 import { roleFor, canEditRecord, canDeleteRecord, canLogRepayment, canManageShares } from '@/lib/lendBorrowSharing'
 
-export function LendBorrowDetailView({ record, repayments, additions = [], accounts, transactions, onBack, onEdit, onDelete, onDeleteTx, onLogRepayment, onAddMore, onManageAccess, showMoney, onToggleMoney, toast }) {
+export function LendBorrowDetailView({ record, repayments, additions = [], accounts, transactions, onBack, onEdit, onDelete, onDeleteTx, onDeleteTxBulk, onLogRepayment, onAddMore, onManageAccess, showMoney, onToggleMoney, toast }) {
   const role = roleFor(record)
   const isLent = record.type === 'lent'
   const isSettled = record.status === 'returned'
@@ -52,20 +52,48 @@ export function LendBorrowDetailView({ record, repayments, additions = [], accou
     if (tx) onDeleteTx(tx)
   }
 
-  // Mobile payment rows have no visible delete icon — a long press deletes directly (deletePayment
-  // itself routes through onDeleteTx, which already confirms before acting), same 500ms
-  // timing/suppression pattern as the Loans and Credit Cards detail views.
+  // Mobile: long-press a row to enter multi-select (same pattern as the main ledger/Accounts),
+  // instead of the old one-row-at-a-time long-press-to-delete. `selectSection` names which of
+  // the two lists (payments/additions) is currently selecting — only one at a time, since they're
+  // two visually separate sections and letting both select simultaneously would make the header
+  // bar's count/delete button ambiguous about which list it acts on.
+  const [selectSection, setSelectSection] = useState(null)
+  const [selectedIds, setSelectedIds] = useState(() => new Set())
   const longPressTimer = useRef(null)
   const longPressFired = useRef(false)
   const LONG_PRESS_MS = 500
   const cancelLongPress = () => { if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null } }
-  const startLongPress = (r) => {
+  const toggleSelect = (id) => setSelectedIds((prev) => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next })
+  const startLongPress = (section, id) => {
     if (!canLogRepayment(role)) return
     longPressFired.current = false
     cancelLongPress()
-    longPressTimer.current = setTimeout(() => { longPressFired.current = true; deletePayment(r) }, LONG_PRESS_MS)
+    longPressTimer.current = setTimeout(() => { longPressFired.current = true; setSelectSection(section); toggleSelect(id) }, LONG_PRESS_MS)
   }
-  const suppressLongPressTap = () => { longPressFired.current = false }
+  const exitSelectMode = () => { setSelectSection(null); setSelectedIds(new Set()) }
+  const handleRowTap = (section, id) => {
+    if (longPressFired.current) { longPressFired.current = false; return }
+    if (selectSection === section) toggleSelect(id)
+  }
+  // Both lists are really just filtered views of the shared `transactions` table (a repayment/
+  // addition row's own id isn't what the server deletes — its linked_transaction_id is, same as
+  // the single-row deletePayment/deleteAddition above), so bulk delete resolves each selected row
+  // to its linked transaction id and reuses the exact same onDeleteTxBulk the main ledger uses.
+  const handleBulkDelete = async (section) => {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      toast.push('Deleting needs a connection — try again once you’re back online.', 'error')
+      return
+    }
+    const list = section === 'payments' ? paymentsForThis : additionsForThis
+    const txIds = [...selectedIds]
+      .map((rid) => list.find((r) => r.id === rid))
+      .filter(Boolean)
+      .map((r) => transactions.find((t) => t.id === r.linked_transaction_id)?.id)
+      .filter(Boolean)
+    if (txIds.length === 0) return
+    const didDelete = await onDeleteTxBulk(txIds)
+    if (didDelete) exitSelectMode()
+  }
 
   // Mobile: Manage access/Edit/Delete collapse into this "..." menu, same pattern as the other
   // detail views — the eye toggle stays outside it, always visible. Desktop is unchanged.
@@ -169,7 +197,15 @@ export function LendBorrowDetailView({ record, repayments, additions = [], accou
       </div>
 
       <div className="rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card">
-        <div className="border-b border-white/10 light:border-black/10 px-5 py-3 text-xs uppercase tracking-widest text-slate-500">{isLent ? 'Repayments received' : 'Payments made'} · {paymentsForThis.length}</div>
+        {selectSection === 'payments' ? (
+          <div className="flex items-center gap-2 border-b border-white/10 light:border-black/10 px-5 py-3 sm:hidden">
+            <button type="button" onClick={exitSelectMode} className="shrink-0 rounded-xl border border-white/10 light:border-black/10 p-2 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900" title="Cancel selection"><X size={15} /></button>
+            <div className="flex-1 text-sm font-medium text-white light:text-slate-900">{selectedIds.size} selected</div>
+            <button type="button" disabled={selectedIds.size === 0} onClick={() => handleBulkDelete('payments')} className="shrink-0 rounded-xl border border-rose-300/30 bg-rose-300/10 p-2 text-rose-300 light:text-rose-700 hover:bg-rose-300/20 disabled:opacity-40 disabled:pointer-events-none" title="Delete selected"><Trash2 size={15} /></button>
+          </div>
+        ) : (
+          <div className="border-b border-white/10 light:border-black/10 px-5 py-3 text-xs uppercase tracking-widest text-slate-500">{isLent ? 'Repayments received' : 'Payments made'} · {paymentsForThis.length}</div>
+        )}
         {paymentsForThis.length === 0 ? (
           <EmptyState compact icon={isLent ? ArrowDownRight : ArrowUpRight} title="No payments yet" message={isSettled ? 'This record is fully settled.' : `Log it here when ${isLent ? 'they repay you' : 'you make a payment'}.`} cta={isSettled || !canLogRepayment(role) ? undefined : `Log ${isLent ? 'repayment' : 'payment'}`} onCta={isSettled || !canLogRepayment(role) ? undefined : () => onLogRepayment(record)} />
         ) : (
@@ -191,17 +227,25 @@ export function LendBorrowDetailView({ record, repayments, additions = [], accou
                         the main ledger — with long-press to delete (no visible delete icon). */}
                     <button
                       type="button"
-                      onClick={suppressLongPressTap}
-                      onTouchStart={() => startLongPress(r)}
+                      onClick={() => handleRowTap('payments', r.id)}
+                      onTouchStart={() => startLongPress('payments', r.id)}
                       onTouchEnd={cancelLongPress}
                       onTouchMove={cancelLongPress}
                       onTouchCancel={cancelLongPress}
                       onContextMenu={(e) => e.preventDefault()}
                       className="flex w-full min-w-0 items-center gap-3 text-left sm:hidden"
                     >
-                      <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/[.05] light:bg-black/[.035] ${amountColor}`}>
-                        {isLent ? <ArrowDownRight size={16} /> : <ArrowUpRight size={16} />}
-                      </div>
+                      {selectSection === 'payments' ? (
+                        selectedIds.has(r.id) ? (
+                          <CheckCircle2 size={22} className="shrink-0 text-accent-400" />
+                        ) : (
+                          <div className="h-[22px] w-[22px] shrink-0 rounded-full border-2 border-white/20 light:border-black/20" />
+                        )
+                      ) : (
+                        <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/[.05] light:bg-black/[.035] ${amountColor}`}>
+                          {isLent ? <ArrowDownRight size={16} /> : <ArrowUpRight size={16} />}
+                        </div>
+                      )}
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-sm font-medium text-white light:text-slate-900">Payment #{paymentsForThis.length - i}</div>
                         <div className="truncate text-[11px] text-slate-500">{formatDate(r.date)}{acc ? ` · ${acc.name}` : ''}</div>
@@ -240,7 +284,15 @@ export function LendBorrowDetailView({ record, repayments, additions = [], accou
       {/* Every top-up against this same record, dated — this is what replaces creating a whole
           new card each time more gets lent/borrowed from the same person. */}
       <div className="rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card">
-        <div className="border-b border-white/10 light:border-black/10 px-5 py-3 text-xs uppercase tracking-widest text-slate-500">{isLent ? 'More lent' : 'More borrowed'} · {additionsForThis.length}</div>
+        {selectSection === 'additions' ? (
+          <div className="flex items-center gap-2 border-b border-white/10 light:border-black/10 px-5 py-3 sm:hidden">
+            <button type="button" onClick={exitSelectMode} className="shrink-0 rounded-xl border border-white/10 light:border-black/10 p-2 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900" title="Cancel selection"><X size={15} /></button>
+            <div className="flex-1 text-sm font-medium text-white light:text-slate-900">{selectedIds.size} selected</div>
+            <button type="button" disabled={selectedIds.size === 0} onClick={() => handleBulkDelete('additions')} className="shrink-0 rounded-xl border border-rose-300/30 bg-rose-300/10 p-2 text-rose-300 light:text-rose-700 hover:bg-rose-300/20 disabled:opacity-40 disabled:pointer-events-none" title="Delete selected"><Trash2 size={15} /></button>
+          </div>
+        ) : (
+          <div className="border-b border-white/10 light:border-black/10 px-5 py-3 text-xs uppercase tracking-widest text-slate-500">{isLent ? 'More lent' : 'More borrowed'} · {additionsForThis.length}</div>
+        )}
         {additionsForThis.length === 0 ? (
           <EmptyState compact icon={Plus} title="No top-ups yet" message={`Log it here if you ${isLent ? 'lend them' : 'borrow'} more later.`} cta={!canLogRepayment(role) ? undefined : `${isLent ? 'Lend' : 'Borrow'} more`} onCta={!canLogRepayment(role) ? undefined : () => onAddMore(record)} />
         ) : (
@@ -257,17 +309,36 @@ export function LendBorrowDetailView({ record, repayments, additions = [], accou
                 const acc = accounts.find((acct) => acct.id === a.account_id)
                 return (
                   <div key={a.id} className="px-5 py-3 sm:py-4">
-                    {/* Mobile: single compact row, same pattern as the repayments list above */}
-                    <div className="flex w-full min-w-0 items-center gap-3 text-left sm:hidden">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/[.05] light:bg-black/[.035] text-amber-300 light:text-amber-700">
-                        <Plus size={16} />
-                      </div>
+                    {/* Mobile: single compact row, long-press to multi-select — same pattern as
+                        the repayments list above (this list had no mobile delete path at all
+                        before). */}
+                    <button
+                      type="button"
+                      onClick={() => handleRowTap('additions', a.id)}
+                      onTouchStart={() => startLongPress('additions', a.id)}
+                      onTouchEnd={cancelLongPress}
+                      onTouchMove={cancelLongPress}
+                      onTouchCancel={cancelLongPress}
+                      onContextMenu={(e) => e.preventDefault()}
+                      className="flex w-full min-w-0 items-center gap-3 text-left sm:hidden"
+                    >
+                      {selectSection === 'additions' ? (
+                        selectedIds.has(a.id) ? (
+                          <CheckCircle2 size={22} className="shrink-0 text-accent-400" />
+                        ) : (
+                          <div className="h-[22px] w-[22px] shrink-0 rounded-full border-2 border-white/20 light:border-black/20" />
+                        )
+                      ) : (
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/[.05] light:bg-black/[.035] text-amber-300 light:text-amber-700">
+                          <Plus size={16} />
+                        </div>
+                      )}
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-sm font-medium text-white light:text-slate-900">Top-up #{additionsForThis.length - i}</div>
                         <div className="truncate text-[11px] text-slate-500">{formatDate(a.date)}{acc ? ` · ${acc.name}` : ''}</div>
                       </div>
                       <div className="shrink-0 text-sm font-semibold text-amber-300 light:text-amber-700">+{showMoney ? money(a.amount) : '••••'}</div>
-                    </div>
+                    </button>
 
                     {/* Desktop: unchanged full row */}
                     <div className="hidden sm:grid sm:grid-cols-[1.4fr_.9fr_.6fr_.6fr_auto] sm:items-center sm:gap-4">

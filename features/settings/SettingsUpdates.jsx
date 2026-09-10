@@ -19,6 +19,7 @@ const CHANGELOG = [
       'Settings > SMS auto-detect: a direct download button for the Android app.',
       'Fixed Vault reveal getting stuck on "Decrypting…" forever on a slow/flaky connection.',
       'Fixed transfers sometimes showing an error and creating a duplicate — they now save cleanly the first time.',
+      'Long-press-to-select-and-delete now works in Loans, Lend/Borrow, Credit cards, and Family/Company, not just Transactions.',
     ],
   },
   {

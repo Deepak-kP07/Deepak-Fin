@@ -10,7 +10,7 @@ import { MoneyProfileDetailView } from '@/features/familyCompany/MoneyProfileDet
 
 export function FamilyCompanyView({
   data, onAddProfile, onEditProfile, onDeleteProfile,
-  onAddEntry, onEditEntry, onDeleteEntry, onBulkImport, onToggleStatus, onManageAccess, onSyncBalance, onOpenRecurring, onDetailChange,
+  onAddEntry, onEditEntry, onDeleteEntry, onDeleteEntryBulk, onBulkImport, onToggleStatus, onManageAccess, onSyncBalance, onOpenRecurring, onDetailChange,
   showMoney, onToggleMoney, initialSelectedId,
 }) {
   const { money_profiles: profiles = [], money_profile_entries: entries = [], accounts = [], credit_cards: creditCards = [], categories = [], transactions = [] } = data
@@ -33,6 +33,7 @@ export function FamilyCompanyView({
         onAddEntry={onAddEntry}
         onEditEntry={onEditEntry}
         onDeleteEntry={onDeleteEntry}
+        onDeleteEntryBulk={onDeleteEntryBulk}
         onBulkImport={onBulkImport}
         onToggleStatus={onToggleStatus}
         onManageAccess={onManageAccess}
