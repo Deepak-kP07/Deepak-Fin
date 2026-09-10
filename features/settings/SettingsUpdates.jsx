@@ -17,6 +17,7 @@ const CHANGELOG = [
       'Weekly/monthly report emails: biggest transactions, %-change vs last period, and a by-account breakdown.',
       'The "Personal Fin" logo now takes you back to Dashboard.',
       'Settings > SMS auto-detect: a direct download button for the Android app.',
+      'Fixed Vault reveal getting stuck on "Decrypting…" forever on a slow/flaky connection.',
     ],
   },
   {
