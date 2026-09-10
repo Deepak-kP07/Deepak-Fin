@@ -20,6 +20,7 @@ const CHANGELOG = [
       'Fixed Vault reveal getting stuck on "Decrypting…" forever on a slow/flaky connection.',
       'Fixed transfers sometimes showing an error and creating a duplicate — they now save cleanly the first time.',
       'Long-press-to-select-and-delete now works in Loans, Lend/Borrow, Credit cards, and Family/Company, not just Transactions.',
+      'Fixed Vault card sharing sometimes downloading two copies, or attaching no image at all on mobile.',
     ],
   },
   {
