@@ -131,6 +131,18 @@ body {
   .light *:focus-visible {
     outline-color: hsl(var(--accent-h) var(--accent-s) 31%);
     }
+  /* Recharts calls .focus() on whatever SVG element you click/tap (its own keyboard-a11y
+     wiring) — some part of that chain (verified: a plain re-click on an already-active element,
+     e.g. tapping an already-exploded pie slice again) lands on bare :focus rather than
+     :focus-visible, so scoping the ring override to :focus-visible alone still let a plain
+     rectangular outline through around that element's bounding box (not shaped like the clicked
+     slice/bar at all) — looked exactly like an unrelated stray border rather than the
+     tapped-slice highlight it's supposed to be. Charts already show selection state visually (an
+     exploded pie slice, an active bar) — they don't need any focus ring on top of that. */
+  .recharts-wrapper *:focus,
+  .recharts-wrapper *:focus-visible {
+    outline: none;
+    }
 }
 
 @keyframes ticker-up {

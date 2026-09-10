@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { BookOpen, Bell, Inbox, KeyRound, LayoutDashboard, LayoutGrid, Link2, LogOut, Menu, Palette, ShieldAlert, Smartphone, Star, Tag, Landmark as LandmarkIcon, User } from 'lucide-react'
+import { BookOpen, Bell, Inbox, KeyRound, LayoutDashboard, LayoutGrid, Link2, LogOut, Menu, Palette, RefreshCw, ShieldAlert, Smartphone, Star, Tag, Landmark as LandmarkIcon, User } from 'lucide-react'
 import { BottomSheet } from '@/components/shared/BottomSheet'
 import { SettingsProfile } from './SettingsProfile'
 import { SettingsAppearance } from './SettingsAppearance'
@@ -17,6 +17,7 @@ import { SettingsMoneyRules } from './SettingsMoneyRules'
 import { SettingsKite } from './SettingsKite'
 import { SettingsSmsAutoDetect } from './SettingsSmsAutoDetect'
 import { SettingsUserGuide } from './SettingsUserGuide'
+import { SettingsUpdates } from './SettingsUpdates'
 
 const SECTIONS = [
   { key: 'profile', label: 'Profile', icon: User, Component: SettingsProfile },
@@ -33,6 +34,7 @@ const SECTIONS = [
   { key: 'kite', label: 'Kite Connect', icon: Link2, Component: SettingsKite },
   { key: 'sms_autodetect', label: 'SMS auto-detect', icon: Inbox, Component: SettingsSmsAutoDetect },
   { key: 'guide', label: 'User guide', icon: BookOpen, Component: SettingsUserGuide },
+  { key: 'updates', label: 'Updates', icon: RefreshCw, Component: SettingsUpdates },
 ]
 
 export function SettingsShell({ activeSection, onSectionChange, onLogout, ...rest }) {

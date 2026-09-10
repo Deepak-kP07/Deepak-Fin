@@ -6,8 +6,11 @@ import { BatteryWarning, CheckCircle2, ChevronDown, ChevronRight, Download, Inbo
 import { ToggleSwitch } from '@/components/shared/ToggleSwitch'
 import { checkSmsPermission, isNativeSmsAvailable, openBatteryOptimizationSettings, requestSmsPermission } from '@/lib/sms/nativeBridge'
 
-// Sideloaded APK, not the Play Store — see ANDROID_SETUP.md's distribution note.
-const APK_DOWNLOAD_URL = 'https://drive.google.com/drive/folders/14yYawYHVochtQUAP8Knr19mTNx5zC2xO?usp=sharing'
+// Sideloaded APK, not the Play Store — see ANDROID_SETUP.md's distribution note. Needs the
+// NEXT_PUBLIC_ prefix to reach this client component's bundle at all — a plain (server-only) env
+// var reads as undefined here, same as every other client-visible config value in this app
+// (NEXT_PUBLIC_BASE_URL, NEXT_PUBLIC_GOOGLE_CLIENT_ID, ...).
+const APK_DOWNLOAD_URL = process.env.NEXT_PUBLIC_APP_APK_DRIVE_LINK
 
 // SMS auto-detect is Android-only, via a separate native-wrapped build of this same app — a
 // plain web/PWA tab can't read device SMS. The "Pending" module toggle (Settings > Modules) is
@@ -40,14 +43,16 @@ function NativePermissionCard({ toast }) {
         <div className="flex items-center gap-3 rounded-xl bg-black/20 light:bg-black/[.06] px-4 py-3 text-xs text-slate-500">
           <Smartphone size={16} className="shrink-0" />You're viewing this in a browser — install the Android app to actually detect SMS. This page still lets you manage the settings below.
         </div>
-        <a
-          href={APK_DOWNLOAD_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center justify-center gap-2 rounded-xl bg-accent-300/20 px-4 py-2.5 text-xs font-semibold text-accent-100 light:text-accent-700 hover:bg-accent-300/30"
-        >
-          <Download size={14} />Download the Android app (APK)
-        </a>
+        {APK_DOWNLOAD_URL && (
+          <a
+            href={APK_DOWNLOAD_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center gap-2 rounded-xl bg-accent-300/20 px-4 py-2.5 text-xs font-semibold text-accent-100 light:text-accent-700 hover:bg-accent-300/30"
+          >
+            <Download size={14} />Download the Android app (APK)
+          </a>
+        )}
       </div>
     )
   }

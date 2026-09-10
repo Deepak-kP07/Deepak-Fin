@@ -89,7 +89,7 @@ import { NetWorthDetailView } from '@/features/dashboard/NetWorthDetailView'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import {
-  Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend,
+  Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Sector, Tooltip, XAxis, YAxis, Legend,
 } from 'recharts'
 import {
   ArrowDownRight, ArrowLeftRight, ArrowUpDown, ArrowUpRight, BarChart3, Briefcase, Calculator, Calendar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock, CreditCard,
@@ -1484,6 +1484,22 @@ function AttachmentViewer({ open, onClose, transaction }) {
   )
 }
 
+// Recharts has no built-in "exploded" slice — this draws the tapped sector shifted radially
+// outward from center (along its own midAngle) plus a touch wider, which is the standard way to
+// fake the pulled-out-of-the-donut look with their Sector primitive. Pure/stateless (no component
+// closure needed), so it lives at module scope rather than being redefined every render.
+const PIE_EXPLODE_OFFSET = 10
+function renderExplodedPieSlice(props) {
+  const { cx, cy, midAngle, innerRadius, outerRadius, startAngle, endAngle, fill } = props
+  const rad = -midAngle * (Math.PI / 180)
+  return (
+    <Sector
+      cx={cx + PIE_EXPLODE_OFFSET * Math.cos(rad)} cy={cy + PIE_EXPLODE_OFFSET * Math.sin(rad)}
+      innerRadius={innerRadius} outerRadius={outerRadius + 4} startAngle={startAngle} endAngle={endAngle} fill={fill}
+    />
+  )
+}
+
 function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTxBulk, onImport, showMoney, onToggleMoney, onOpenRecurring, onPayCardBill, onApprovePending, onRejectPending }) {
   const { transactions, accounts, categories, credit_cards: creditCards = [], pending_transactions: pendingTransactions = [] } = data
   const pendingSms = useMemo(() => pendingTransactions.filter((p) => p.status === 'pending').sort((a, b) => new Date(b.created_at) - new Date(a.created_at)), [pendingTransactions])
@@ -1517,6 +1533,13 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTx
   const [accountId, setAccountId] = useState('all')
   const [categoryId, setCategoryId] = useState('all')
   const [chartView, setChartView] = useState(false)
+  // Which category-breakdown pie slice is "exploded" (tapped/clicked) — -1 means none. Recharts'
+  // Pie keeps its own internal "last active index" alongside the controlled activeIndex prop;
+  // going back to `undefined` didn't reliably clear that internal state (the slice stayed
+  // exploded), but an explicit, always-out-of-range -1 forces it to actually recompute "nothing
+  // active" instead of silently keeping whatever it last rendered. Tapping the same slice again
+  // collapses it back in.
+  const [activeSliceIndex, setActiveSliceIndex] = useState(-1)
   // Defaults to the current calendar month — the left/right arrows step one month at a time.
   // A custom range (below) overrides this entirely while active.
   const [monthCursor, setMonthCursor] = useState(() => { const d = new Date(); return { year: d.getFullYear(), month: d.getMonth() } })
@@ -1869,11 +1892,30 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTx
           <div className="rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card p-4 sm:p-6">
             <div className="mb-5 text-sm font-semibold text-white light:text-slate-900">By category · {customRange ? `${formatDate(customRange.start)} – ${formatDate(customRange.end)}` : `${MONTH_NAMES[monthCursor.month]} ${monthCursor.year}`}</div>
             <div className="grid gap-6 lg:grid-cols-[1.3fr_1fr] lg:gap-8">
-              <div className="h-72 lg:h-[28rem]">
+              {/* onFocusCapture: Recharts calls .focus() on whatever slice's <g> you click (its
+                  own keyboard-a11y wiring, tabindex="-1" so it's programmatic-only, never
+                  Tab-reachable) — left alone, the browser draws its native focus ring around
+                  that <g>'s bounding box, which looks nothing like the tapped wedge and reads as
+                  a stray rectangular border rather than the (correct) exploded-slice highlight
+                  below. Blurring it the instant it's focused is the direct fix — a global CSS
+                  `outline: none` override was tried first but didn't reliably reach this dev
+                  server's compiled bundle, so this doesn't depend on that pipeline at all. */}
+              <div className="h-72 lg:h-[28rem]" onFocusCapture={(e) => e.target.blur()}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={categoryBreakdown} dataKey="value" nameKey="name" innerRadius="40%" outerRadius="76%" stroke="none">
-                      {categoryBreakdown.map((c, i) => <Cell key={i} fill={c.color} />)}
+                    <Pie
+                      data={categoryBreakdown} dataKey="value" nameKey="name" innerRadius="40%" outerRadius="76%" stroke="none"
+                      activeIndex={activeSliceIndex} activeShape={renderExplodedPieSlice}
+                      onClick={(_, index) => setActiveSliceIndex((prev) => (prev === index ? -1 : index))}
+                      // Recharts' Pie also tracks its own internal hover-driven active index —
+                      // left alone, re-clicking the already-exploded slice keeps it "hovered" in
+                      // that internal state, which then wins over activeIndex ticking back to
+                      // undefined, so the slice never visibly un-explodes. A no-op onMouseEnter
+                      // stops Recharts from managing that state at all, leaving activeIndex (ours)
+                      // as the only thing deciding which slice is active.
+                      onMouseEnter={() => {}}
+                    >
+                      {categoryBreakdown.map((c, i) => <Cell key={i} fill={c.color} className="cursor-pointer outline-none" />)}
                     </Pie>
                     <Tooltip contentStyle={{ background: '#0f1420', border: '1px solid #ffffff22', borderRadius: 12, color: '#fff' }} itemStyle={{ color: '#fff' }} labelStyle={{ color: '#fff' }} formatter={(v) => (showMoney ? money(v) : '••••')} />
                   </PieChart>
