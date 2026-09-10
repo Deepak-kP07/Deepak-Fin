@@ -26,6 +26,10 @@ function shareCaption(item, secrets) {
   return [...heading, ...lines.filter(Boolean), '', 'Sent via Personal Fin — manage all your personal finance at personalfin.site'].join('\n')
 }
 
+function filenameFor(item) {
+  return `${(item.label || 'card').replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase()}.png`
+}
+
 // Snapshots the actual front-face DOM node (not a redrawn approximation) so the shared image is
 // pixel-for-pixel what's already on screen — same gradient, chip, wifi mark, number, and holder
 // name — and never drifts out of sync if that design changes later.
@@ -34,20 +38,17 @@ async function cardImageFile(frontNode, filename) {
   return new File([blob], filename, { type: 'image/png' })
 }
 
-async function shareItem(item, secrets, frontNode, toast) {
+// `file` is captured ahead of time (see the useEffect in VaultCardFlip below), not here — mobile
+// browsers only allow navigator.share's file support within a very short window of the actual
+// tap ("user activation"), and capturing the card image itself takes long enough that awaiting it
+// *inside* the click handler reliably blew past that window, so canShare silently returned false
+// and every mobile share fell back to text-only. Pre-capturing removes that gap: by the time
+// Share is tapped, the file is just a plain value already sitting in state.
+async function shareItem(item, secrets, file, toast) {
   const text = shareCaption(item, secrets)
-  const filename = `${(item.label || 'card').replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase()}.png`
-  let file = null
-  try {
-    file = await cardImageFile(frontNode, filename)
-  } catch (err) {
-    // Previously swallowed entirely — silently degrading to a text-only share with zero
-    // indication why. Logged (not just toasted) since the real cause is almost certainly some
-    // captured element's computed style html-to-image can't rasterize, which needs the actual
-    // error/stack to track down, not just "it failed".
-    console.error('Vault card image capture failed:', err)
-    toast?.push("Couldn't attach the card image — sharing text only.", 'error')
-  }
+  // Covers both a genuine capture failure and "tapped Share before the background capture
+  // finished" — either way there's no image to attach, so the message is the same.
+  if (!file) toast?.push("Couldn't attach the card image — sharing text only.", 'error')
 
   if (file && typeof navigator !== 'undefined' && navigator.canShare?.({ files: [file] })) {
     try { await navigator.share({ files: [file], title: item.label, text }) } catch (err) { if (err?.name !== 'AbortError') toast?.push('Share failed.', 'error') }
@@ -65,7 +66,7 @@ async function shareItem(item, secrets, frontNode, toast) {
   if (file) {
     const url = URL.createObjectURL(file)
     const link = document.createElement('a')
-    link.href = url; link.download = filename
+    link.href = url; link.download = file.name
     document.body.appendChild(link); link.click(); link.remove()
     URL.revokeObjectURL(url)
   }
@@ -82,11 +83,24 @@ export function VaultCardFlip({ item, onEdit, onDelete, toast }) {
   const [revealing, setRevealing] = useState(false)
   const [sharing, setSharing] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [cardFile, setCardFile] = useState(null)
   const frontRef = useRef(null)
   const sharingRef = useRef(false)
   const stop = (fn) => (e) => { e.stopPropagation(); fn() }
 
   const flipBack = () => { setFlipped(false); setSecrets(null) }
+
+  // Captured the moment the card is revealed, not when Share is tapped — see shareItem's own
+  // comment on why. By the time a real tap on Share happens, this has almost always already
+  // resolved, so navigator.share can run with zero async delay after the tap itself.
+  useEffect(() => {
+    if (!secrets) { setCardFile(null); return }
+    let cancelled = false
+    cardImageFile(frontRef.current, filenameFor(item))
+      .then((f) => { if (!cancelled) setCardFile(f) })
+      .catch((err) => { if (!cancelled) console.error('Vault card image capture failed:', err) })
+    return () => { cancelled = true }
+  }, [secrets, item])
 
   const copyCardNumber = async () => {
     const raw = String(secrets?.card_number || '').replace(/\s+/g, '')
@@ -104,7 +118,7 @@ export function VaultCardFlip({ item, onEdit, onDelete, toast }) {
     if (sharingRef.current) return
     sharingRef.current = true
     setSharing(true)
-    try { await shareItem(item, secrets, frontRef.current, toast) } finally { sharingRef.current = false; setSharing(false) }
+    try { await shareItem(item, secrets, cardFile, toast) } finally { sharingRef.current = false; setSharing(false) }
   }
 
   // A flaky mobile connection can leave a fetch neither resolved nor rejected for a very long
