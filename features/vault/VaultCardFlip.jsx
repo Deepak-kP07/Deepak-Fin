@@ -83,6 +83,7 @@ export function VaultCardFlip({ item, onEdit, onDelete, toast }) {
   const [sharing, setSharing] = useState(false)
   const [copied, setCopied] = useState(false)
   const frontRef = useRef(null)
+  const sharingRef = useRef(false)
   const stop = (fn) => (e) => { e.stopPropagation(); fn() }
 
   const flipBack = () => { setFlipped(false); setSecrets(null) }
@@ -93,10 +94,17 @@ export function VaultCardFlip({ item, onEdit, onDelete, toast }) {
     if (await copyToClipboard(raw)) { setCopied(true); setTimeout(() => setCopied(false), 1500) }
   }
 
+  // `sharing` (React state) updates asynchronously — a fast double-click/double-tap can fire
+  // both handlers before the first `setSharing(true)` actually re-renders the button as
+  // disabled, so `if (sharing) return` alone doesn't reliably stop a second overlapping call.
+  // sharingRef is set synchronously in the same tick as the very first call, so the second one
+  // sees it immediately regardless of React's render timing — this is what was producing two
+  // downloaded PNGs from what looked like one share tap.
   const doShare = async () => {
-    if (sharing) return
+    if (sharingRef.current) return
+    sharingRef.current = true
     setSharing(true)
-    try { await shareItem(item, secrets, frontRef.current, toast) } finally { setSharing(false) }
+    try { await shareItem(item, secrets, frontRef.current, toast) } finally { sharingRef.current = false; setSharing(false) }
   }
 
   // A flaky mobile connection can leave a fetch neither resolved nor rejected for a very long
