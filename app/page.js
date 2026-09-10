@@ -64,6 +64,7 @@ import { BucketListView } from '@/features/buckets/BucketListView'
 import { PendingTransactionsView } from '@/features/pending/PendingTransactionsView'
 import { startSmsListener } from '@/lib/sms/nativeBridge'
 import { ensureNativePushRegistered } from '@/lib/push/nativeBridge'
+import { triggerAppUpdate } from '@/lib/pwaUpdate'
 import { LendForm } from '@/features/lend-borrow/LendForm'
 import { LendAddMoreForm } from '@/features/lend-borrow/LendAddMoreForm'
 import { LendBorrowView } from '@/features/lend-borrow/LendBorrowView'
@@ -2281,10 +2282,23 @@ function Shell({ user, onLogout }) {
     const hadController = !!navigator.serviceWorker.controller
     const onControllerChange = () => {
       if (!hadController) return
-      toast.push('A new version is available.', 'info', { persist: true, action: { label: 'Update', onClick: () => window.location.reload() } })
+      toast.push('A new version is available.', 'info', { persist: true, action: { label: 'Update', onClick: triggerAppUpdate } })
     }
     navigator.serviceWorker.addEventListener('controllerchange', onControllerChange)
     return () => navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange)
+  }, [])
+
+  // The other half of the "update available" push notification (app/api/cron/notifications and
+  // lib/server/services/pushSend.js send it, app/sw.js's notificationclick opens this URL) — a tab
+  // left open catches a genuine update via the controllerchange listener above, but a tap on the
+  // push notification is often a cold app-open with nothing to compare against yet, so this
+  // param is the signal instead. Stripped from the URL right after so it can't re-fire on a
+  // later refresh/navigation within the same session.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (new URLSearchParams(window.location.search).get('update') !== '1') return
+    toast.push('A new version is available.', 'info', { persist: true, action: { label: 'Update', onClick: triggerAppUpdate } })
+    window.history.replaceState(null, '', window.location.pathname)
   }, [])
 
   const openTxForm = (t = null, defaultAccountId = '', defaultRepayment = null) => { setTxEditing(t); setTxDefaultAccountId(defaultAccountId); setTxDefaultRepayment(defaultRepayment); setTxFormOpen(true) }

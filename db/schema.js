@@ -739,7 +739,7 @@ export const notificationEvents = pgTable('notification_events', {
   periodKey: text('period_key').notNull(),
   sentAt: timestamp('sent_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
-  check('notification_events_type_check', sql`${t.type} in ('card_due','loan_due','recurring_generated','budget_overspend','recurring_money_profile_generated','pending_review_digest')`),
+  check('notification_events_type_check', sql`${t.type} in ('card_due','loan_due','recurring_generated','budget_overspend','recurring_money_profile_generated','pending_review_digest','app_update')`),
   unique('notification_events_dedup_key').on(t.userId, t.type, t.entityId, t.periodKey),
   index('notification_events_user_idx').on(t.userId),
 ])

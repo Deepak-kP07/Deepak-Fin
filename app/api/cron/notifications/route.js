@@ -24,8 +24,22 @@ async function recordNotified(supabase, userId, type, entityId, periodKey) {
   await supabase.from('notification_events').insert({ user_id: userId, type, entity_id: entityId, period_key: periodKey }).select().maybeSingle()
 }
 
-async function checkUser(supabase, userId) {
+async function checkUser(supabase, userId, buildId) {
   const notifications = []
+
+  // A new version deployed since this user was last notified — Vercel sets
+  // VERCEL_GIT_COMMIT_SHA automatically per deployment (undefined outside Vercel, e.g. local dev,
+  // where there's no stable build identity to compare against, so this is skipped entirely
+  // there). entityId reuses the user's own id, same trick 'pending_review_digest' already uses
+  // for a notification with no natural per-row entity — periodKey (the build id) is what actually
+  // makes this fire once per user per new deploy, via the same alreadyNotified/recordNotified
+  // dedup every other notification type here already relies on.
+  if (buildId && !(await alreadyNotified(supabase, userId, 'app_update', userId, buildId))) {
+    notifications.push({
+      type: 'app_update', entityId: userId, periodKey: buildId,
+      title: 'A new version of Personal Fin is available', body: 'Tap to update to the latest version.', url: '/?update=1',
+    })
+  }
 
   // Recurring transactions generated — the cron run itself is the reliable trigger now, not
   // just "whenever the user happens to open the app."
@@ -131,9 +145,10 @@ async function handler(request) {
   const { data: usersPage, error: listError } = await supabase.auth.admin.listUsers()
   if (listError) return NextResponse.json({ error: listError.message }, { status: 500 })
 
+  const buildId = process.env.VERCEL_GIT_COMMIT_SHA || null
   const results = []
   for (const user of usersPage.users) {
-    const notifications = await checkUser(supabase, user.id)
+    const notifications = await checkUser(supabase, user.id, buildId)
     let sent = 0
     for (const n of notifications) {
       const count = await sendPushToUser(supabase, user.id, { title: n.title, body: n.body, url: `${BASE_URL}${n.url}` })

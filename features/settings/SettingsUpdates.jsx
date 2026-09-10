@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { RefreshCw, Sparkles } from 'lucide-react'
+import { triggerAppUpdate } from '@/lib/pwaUpdate'
 
 // Short, user-facing entries — not raw commit messages. Newest first. Add a new entry at the top
 // whenever something user-visible ships; no need to log every internal fix.
@@ -56,22 +57,11 @@ const CHANGELOG = [
 export function SettingsUpdates() {
   const [checking, setChecking] = useState(false)
 
-  // Same mechanism the one-time "A new version is available" toast already uses (app/page.js) —
-  // Serwist's skipWaiting+clientsClaim mean a newly found worker takes over on its own, this just
-  // forces a check instead of waiting for the browser's own polling, then reloads to pick it up.
-  // Unlike the toast, this is reachable any time — so missing that one prompt isn't a dead end.
+  // Unlike the one-time "new version available" toast/push, this is reachable any time — so
+  // missing that one prompt isn't a dead end.
   const checkForUpdate = async () => {
     setChecking(true)
-    try {
-      if ('serviceWorker' in navigator) {
-        const reg = await navigator.serviceWorker.getRegistration()
-        await reg?.update()
-      }
-    } catch {
-      // best-effort — reload happens regardless below
-    } finally {
-      setTimeout(() => window.location.reload(), 400)
-    }
+    await triggerAppUpdate()
   }
 
   return (
