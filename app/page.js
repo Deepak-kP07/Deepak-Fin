@@ -2973,9 +2973,9 @@ function Shell({ user, onLogout }) {
       <div className="mx-auto flex min-h-screen max-w-[1480px]">
         {/* Sidebar */}
         <aside className="hidden w-64 shrink-0 flex-col border-r border-white/5 light:border-black/5 px-5 py-6 lg:flex lg:sticky lg:top-0 lg:h-screen lg:self-start lg:overflow-y-auto glassy:z-10 glassy:glass-nav glassy:border-r-0">
-          <div className="flex items-center gap-3 text-sm font-semibold text-white light:text-slate-900">
+          <button type="button" onClick={() => setView('dashboard')} className="flex items-center gap-3 text-sm font-semibold text-white light:text-slate-900">
             <img src="/logo.png" alt="" className="h-10 w-10 rounded-2xl object-cover" />Personal Fin
-          </div>
+          </button>
           <nav className="mt-10 space-y-1">
             {nav.map((n) => (
               <button key={n.key} data-tour={`nav-${n.key}`} onClick={() => setView(n.key)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition ${view === n.key ? 'bg-white/[.06] light:bg-black/[.04] text-white light:text-slate-900' : 'text-slate-400 light:text-slate-500 hover:bg-white/[.04] hover:light:bg-black/[.03] hover:text-white hover:light:text-slate-900'}`}>
