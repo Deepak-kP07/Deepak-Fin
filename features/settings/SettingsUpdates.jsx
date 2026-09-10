@@ -8,6 +8,18 @@ import { triggerAppUpdate } from '@/lib/pwaUpdate'
 // whenever something user-visible ships; no need to log every internal fix.
 const CHANGELOG = [
   {
+    date: '10 Sep 2026',
+    points: [
+      'This "Updates" page — check for updates any time, plus a push notification when a new version ships.',
+      'Settings > Accounts: hide an account from every "log an entry" dropdown without touching its balance or history.',
+      'Budgets: a new "Budget allocation" chart, visible from day one even before anything is spent.',
+      'Transactions: tap a category in the list to highlight its slice in the pie chart.',
+      'Weekly/monthly report emails: biggest transactions, %-change vs last period, and a by-account breakdown.',
+      'The "Personal Fin" logo now takes you back to Dashboard.',
+      'Settings > SMS auto-detect: a direct download button for the Android app.',
+    ],
+  },
+  {
     date: '06 Sep 2026',
     points: [
       'Investments: SIPs and other assets now count toward your net worth.',
