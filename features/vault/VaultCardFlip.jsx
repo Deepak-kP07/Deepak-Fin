@@ -34,20 +34,30 @@ async function cardImageFile(frontNode, filename) {
   return new File([blob], filename, { type: 'image/png' })
 }
 
-async function shareItem(item, secrets, frontNode) {
+async function shareItem(item, secrets, frontNode, toast) {
   const text = shareCaption(item, secrets)
   const filename = `${(item.label || 'card').replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase()}.png`
   let file = null
-  try { file = await cardImageFile(frontNode, filename) } catch { /* falls through to text-only share below */ }
+  try {
+    file = await cardImageFile(frontNode, filename)
+  } catch (err) {
+    // Previously swallowed entirely — silently degrading to a text-only share with zero
+    // indication why. Logged (not just toasted) since the real cause is almost certainly some
+    // captured element's computed style html-to-image can't rasterize, which needs the actual
+    // error/stack to track down, not just "it failed".
+    console.error('Vault card image capture failed:', err)
+    toast?.push("Couldn't attach the card image — sharing text only.", 'error')
+  }
 
   if (file && typeof navigator !== 'undefined' && navigator.canShare?.({ files: [file] })) {
-    try { await navigator.share({ files: [file], title: item.label, text }) } catch { /* user cancelled the share sheet */ }
+    try { await navigator.share({ files: [file], title: item.label, text }) } catch (err) { if (err?.name !== 'AbortError') toast?.push('Share failed.', 'error') }
     return
   }
   // No native file-share support — text-only share is still a real share (opens the same OS/app
   // picker, just without the image attached), so it's tried before ever touching the disk.
   if (typeof navigator !== 'undefined' && navigator.share) {
-    try { await navigator.share({ title: item.label, text }) } catch { /* user cancelled the share sheet */ }
+    if (file) toast?.push('This device can\'t share the image directly — sharing text only.', 'info')
+    try { await navigator.share({ title: item.label, text }) } catch (err) { if (err?.name !== 'AbortError') toast?.push('Share failed.', 'error') }
     return
   }
   // No Web Share API at all (very old browser) — the only way left to hand the picture off is a
@@ -86,7 +96,7 @@ export function VaultCardFlip({ item, onEdit, onDelete, toast }) {
   const doShare = async () => {
     if (sharing) return
     setSharing(true)
-    try { await shareItem(item, secrets, frontRef.current) } finally { setSharing(false) }
+    try { await shareItem(item, secrets, frontRef.current, toast) } finally { setSharing(false) }
   }
 
   // A flaky mobile connection can leave a fetch neither resolved nor rejected for a very long
