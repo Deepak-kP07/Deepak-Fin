@@ -1922,15 +1922,20 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTx
                   </PieChart>
                 </ResponsiveContainer>
               </div>
-              <div className="flex flex-col justify-center gap-3">
+              <div className="flex flex-col justify-center gap-1">
                 {categoryBreakdown.map((c, i) => (
-                  <div key={i} className="flex items-center justify-between gap-3 text-sm">
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => setActiveSliceIndex((prev) => (prev === i ? -1 : i))}
+                    className={`flex items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-left text-sm transition ${activeSliceIndex === i ? 'bg-white/[.06] light:bg-black/[.05]' : 'hover:bg-white/[.03] hover:light:bg-black/[.02]'}`}
+                  >
                     <div className="flex min-w-0 items-center gap-2.5">
                       <div className="h-3 w-3 shrink-0 rounded-full" style={{ background: c.color }} />
                       <div className="truncate text-slate-300 light:text-slate-700">{c.name}</div>
                     </div>
                     <div className="shrink-0 font-medium text-white light:text-slate-900">{showMoney ? money(c.value) : '••••'}</div>
-                  </div>
+                  </button>
                 ))}
                 <div className="mt-1 border-t border-white/20 light:border-black/15" />
                 <div className="flex items-center justify-between gap-3 text-sm">
@@ -2829,6 +2834,15 @@ function Shell({ user, onLogout }) {
     const updated = await Promise.all(results.map((r) => r.json()))
     setData((d) => ({ ...d, accounts: d.accounts.map((acc) => updated.find((u) => u.id === acc.id) || acc) }))
   }
+  // Toggles an account out of every "log an entry against this account" dropdown (dropdownAccounts,
+  // below) without touching its balance, history, or its own place in the main Accounts list.
+  const toggleAccountVisible = async (account) => {
+    const nextActive = account.is_active === false
+    const response = await fetch(`/api/finance/accounts/${account.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_active: nextActive }) })
+    if (!response.ok) { toast.push('Update failed', 'error'); return }
+    const updated = await response.json()
+    setData((d) => ({ ...d, accounts: d.accounts.map((acc) => (acc.id === updated.id ? updated : acc)) }))
+  }
   const openSettings = (section) => { setSettingsSection(section); setView('profile') }
 
   // Mobile-only: which "add" action the floating + button performs depends on the active module
@@ -2876,6 +2890,14 @@ function Shell({ user, onLogout }) {
 
   const moduleSettings = resolveModuleSettings(data.profile)
   const pendingSmsCount = (data.pending_transactions || []).filter((p) => p.status === 'pending').length
+  // An account marked hidden (Settings > Accounts' eye toggle) still exists and still counts
+  // toward balances/net worth — it just stops showing up as a choice on forms that log a new
+  // entry against an account, for someone who wants it out of the way without archiving it
+  // entirely. Deliberately NOT applied to AccountForm (still needs every account, hidden or not,
+  // e.g. to pick a debit card's linked bank account) or CsvImport (must still match import rows
+  // against every account, including hidden ones) — every other place that hands `accounts` to a
+  // "log something against this account" form uses this instead of `data.accounts` directly.
+  const dropdownAccounts = data.accounts.filter((a) => a.is_active !== false)
 
   // Native SMS listener (Android app only — see lib/sms/nativeBridge.js, a no-op on a plain web
   // tab). dataRef exists purely so the listener's closure always reads the current
@@ -3036,6 +3058,7 @@ function Shell({ user, onLogout }) {
                   onAddCategory={(defaultType) => openCatForm(null, defaultType)} onEditCategory={openCatForm} onDeleteCategory={deleteCategory}
                   onReorderCategories={reorderCategories} onToggleCategoryModule={toggleCategoryModule}
                   onReorderAccounts={reorderAccounts}
+                  onToggleAccountVisible={toggleAccountVisible}
                   onAddVaultItem={(type) => openVaultForm(null, type)} onEditVaultItem={openVaultForm} onDeleteVaultItem={deleteVaultItem}
                   onAddRule={addRule} onToggleRule={toggleRule} onDeleteRule={deleteRule}
                   onLogout={onLogout}
@@ -3092,11 +3115,11 @@ function Shell({ user, onLogout }) {
       </BottomSheet>
 
       {/* Modals */}
-      <TransactionForm open={txFormOpen} onClose={closeTxForm} onSaved={onTxSaved} editing={txEditing} accounts={data.accounts} categories={data.categories} creditCards={data.credit_cards} lendBorrow={data.lend_borrow} loans={data.loans} transactions={data.transactions} onAddAccount={() => { closeTxForm(); openAccForm() }} onAddCategory={() => openCatForm()} toast={toast} profile={data.profile} defaultAccountId={txDefaultAccountId} defaultRepayment={txDefaultRepayment} mutate={mutate} />
+      <TransactionForm open={txFormOpen} onClose={closeTxForm} onSaved={onTxSaved} editing={txEditing} accounts={dropdownAccounts} categories={data.categories} creditCards={data.credit_cards} lendBorrow={data.lend_borrow} loans={data.loans} transactions={data.transactions} onAddAccount={() => { closeTxForm(); openAccForm() }} onAddCategory={() => openCatForm()} toast={toast} profile={data.profile} defaultAccountId={txDefaultAccountId} defaultRepayment={txDefaultRepayment} mutate={mutate} />
       <AccountForm open={accFormOpen} onClose={closeAccForm} onSaved={onAccSaved} editing={accEditing} accounts={data.accounts} toast={toast} mutate={mutate} />
       <CategoryForm open={catFormOpen} onClose={closeCatForm} onSaved={onCatSaved} editing={catEditing} defaultType={catFormDefaultType} toast={toast} mutate={mutate} />
       <RecurringManager open={recurringManagerOpen} onClose={closeRecurringManager} rules={data.recurring_transactions} onAdd={() => openRecurringForm()} onEdit={openRecurringForm} onToggle={toggleRecurring} onDelete={deleteRecurring} showMoney={showMoney} />
-      <RecurringForm open={recurringFormOpen} onClose={closeRecurringForm} onSaved={onRecurringSaved} editing={recurringEditing} accounts={data.accounts} categories={data.categories} toast={toast} />
+      <RecurringForm open={recurringFormOpen} onClose={closeRecurringForm} onSaved={onRecurringSaved} editing={recurringEditing} accounts={dropdownAccounts} categories={data.categories} toast={toast} />
       <BudgetForm open={budgetFormOpen} onClose={closeBudgetForm} onSaved={onBudgetSaved} editing={budgetEditing} categories={data.categories} toast={toast} mutate={mutate} />
       <BudgetMonthForm
         open={budgetMonthFormOpen} onClose={closeBudgetMonthForm} onSaved={onBudgetMonthSaved}
@@ -3105,27 +3128,27 @@ function Shell({ user, onLogout }) {
         categories={data.categories} onAddCategory={() => openCatForm()} toast={toast}
       />
       <CsvImport open={csvOpen} onClose={() => setCsvOpen(false)} onImported={async () => { setCsvOpen(false); await refresh() }} accounts={data.accounts} categories={data.categories} transactions={data.transactions} toast={toast} />
-      <PortfolioForm open={portfolioFormOpen} onClose={closePortfolioForm} onSaved={onPortfolioSaved} editing={portfolioEditing} accounts={data.accounts} toast={toast} mutate={mutate} />
+      <PortfolioForm open={portfolioFormOpen} onClose={closePortfolioForm} onSaved={onPortfolioSaved} editing={portfolioEditing} accounts={dropdownAccounts} toast={toast} mutate={mutate} />
       <HoldingForm open={holdingFormOpen} onClose={closeHoldingForm} onSaved={onHoldingSaved} editing={holdingEditing} portfolios={data.portfolios} defaultPortfolioId={holdingDefaultPortfolio} profile={data.profile} toast={toast} mutate={mutate} />
       <OtherInvestmentForm open={otherInvestmentFormOpen} onClose={closeOtherInvestmentForm} onSaved={onOtherInvestmentSaved} editing={otherInvestmentEditing} portfolioId={otherInvestmentPortfolioId} toast={toast} mutate={mutate} />
       <HoldingsBulkImport open={bulkImportOpen} onClose={closeBulkImport} onImported={onBulkImported} portfolio={bulkImportPortfolio} toast={toast} />
-      <LoanForm open={loanFormOpen} onClose={closeLoanForm} onSaved={onLoanSaved} editing={loanEditing} accounts={data.accounts} toast={toast} />
-      <LoanPaymentForm open={loanPayOpen} onClose={closeLoanPay} onSaved={onLoanPaid} loan={loanPayLoan} accounts={data.accounts} creditCards={data.credit_cards} toast={toast} />
+      <LoanForm open={loanFormOpen} onClose={closeLoanForm} onSaved={onLoanSaved} editing={loanEditing} accounts={dropdownAccounts} toast={toast} />
+      <LoanPaymentForm open={loanPayOpen} onClose={closeLoanPay} onSaved={onLoanPaid} loan={loanPayLoan} accounts={dropdownAccounts} creditCards={data.credit_cards} toast={toast} />
       <BucketForm open={bucketFormOpen} onClose={closeBucketForm} onSaved={onBucketSaved} editing={bucketEditing} toast={toast} mutate={mutate} />
-      <LendForm open={lendFormOpen} onClose={closeLendForm} onSaved={onLendSaved} editing={lendEditing} accounts={data.accounts} creditCards={data.credit_cards} toast={toast} />
-      <LendAddMoreForm open={lendAddFormOpen} onClose={closeLendAddForm} onSaved={onLendAdded} record={lendAddRecord} accounts={data.accounts} creditCards={data.credit_cards} toast={toast} />
+      <LendForm open={lendFormOpen} onClose={closeLendForm} onSaved={onLendSaved} editing={lendEditing} accounts={dropdownAccounts} creditCards={data.credit_cards} toast={toast} />
+      <LendAddMoreForm open={lendAddFormOpen} onClose={closeLendAddForm} onSaved={onLendAdded} record={lendAddRecord} accounts={dropdownAccounts} creditCards={data.credit_cards} toast={toast} />
       <ManageLendAccessSheet open={manageLendAccessOpen} onClose={closeManageLendAccess} record={manageLendAccessRecord} toast={toast} />
-      <PortfolioFundsForm open={fundsFormOpen} onClose={closeFundsForm} onSaved={onFundsSaved} portfolio={fundsPortfolio} accounts={data.accounts} toast={toast} />
-      <WithdrawFundsForm open={withdrawFormOpen} onClose={closeWithdrawForm} onSaved={onWithdrawSaved} portfolio={withdrawPortfolio} accounts={data.accounts} toast={toast} />
+      <PortfolioFundsForm open={fundsFormOpen} onClose={closeFundsForm} onSaved={onFundsSaved} portfolio={fundsPortfolio} accounts={dropdownAccounts} toast={toast} />
+      <WithdrawFundsForm open={withdrawFormOpen} onClose={closeWithdrawForm} onSaved={onWithdrawSaved} portfolio={withdrawPortfolio} accounts={dropdownAccounts} toast={toast} />
       <SipForm open={sipFormOpen} onClose={closeSipForm} onSaved={onSipSaved} editing={sipEditing} portfolios={data.portfolios} toast={toast} mutate={mutate} />
       <CreditCardForm open={cardFormOpen} onClose={closeCardForm} onSaved={onCardSaved} editing={cardEditing} toast={toast} mutate={mutate} />
       <VaultItemForm open={vaultFormOpen} onClose={closeVaultForm} onSaved={onVaultSaved} editing={vaultEditing} accounts={data.accounts} toast={toast} defaultType={vaultDefaultType} />
       <CardSpendForm open={cardSpendOpen} onClose={closeCardSpend} onSaved={onCardSpendSaved} card={cardSpendTarget} categories={data.categories} toast={toast} />
-      <CardPayForm open={cardPayOpen} onClose={closeCardPay} onSaved={onCardPaid} card={cardPayTarget} accounts={data.accounts} toast={toast} />
-      <ScholarshipForm open={scholarshipFormOpen} onClose={closeScholarshipForm} onSaved={onScholarshipSaved} editing={scholarshipEditing} accounts={data.accounts} toast={toast} />
-      <ScholarshipPayForm open={scholarshipPayOpen} onClose={closeScholarshipPay} onSaved={onScholarshipPaid} scholarship={scholarshipPayTarget} accounts={data.accounts} toast={toast} />
-      <MoneyProfileForm open={moneyProfileFormOpen} onClose={closeMoneyProfileForm} onSaved={onMoneyProfileSaved} editing={moneyProfileEditing} accounts={data.accounts} toast={toast} mutate={mutate} />
-      <MoneyProfileEntryForm open={moneyProfileEntryFormOpen} onClose={closeMoneyProfileEntryForm} onSaved={onMoneyProfileEntrySaved} editing={moneyProfileEntryEditing} profile={data.money_profiles?.find((p) => p.id === moneyProfileEntryProfileId)} accounts={data.accounts} creditCards={data.credit_cards} categories={categoriesFor(data.money_profiles?.find((p) => p.id === moneyProfileEntryProfileId) || {}, data.categories)} onAddCategory={(data.money_profiles?.find((p) => p.id === moneyProfileEntryProfileId)?.my_role || 'owner') === 'owner' ? () => openCatForm() : undefined} toast={toast} />
+      <CardPayForm open={cardPayOpen} onClose={closeCardPay} onSaved={onCardPaid} card={cardPayTarget} accounts={dropdownAccounts} toast={toast} />
+      <ScholarshipForm open={scholarshipFormOpen} onClose={closeScholarshipForm} onSaved={onScholarshipSaved} editing={scholarshipEditing} accounts={dropdownAccounts} toast={toast} />
+      <ScholarshipPayForm open={scholarshipPayOpen} onClose={closeScholarshipPay} onSaved={onScholarshipPaid} scholarship={scholarshipPayTarget} accounts={dropdownAccounts} toast={toast} />
+      <MoneyProfileForm open={moneyProfileFormOpen} onClose={closeMoneyProfileForm} onSaved={onMoneyProfileSaved} editing={moneyProfileEditing} accounts={dropdownAccounts} toast={toast} mutate={mutate} />
+      <MoneyProfileEntryForm open={moneyProfileEntryFormOpen} onClose={closeMoneyProfileEntryForm} onSaved={onMoneyProfileEntrySaved} editing={moneyProfileEntryEditing} profile={data.money_profiles?.find((p) => p.id === moneyProfileEntryProfileId)} accounts={dropdownAccounts} creditCards={data.credit_cards} categories={categoriesFor(data.money_profiles?.find((p) => p.id === moneyProfileEntryProfileId) || {}, data.categories)} onAddCategory={(data.money_profiles?.find((p) => p.id === moneyProfileEntryProfileId)?.my_role || 'owner') === 'owner' ? () => openCatForm() : undefined} toast={toast} />
       <MoneyProfileBulkImport open={moneyProfileBulkImportOpen} onClose={closeMoneyProfileBulkImport} onImported={onMoneyProfileBulkImported} profile={moneyProfileBulkImportProfile} categories={categoriesFor(moneyProfileBulkImportProfile || {}, data.categories)} toast={toast} />
       <ManageAccessSheet open={manageAccessOpen} onClose={closeManageAccess} profile={manageAccessProfile} toast={toast} />
       <RecurringEntryManager
@@ -3136,7 +3159,7 @@ function Shell({ user, onLogout }) {
       />
       <RecurringEntryForm
         open={recurringEntryFormOpen} onClose={closeRecurringEntryForm} onSaved={onRecurringEntrySaved} editing={recurringEntryEditing}
-        profile={recurringEntryManagerProfile} accounts={data.accounts} creditCards={data.credit_cards}
+        profile={recurringEntryManagerProfile} accounts={dropdownAccounts} creditCards={data.credit_cards}
         categories={categoriesFor(recurringEntryManagerProfile || {}, data.categories)}
         toast={toast}
       />

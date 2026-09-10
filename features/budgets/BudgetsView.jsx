@@ -229,25 +229,35 @@ export function BudgetsView({ data, onSetMonth, onCloseMonth, onReopenMonth, onD
                 </div>
 
                 {(() => {
+                  // Allocation (budgeted per category) is populated the moment a budget is set —
+                  // shown first so there's always at least one chart here, even on day one of the
+                  // month when nothing's been spent yet and "Spend split" below has nothing to draw.
+                  const allocationMix = activeBreakdown.filter((b) => b.budgeted > 0).map((b) => ({ name: b.category?.name || 'Category', value: b.budgeted, color: b.category?.color || '#94a3b8' }))
                   const spendMix = activeBreakdown.filter((b) => b.spent > 0).map((b) => ({ name: b.category?.name || 'Category', value: b.spent, color: b.category?.color || '#94a3b8' }))
-                  return spendMix.length === 0 ? null : (
+                  const donut = (title, mix) => mix.length === 0 ? null : (
                     // Same proven h-72/radii shape as Insights' "Where money goes" donut
                     // (features/insights/InsightsView.jsx) — the previous narrow `max-w-[280px]`
                     // cap left too little height for the pie *and* the wrapping category-name
                     // legend at once, clipping the chart into the "broken" render.
-                    <div className="mt-6 min-w-0 lg:mt-0">
-                      <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">Spend split</div>
+                    <div className="min-w-0">
+                      <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">{title}</div>
                       <div className="mt-2 h-72">
                         <ResponsiveContainer width="100%" height="100%">
                           <PieChart>
-                            <Pie data={spendMix} dataKey="value" nameKey="name" innerRadius={55} outerRadius={95} stroke="none">
-                              {spendMix.map((s, i) => <Cell key={i} fill={s.color} />)}
+                            <Pie data={mix} dataKey="value" nameKey="name" innerRadius={55} outerRadius={95} stroke="none">
+                              {mix.map((s, i) => <Cell key={i} fill={s.color} />)}
                             </Pie>
                             <Tooltip contentStyle={{ background: '#0f1420', border: '1px solid #ffffff22', borderRadius: 12, color: '#fff' }} formatter={(v) => showMoney ? money(v) : '••••'} />
                             <Legend iconType="circle" wrapperStyle={{ color: '#94a3b8', fontSize: 11 }} />
                           </PieChart>
                         </ResponsiveContainer>
                       </div>
+                    </div>
+                  )
+                  return (allocationMix.length === 0 && spendMix.length === 0) ? null : (
+                    <div className="mt-6 min-w-0 space-y-6 lg:mt-0">
+                      {donut('Budget allocation', allocationMix)}
+                      {donut('Spend split', spendMix)}
                     </div>
                   )
                 })()}
