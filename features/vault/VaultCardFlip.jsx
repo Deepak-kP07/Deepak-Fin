@@ -66,7 +66,7 @@ async function shareItem(item, secrets, frontNode) {
 // library) — but unlike that card, the back never shows cached numbers. It starts masked and
 // only decrypts on an explicit Reveal click; the revealed values live in local state only and
 // are dropped the moment the card is flipped back or unmounted, never touching shared app state.
-export function VaultCardFlip({ item, onEdit, onDelete }) {
+export function VaultCardFlip({ item, onEdit, onDelete, toast }) {
   const [flipped, setFlipped] = useState(false)
   const [secrets, setSecrets] = useState(null)
   const [revealing, setRevealing] = useState(false)
@@ -89,12 +89,28 @@ export function VaultCardFlip({ item, onEdit, onDelete }) {
     try { await shareItem(item, secrets, frontRef.current) } finally { setSharing(false) }
   }
 
+  // A flaky mobile connection can leave a fetch neither resolved nor rejected for a very long
+  // time — with no timeout, that left this stuck on "Decrypting…" forever, since nothing ever
+  // reached the finally below to clear it. AbortController plus a toast on every failure path
+  // (there was none before — unlike VaultItemForm's save path, a failed reveal used to just
+  // silently revert to "Tap to reveal" with no explanation) fixes both the hang and the silence.
   const reveal = async () => {
     setRevealing(true)
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 15000)
     try {
-      const res = await fetch(`/api/finance/vault_items/${item.id}/reveal`, { method: 'POST' })
-      if (res.ok) setSecrets((await res.json()).secrets)
-    } finally { setRevealing(false) }
+      const res = await fetch(`/api/finance/vault_items/${item.id}/reveal`, { method: 'POST', signal: controller.signal })
+      if (res.ok) {
+        setSecrets((await res.json()).secrets)
+      } else {
+        toast?.push('Could not reveal this item — try again.', 'error')
+      }
+    } catch (err) {
+      toast?.push(err.name === 'AbortError' ? 'Reveal timed out — check your connection and try again.' : 'Could not reveal this item — try again.', 'error')
+    } finally {
+      clearTimeout(timeout)
+      setRevealing(false)
+    }
   }
 
   // The front shows the real number and holder name without a tap — unlike the back's `secrets`
@@ -104,10 +120,14 @@ export function VaultCardFlip({ item, onEdit, onDelete }) {
   const [preview, setPreview] = useState(null)
   useEffect(() => {
     let cancelled = false
-    fetch(`/api/finance/vault_items/${item.id}/reveal?preview=1`, { method: 'POST' })
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 15000)
+    fetch(`/api/finance/vault_items/${item.id}/reveal?preview=1`, { method: 'POST', signal: controller.signal })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (!cancelled && d?.secrets) setPreview(d.secrets) })
-    return () => { cancelled = true }
+      .catch(() => { /* best-effort — the front face just keeps showing the masked last4 */ })
+      .finally(() => clearTimeout(timeout))
+    return () => { cancelled = true; controller.abort(); clearTimeout(timeout) }
   }, [item.id])
 
   const isCard = item.item_type === 'debit_card' || item.item_type === 'credit_card'

@@ -11,7 +11,7 @@ const TABS = [
   { key: 'credit_card', label: 'Credit cards' },
 ]
 
-export function VaultView({ data, onAdd, onEdit, onDelete }) {
+export function VaultView({ data, onAdd, onEdit, onDelete, toast }) {
   const { vault_items = [] } = data
   const [tab, setTab] = useState('bank_account')
   const rows = vault_items.filter((i) => i.item_type === tab)
@@ -44,7 +44,7 @@ export function VaultView({ data, onAdd, onEdit, onDelete }) {
       ) : (
         <div className="grid justify-center gap-6 grid-cols-[repeat(auto-fit,minmax(300px,340px))] lg:justify-start">
           {rows.map((item) => (
-            <VaultCardFlip key={item.id} item={item} onEdit={onEdit} onDelete={onDelete} />
+            <VaultCardFlip key={item.id} item={item} onEdit={onEdit} onDelete={onDelete} toast={toast} />
           ))}
         </div>
       )}
