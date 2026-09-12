@@ -8,6 +8,14 @@ import { triggerAppUpdate } from '@/lib/pwaUpdate'
 // whenever something user-visible ships; no need to log every internal fix.
 const CHANGELOG = [
   {
+    date: '13 Sep 2026',
+    points: [
+      'Category icons now also show in the Transactions ledger, account detail view, yearly budget cards, and Settings > Categories — not just when picking a category.',
+      'Category icon matching now looks at the transaction description too (e.g. "Water bottle"), not just the category name, so more rows get a real icon instead of a generic mark.',
+      'Long dropdowns (categories, accounts) now filter as you type — no search box, just start typing while it\'s open.',
+    ],
+  },
+  {
     date: '12 Sep 2026',
     points: [
       'Add account/transaction/entry forms on mobile: related fields now sit side by side, and the sheet sizes itself to fit — no more scrolling to reach Save.',
