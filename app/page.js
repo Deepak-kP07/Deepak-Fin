@@ -9,7 +9,7 @@ import {
   MONTH_NAMES, addMonthsToDate, capitalizeFirst, formatDate, formatDateTime, liveOutstanding, maskedMoney, money, money2,
   monthAbbr, monthName, ordinal, paymentTypeLabel, todayISO,
 } from '@/lib/format'
-import { PALETTE, rotateHue } from '@/lib/palette'
+import { PALETTE, rotateHue, visibleSwatch } from '@/lib/palette'
 import { applyAccentColor } from '@/lib/color'
 import { useTheme } from 'next-themes'
 import { clearSnapshot, loadSnapshot, saveSnapshot } from '@/lib/offline/db'
@@ -815,18 +815,18 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
   const balanceItems = [
     ...accounts.filter((a) => a.type !== 'debit_card').map((a) => ({
       id: `acc-${a.id}`, name: a.name, sub: a.type.replace('_', ' '), amount: Number(a.current_balance || 0),
-      icon: a.type === 'cash' ? Wallet : Landmark, color: a.color || '#64748b', debt: false,
+      icon: a.type === 'cash' ? Wallet : Landmark, color: visibleSwatch(a.color || '#64748b'), debt: false,
     })),
     ...(moduleSettings.credit_cards.enabled ? credit_cards.map((c) => ({
       id: `cc-${c.id}`, name: c.name, sub: 'Credit card', amount: Number(c.current_outstanding || 0),
-      icon: CreditCard, color: c.color || '#64748b', debt: true,
+      icon: CreditCard, color: visibleSwatch(c.color || '#64748b'), debt: true,
     })) : []),
     ...(moduleSettings.investments.enabled ? portfolios.map((p) => {
       const value = holdings.filter((h) => h.portfolio_id === p.id).reduce((s, h) => s + Number(h.qty) * Number(h.current_price || h.avg_buy_price), 0)
         + sips.filter((x) => x.portfolio_id === p.id).reduce((s, x) => s + Number(x.units_held) * Number(x.nav), 0)
         + otherInvestments.filter((o) => o.portfolio_id === p.id).reduce((s, o) => s + currentValueOf(o), 0)
         + Number(p.cash_balance || 0)
-      return { id: `port-${p.id}`, name: p.name, sub: 'Investment', amount: value, icon: TrendingUp, color: p.color || '#64748b', debt: false }
+      return { id: `port-${p.id}`, name: p.name, sub: 'Investment', amount: value, icon: TrendingUp, color: visibleSwatch(p.color || '#64748b'), debt: false }
     }) : []),
   ]
 
