@@ -483,9 +483,8 @@ export function InvestmentsView({
                     <td className="px-3 py-3 text-right">{g.qty}</td>
                     <td className="px-3 py-3 text-right">{money2(g.qty > 0 ? g.invested / g.qty : 0)}</td>
                     <td className="px-3 py-3 text-right text-white light:text-slate-900">{showMoney ? money(g.current) : '••••'}</td>
-                    <td className={`px-3 py-3 text-right font-semibold ${g.pnl >= 0 ? 'text-emerald-300 light:text-emerald-700' : 'text-rose-300 light:text-rose-700'}`}>
-                      {showMoney ? (g.pnl >= 0 ? '+' : '−') + money(g.pnl).replace('-', '') : '••••'}
-                      <div className="text-[10px] font-normal opacity-80">{g.pnlPct >= 0 ? '+' : ''}{g.pnlPct.toFixed(2)}%</div>
+                    <td className={`whitespace-nowrap px-3 py-3 text-right font-semibold ${g.pnl >= 0 ? 'text-emerald-300 light:text-emerald-700' : 'text-rose-300 light:text-rose-700'}`}>
+                      {showMoney ? <>{g.pnl >= 0 ? '+' : '−'}{money(g.pnl).replace('-', '')} <span className="font-normal opacity-70">({g.pnlPct >= 0 ? '+' : ''}{g.pnlPct.toFixed(2)}%)</span></> : '••••'}
                     </td>
                     <td className="px-3 py-3 text-right text-slate-400 light:text-slate-500">{g.allocationPct.toFixed(1)}%</td>
                   </tr>
@@ -523,9 +522,8 @@ export function InvestmentsView({
                     <td className="px-3 py-3 text-right">{money2(g.units)}</td>
                     <td className="px-3 py-3 text-right">{money2(g.units > 0 ? g.invested / g.units : 0)}</td>
                     <td className="px-3 py-3 text-right text-white light:text-slate-900">{showMoney ? money(g.current) : '••••'}</td>
-                    <td className={`px-3 py-3 text-right font-semibold ${g.pnl >= 0 ? 'text-emerald-300 light:text-emerald-700' : 'text-rose-300 light:text-rose-700'}`}>
-                      {showMoney ? (g.pnl >= 0 ? '+' : '−') + money(g.pnl).replace('-', '') : '••••'}
-                      <div className="text-[10px] font-normal opacity-80">{g.pnlPct >= 0 ? '+' : ''}{g.pnlPct.toFixed(2)}%</div>
+                    <td className={`whitespace-nowrap px-3 py-3 text-right font-semibold ${g.pnl >= 0 ? 'text-emerald-300 light:text-emerald-700' : 'text-rose-300 light:text-rose-700'}`}>
+                      {showMoney ? <>{g.pnl >= 0 ? '+' : '−'}{money(g.pnl).replace('-', '')} <span className="font-normal opacity-70">({g.pnlPct >= 0 ? '+' : ''}{g.pnlPct.toFixed(2)}%)</span></> : '••••'}
                     </td>
                     <td className="px-3 py-3 text-right text-slate-400 light:text-slate-500">{g.allocationPct.toFixed(1)}%</td>
                   </tr>
@@ -563,9 +561,8 @@ export function InvestmentsView({
                     <td className="px-3 py-3 text-right">{g.count}</td>
                     <td className="px-3 py-3 text-right">{showMoney ? money(g.invested) : '••••'}</td>
                     <td className="px-3 py-3 text-right text-white light:text-slate-900">{showMoney ? money(g.current) : '••••'}</td>
-                    <td className={`px-3 py-3 text-right font-semibold ${g.pnl >= 0 ? 'text-emerald-300 light:text-emerald-700' : 'text-rose-300 light:text-rose-700'}`}>
-                      {showMoney ? (g.pnl >= 0 ? '+' : '−') + money(g.pnl).replace('-', '') : '••••'}
-                      <div className="text-[10px] font-normal opacity-80">{g.pnlPct >= 0 ? '+' : ''}{g.pnlPct.toFixed(2)}%</div>
+                    <td className={`whitespace-nowrap px-3 py-3 text-right font-semibold ${g.pnl >= 0 ? 'text-emerald-300 light:text-emerald-700' : 'text-rose-300 light:text-rose-700'}`}>
+                      {showMoney ? <>{g.pnl >= 0 ? '+' : '−'}{money(g.pnl).replace('-', '')} <span className="font-normal opacity-70">({g.pnlPct >= 0 ? '+' : ''}{g.pnlPct.toFixed(2)}%)</span></> : '••••'}
                     </td>
                     <td className="px-3 py-3 text-right text-slate-400 light:text-slate-500">{g.allocationPct.toFixed(1)}%</td>
                   </tr>

@@ -10,7 +10,9 @@ const CHANGELOG = [
   {
     date: '12 Sep 2026',
     points: [
-      'Add account/transaction/entry forms on mobile now open full-screen, with related fields side by side, so everything fits without scrolling.',
+      'Add account/transaction/entry forms on mobile: related fields now sit side by side, and the sheet sizes itself to fit — no more scrolling to reach Save.',
+      'Add transaction now swipes down to dismiss on mobile, just like every other form.',
+      'Investments: combined holdings/SIPs/other-investments tables show P&L amount and % on one line instead of stacked.',
       'Transactions: grouped by day (desktop and mobile), with each day showing its own income/spend total.',
       'Transactions > By category: Overall/Income/Expense tabs, and same-named or same-colored categories no longer look identical.',
       'Net worth now counts money you\'ve lent out as an asset and money you\'ve borrowed as a liability.',
