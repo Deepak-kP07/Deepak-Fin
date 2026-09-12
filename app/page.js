@@ -683,7 +683,7 @@ function GlassyCashflowTooltip({ active, payload, showMoney }) {
 
 /* ---------------- Views ---------------- */
 function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, onManageMoneyRules, onPayCardBill }) {
-  const { profile, accounts, transactions, categories, holdings = [], loans = [], loan_payments = [], bucket_list = [], money_rules = [], credit_cards = [], portfolios = [], budget_months = [], sips = [], other_investments: otherInvestments = [] } = data
+  const { profile, accounts, transactions, categories, holdings = [], loans = [], loan_payments = [], bucket_list = [], money_rules = [], credit_cards = [], portfolios = [], budget_months = [], sips = [], other_investments: otherInvestments = [], lend_borrow = [] } = data
   // Only the glassy theme gets the glowing area-chart treatment below — dark/light keep the plain
   // bar chart, so this doesn't touch either of their look.
   const { theme } = useTheme()
@@ -714,8 +714,13 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
   // worth by exactly the unpaid card balance. Ungated by the credit_cards module toggle, matching
   // how loans/investments are treated elsewhere on this screen (a module switch is UI-hide only).
   const creditCardDebt = credit_cards.reduce((s, c) => s + Number(c.current_outstanding || 0), 0)
-  const totalAssets = totalBalance + currentInv
-  const totalLiabilities = totalOutstanding + creditCardDebt
+  // Money lent out is just as real an asset as cash sitting in an account (it's owed back to
+  // you), and money borrowed is just as real a liability as a loan — only the still-outstanding
+  // portion counts (amount minus whatever's already been repaid), never the original full amount.
+  const lendOutstanding = lend_borrow.filter((l) => l.type === 'lent').reduce((s, l) => s + Math.max(0, Number(l.amount) - Number(l.amount_repaid || 0)), 0)
+  const borrowOutstanding = lend_borrow.filter((l) => l.type === 'borrowed').reduce((s, l) => s + Math.max(0, Number(l.amount) - Number(l.amount_repaid || 0)), 0)
+  const totalAssets = totalBalance + currentInv + lendOutstanding
+  const totalLiabilities = totalOutstanding + creditCardDebt + borrowOutstanding
   const netWorth = totalAssets - totalLiabilities
 
   // Net worth detail page — same filters/formulas as the totals just above, so each section's
@@ -760,6 +765,16 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
   const creditCardItems = credit_cards.map((c) => ({
     id: `cc-${c.id}`, name: c.name, sub: 'Credit card', amount: Number(c.current_outstanding || 0),
     icon: CreditCard, color: c.color || '#64748b', debt: true,
+  }))
+  // Only the still-outstanding portion of each record — same "already settled drops off" rule
+  // loanItems above applies to closed loans, just expressed as amount_repaid instead of a status.
+  const lendItems = lend_borrow.filter((l) => l.type === 'lent' && Number(l.amount) - Number(l.amount_repaid || 0) > 0).map((l) => ({
+    id: `lend-${l.id}`, name: l.person_name, sub: 'Lent out',
+    amount: Number(l.amount) - Number(l.amount_repaid || 0), icon: Heart, color: '#6ee7b7', debt: false,
+  }))
+  const borrowItems = lend_borrow.filter((l) => l.type === 'borrowed' && Number(l.amount) - Number(l.amount_repaid || 0) > 0).map((l) => ({
+    id: `borrow-${l.id}`, name: l.person_name, sub: 'Borrowed',
+    amount: Number(l.amount) - Number(l.amount_repaid || 0), icon: Heart, color: '#fda4af', debt: true,
   }))
 
   // Drilldown state for the Income/Expense/Savings stat cards (StatDrilldown) — declared here,
@@ -855,7 +870,9 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
         setView={setView}
         netWorth={netWorth} totalAssets={totalAssets} totalLiabilities={totalLiabilities}
         totalBalance={totalBalance} currentInv={currentInv} totalOutstanding={totalOutstanding} creditCardDebt={creditCardDebt}
+        lendOutstanding={lendOutstanding} borrowOutstanding={borrowOutstanding}
         cashBankItems={cashBankItems} investmentItems={investmentItems} loanItems={loanItems} creditCardItems={creditCardItems}
+        lendItems={lendItems} borrowItems={borrowItems}
         investmentsModuleEnabled={moduleSettings.investments.enabled}
         creditCardsModuleEnabled={moduleSettings.credit_cards.enabled}
       />
@@ -1104,15 +1121,17 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
                   </div>
                   <div
                     role="img"
-                    aria-label={showMoney ? `Assets ${money(totalAssets)}: cash and bank ${money(totalBalance)}, investments ${money(currentInv)}` : 'Assets breakdown, amounts hidden'}
+                    aria-label={showMoney ? `Assets ${money(totalAssets)}: cash and bank ${money(totalBalance)}, investments ${money(currentInv)}, lent out ${money(lendOutstanding)}` : 'Assets breakdown, amounts hidden'}
                     className="mt-1.5 flex h-2 gap-px overflow-hidden rounded-full bg-white/[.07] light:bg-black/[.07]"
                   >
                     <div className="bg-emerald-400" style={{ width: nwPct(totalBalance) }} />
                     <div className="bg-emerald-400/50" style={{ width: nwPct(currentInv) }} />
+                    {lendOutstanding > 0 && <div className="bg-emerald-200" style={{ width: nwPct(lendOutstanding) }} />}
                   </div>
                   <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-[11px] text-slate-400 light:text-slate-500">
                     <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />Cash &amp; bank {showMoney ? money(totalBalance) : '••••'}</span>
                     <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400/50" />Investments {showMoney ? money(currentInv) : '••••'}</span>
+                    {lendOutstanding > 0 && <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-200" />Lent out {showMoney ? money(lendOutstanding) : '••••'}</span>}
                   </div>
                 </div>
                 <div>
@@ -1122,15 +1141,17 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
                   </div>
                   <div
                     role="img"
-                    aria-label={showMoney ? `Liabilities ${money(totalLiabilities)}: loans ${money(totalOutstanding)}, credit cards ${money(creditCardDebt)}` : 'Liabilities breakdown, amounts hidden'}
+                    aria-label={showMoney ? `Liabilities ${money(totalLiabilities)}: loans ${money(totalOutstanding)}, credit cards ${money(creditCardDebt)}, borrowed ${money(borrowOutstanding)}` : 'Liabilities breakdown, amounts hidden'}
                     className="mt-1.5 flex h-2 gap-px overflow-hidden rounded-full bg-white/[.07] light:bg-black/[.07]"
                   >
                     <div className="bg-rose-400" style={{ width: nwPct(totalOutstanding) }} />
                     <div className="bg-rose-400/50" style={{ width: nwPct(creditCardDebt) }} />
+                    {borrowOutstanding > 0 && <div className="bg-rose-200" style={{ width: nwPct(borrowOutstanding) }} />}
                   </div>
                   <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-[11px] text-slate-400 light:text-slate-500">
                     <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 shrink-0 rounded-full bg-rose-400" />Loans {showMoney ? money(totalOutstanding) : '••••'}</span>
                     <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 shrink-0 rounded-full bg-rose-400/50" />Cards {showMoney ? money(creditCardDebt) : '••••'}</span>
+                    {borrowOutstanding > 0 && <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 shrink-0 rounded-full bg-rose-200" />Borrowed {showMoney ? money(borrowOutstanding) : '••••'}</span>}
                   </div>
                 </div>
               </>

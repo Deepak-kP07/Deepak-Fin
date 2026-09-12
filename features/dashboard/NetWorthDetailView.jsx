@@ -1,6 +1,6 @@
 'use client'
 
-import { ChevronRight, CreditCard, Landmark, TrendingUp, Wallet } from 'lucide-react'
+import { ChevronRight, CreditCard, Heart, Landmark, TrendingUp, Wallet } from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { money } from '@/lib/format'
 
@@ -42,8 +42,8 @@ function ItemSection({ title, subtotal, items, showMoney, caption, emptyIcon: Em
 export function NetWorthDetailView({
   onBack, showMoney, setView,
   netWorth, totalAssets, totalLiabilities,
-  totalBalance, currentInv, totalOutstanding, creditCardDebt,
-  cashBankItems, investmentItems, loanItems, creditCardItems,
+  totalBalance, currentInv, totalOutstanding, creditCardDebt, lendOutstanding, borrowOutstanding,
+  cashBankItems, investmentItems, loanItems, creditCardItems, lendItems, borrowItems,
   investmentsModuleEnabled, creditCardsModuleEnabled,
 }) {
   const nothingTracked = totalAssets === 0 && totalLiabilities === 0
@@ -99,19 +99,21 @@ export function NetWorthDetailView({
             >
               <div className="bg-emerald-400" style={{ width: nwPct(totalBalance) }} />
               <div className="bg-emerald-400/50" style={{ width: nwPct(currentInv) }} />
+              {lendOutstanding > 0 && <div className="bg-emerald-200" style={{ width: nwPct(lendOutstanding) }} />}
             </div>
             <div
               role="img"
-              aria-label={showMoney ? `Liabilities: loans ${money(totalOutstanding)}, credit cards ${money(creditCardDebt)}` : 'Liabilities breakdown, amounts hidden'}
+              aria-label={showMoney ? `Liabilities: loans ${money(totalOutstanding)}, credit cards ${money(creditCardDebt)}, borrowed ${money(borrowOutstanding)}` : 'Liabilities breakdown, amounts hidden'}
               className="mt-1.5 flex h-2 gap-px overflow-hidden rounded-full bg-white/[.07] light:bg-black/[.07]"
             >
               <div className="bg-rose-400" style={{ width: nwPct(totalOutstanding) }} />
               <div className="bg-rose-400/50" style={{ width: nwPct(creditCardDebt) }} />
+              {borrowOutstanding > 0 && <div className="bg-rose-200" style={{ width: nwPct(borrowOutstanding) }} />}
             </div>
 
             <div className="mt-4 space-y-1 text-[11px] text-slate-500">
-              <div>Assets = Cash &amp; bank ({showMoney ? money(totalBalance) : '••••'}) + Investments ({showMoney ? money(currentInv) : '••••'})</div>
-              <div>Liabilities = Loans ({showMoney ? money(totalOutstanding) : '••••'}) + Credit cards ({showMoney ? money(creditCardDebt) : '••••'})</div>
+              <div>Assets = Cash &amp; bank ({showMoney ? money(totalBalance) : '••••'}) + Investments ({showMoney ? money(currentInv) : '••••'}){lendOutstanding > 0 ? ` + Lent out (${showMoney ? money(lendOutstanding) : '••••'})` : ''}</div>
+              <div>Liabilities = Loans ({showMoney ? money(totalOutstanding) : '••••'}) + Credit cards ({showMoney ? money(creditCardDebt) : '••••'}){borrowOutstanding > 0 ? ` + Borrowed (${showMoney ? money(borrowOutstanding) : '••••'})` : ''}</div>
             </div>
           </div>
 
@@ -125,6 +127,11 @@ export function NetWorthDetailView({
             emptyIcon={TrendingUp} emptyTitle="No investments yet" emptyMessage="Add a portfolio to start tracking investment value." emptyCta="Add investment" onEmptyCta={() => setView('investments')}
           />
           <ItemSection
+            title="Lent out" subtotal={lendOutstanding} items={lendItems} showMoney={showMoney}
+            caption={lendItems.length > 0 ? 'Only the still-outstanding portion of each record.' : null}
+            emptyIcon={Heart} emptyTitle="Nothing lent out" emptyMessage="Money you've lent that's still owed back to you will show up here." emptyCta="Add a lend/borrow record" onEmptyCta={() => setView('lend')}
+          />
+          <ItemSection
             title="Loans" subtotal={totalOutstanding} items={loanItems} showMoney={showMoney}
             caption={loanItems.length > 0 ? "Includes today's accrued interest, same as the Loans page." : null}
             emptyIcon={Landmark} emptyTitle="No loans" emptyMessage="Loans you're paying off will show up here." emptyCta="Add loan" onEmptyCta={() => setView('loans')}
@@ -133,6 +140,11 @@ export function NetWorthDetailView({
             title="Credit cards" subtotal={creditCardDebt} items={creditCardItems} showMoney={showMoney}
             caption={!creditCardsModuleEnabled && creditCardItems.length > 0 ? 'Credit cards module is off in Settings — still counted here.' : null}
             emptyIcon={CreditCard} emptyTitle="No credit cards" emptyMessage="Cards with an outstanding balance will show up here." emptyCta="Add card" onEmptyCta={() => setView('credit_cards')}
+          />
+          <ItemSection
+            title="Borrowed" subtotal={borrowOutstanding} items={borrowItems} showMoney={showMoney}
+            caption={borrowItems.length > 0 ? 'Only the still-outstanding portion of each record.' : null}
+            emptyIcon={Heart} emptyTitle="Nothing borrowed" emptyMessage="Money you've borrowed that's still owed will show up here." emptyCta="Add a lend/borrow record" onEmptyCta={() => setView('lend')}
           />
         </>
       )}
