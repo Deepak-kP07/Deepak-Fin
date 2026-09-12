@@ -16,6 +16,7 @@ const CHANGELOG = [
       'Net worth: fixed the Assets − Liabilities = Net worth line wrapping awkwardly on mobile — it now fits on one line.',
       'Fixed Dashboard > Balances icons being nearly invisible for accounts/cards with a dark custom color (e.g. IPPB, SBI Elite).',
       'Fixed a Lend/Borrow record able to get stuck showing "Returned" after editing its amount, even with money still owed.',
+      'Investments: Combined holdings/SIPs now show how much you invested next to the current value, not just the P&L.',
     ],
   },
   {
