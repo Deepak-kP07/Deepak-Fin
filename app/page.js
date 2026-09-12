@@ -9,7 +9,7 @@ import {
   MONTH_NAMES, addMonthsToDate, capitalizeFirst, formatDate, formatDateTime, liveOutstanding, maskedMoney, money, money2,
   monthAbbr, monthName, ordinal, paymentTypeLabel, todayISO,
 } from '@/lib/format'
-import { PALETTE } from '@/lib/palette'
+import { PALETTE, rotateHue } from '@/lib/palette'
 import { applyAccentColor } from '@/lib/color'
 import { useTheme } from 'next-themes'
 import { clearSnapshot, loadSnapshot, saveSnapshot } from '@/lib/offline/db'
@@ -1534,6 +1534,7 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTx
   const [accountId, setAccountId] = useState('all')
   const [categoryId, setCategoryId] = useState('all')
   const [chartView, setChartView] = useState(false)
+  const [catView, setCatView] = useState('all')
   // Which category-breakdown pie slice is "exploded" (tapped/clicked) — -1 means none. Recharts'
   // Pie keeps its own internal "last active index" alongside the controlled activeIndex prop;
   // going back to `undefined` didn't reliably clear that internal state (the slice stayed
@@ -1682,16 +1683,42 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTx
 
   // Category split of whatever's currently visible — respects every active filter above, so it's
   // always describing exactly the records on screen, not some separate fixed time window.
+  // Assigns each entry the first color that isn't already taken within THIS list, rotating hue
+  // until it's clear — two entries can perfectly legitimately share a stored color (a category
+  // that's never been given its own, or two categories that happened to be defaulted/picked to
+  // the same swatch), which reads as one blob in a pie/legend otherwise. Only affects what this
+  // one chart renders, never the category's own stored color used everywhere else.
+  const withDistinctColors = (entries) => {
+    const used = new Set()
+    return entries.map((e) => {
+      let color = e.color
+      let attempt = 0
+      while (used.has(color) && attempt < 8) { color = rotateHue(color, 40); attempt += 1 }
+      used.add(color)
+      return { ...e, color }
+    })
+  }
+
   const categoryBreakdown = useMemo(() => {
     const byCat = {}
-    visible.filter((t) => t.type !== 'transfer').forEach((t) => {
+    visible.filter((t) => t.type !== 'transfer' && (catView === 'all' || t.type === catView)).forEach((t) => {
       const cat = categories.find((c) => c.id === t.category_id)
       const key = cat?.id || 'uncat'
-      if (!byCat[key]) byCat[key] = { name: cat?.name || 'Uncategorised', value: 0, color: cat?.color || '#64748b' }
+      if (!byCat[key]) byCat[key] = { name: cat?.name || 'Uncategorised', value: 0, color: cat?.color || '#64748b', type: cat?.type || t.type }
       byCat[key].value += Number(t.amount || 0)
     })
-    return Object.values(byCat).sort((a, b) => b.value - a.value)
-  }, [visible, categories])
+    let rows = Object.values(byCat).sort((a, b) => b.value - a.value)
+    // "Overall" mixes income and expense categories together — two categories of different types
+    // can legitimately share a name (an income-side and an expense-side "Balance adjustment", for
+    // instance), which reads as a confusing duplicate row once mixed with no way to tell them
+    // apart. Only disambiguated when a real collision exists in THIS list, not preemptively.
+    if (catView === 'all') {
+      const nameCounts = {}
+      rows.forEach((r) => { nameCounts[r.name] = (nameCounts[r.name] || 0) + 1 })
+      rows = rows.map((r) => (nameCounts[r.name] > 1 ? { ...r, name: `${r.name} (${r.type})` } : r))
+    }
+    return withDistinctColors(rows)
+  }, [visible, categories, catView])
 
   // jsPDF's built-in fonts (Helvetica/Times/Courier) only support the WinAnsi charset, which
   // doesn't include ₹ — it silently falls back to a stray glyph instead of erroring. Since the
@@ -1907,14 +1934,27 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTx
         transition={{ duration: 0.26, ease: 'easeInOut' }}
       >
       {chartView ? (
-        categoryBreakdown.length === 0 ? (
-          <div className="rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card">
-            <EmptyState icon={Tag} title="No category data" message="Nothing categorised in the current filters yet." />
+        <div className="rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card p-4 sm:p-6">
+          <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
+            <div className="text-sm font-semibold text-white light:text-slate-900">By category · {customRange ? `${formatDate(customRange.start)} – ${formatDate(customRange.end)}` : `${MONTH_NAMES[monthCursor.month]} ${monthCursor.year}`}</div>
+            {/* Overall (default) mixes income+expense; the other two isolate one side — the
+                active tab reads as underlined rather than a filled pill, per an explicit request,
+                unlike every other tab-style control in this app. */}
+            <div className="flex items-center gap-5 text-sm">
+              {[{ key: 'all', label: 'Overall' }, { key: 'income', label: 'Income' }, { key: 'expense', label: 'Expense' }].map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => { setCatView(tab.key); setActiveSliceIndex(-1) }}
+                  className={`-mb-px border-b-2 pb-1.5 font-medium transition ${catView === tab.key ? 'border-accent-300 light:border-accent-600 text-white light:text-slate-900' : 'border-transparent text-slate-500 hover:text-slate-300 hover:light:text-slate-700'}`}
+                >{tab.label}</button>
+              ))}
+            </div>
           </div>
-        ) : (
-          <div className="rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card p-4 sm:p-6">
-            <div className="mb-5 text-sm font-semibold text-white light:text-slate-900">By category · {customRange ? `${formatDate(customRange.start)} – ${formatDate(customRange.end)}` : `${MONTH_NAMES[monthCursor.month]} ${monthCursor.year}`}</div>
-            <div className="grid gap-6 lg:grid-cols-[1.3fr_1fr] lg:gap-8">
+          {categoryBreakdown.length === 0 ? (
+            <EmptyState compact icon={Tag} title="No category data" message="Nothing categorised in the current filters yet." />
+          ) : (
+            <div className="mt-4 grid gap-6 lg:grid-cols-[1.3fr_1fr] lg:gap-8">
               {/* onFocusCapture: Recharts calls .focus() on whatever slice's <g> you click (its
                   own keyboard-a11y wiring, tabindex="-1" so it's programmatic-only, never
                   Tab-reachable) — left alone, the browser draws its native focus ring around
@@ -1967,8 +2007,8 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTx
                 <div className="border-t border-white/20 light:border-black/15" />
               </div>
             </div>
-          </div>
-        )
+          )}
+        </div>
       ) : (
       <section className="overflow-hidden rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card">
         <div className="hidden grid-cols-[1.4fr_.9fr_.6fr_.6fr_auto] gap-4 border-b border-white/10 light:border-black/10 px-5 py-3 text-[10px] uppercase tracking-widest text-slate-600 sm:grid">
