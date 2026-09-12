@@ -8,6 +8,12 @@ import { triggerAppUpdate } from '@/lib/pwaUpdate'
 // whenever something user-visible ships; no need to log every internal fix.
 const CHANGELOG = [
   {
+    date: '12 Sep 2026',
+    points: [
+      'Transactions (mobile): grouped by day, with each day showing its own income/spend total.',
+    ],
+  },
+  {
     date: '10 Sep 2026',
     points: [
       'This "Updates" page — check for updates any time, plus a push notification when a new version ships.',

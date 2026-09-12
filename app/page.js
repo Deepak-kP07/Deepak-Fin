@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion, MotionConfig } from 'framer-motion'
 import { createClient } from '@/lib/supabase/browser'
 import { removeAttachment, uploadAttachment } from '@/lib/attachments'
@@ -1658,6 +1658,28 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTx
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE))
   const pageRows = sorted.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
 
+  // Mobile-only day-group headers (see the row loop below) — only meaningful when consecutive
+  // rows are actually grouped by date, i.e. sorted by date; sorting by amount/description would
+  // scatter a single day's rows across the list, so a header per date change there would just be
+  // noise. Computed across the full filtered set (not just this page) so a day split across a
+  // page boundary still shows its real total, not a partial one.
+  const isDateSorted = sortBy === 'date_asc' || sortBy === 'date_desc'
+  const dayTotals = useMemo(() => {
+    const map = {}
+    for (const t of sorted) {
+      if (t.type === 'transfer') continue // a transfer between your own accounts isn't spend or income
+      const bucket = map[t.date] || { income: 0, expense: 0 }
+      if (t.type === 'income') bucket.income += Number(t.amount || 0)
+      else bucket.expense += Number(t.amount || 0)
+      map[t.date] = bucket
+    }
+    return map
+  }, [sorted])
+  const dayHeaderParts = (dateStr) => {
+    const d = new Date(`${dateStr}T00:00:00`)
+    return { weekday: d.toLocaleDateString('en-IN', { weekday: 'short' }), day: d.getDate(), month: d.toLocaleDateString('en-IN', { month: 'short' }) }
+  }
+
   // Category split of whatever's currently visible — respects every active filter above, so it's
   // always describing exactly the records on screen, not some separate fixed time window.
   const categoryBreakdown = useMemo(() => {
@@ -1960,15 +1982,35 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTx
           <EmptyState icon={Wallet} title="No transactions match" message="Try adjusting filters, or add your first entry." cta="Add transaction" onCta={onOpenTxForm} />
         ) : (
           <div className="divide-y divide-white/5 light:divide-black/5">
-            {pageRows.map((t) => {
+            {pageRows.map((t, i) => {
               const cat = categories.find((c) => c.id === t.category_id)
               const acc = resolveSource(t)
               const isIn = t.type === 'income' || (t.type === 'transfer' && t.transfer_direction === 'in')
               const isTransfer = t.type === 'transfer'
               const sign = isIn ? '+' : '-'
               const color = isIn ? 'text-emerald-300 light:text-emerald-700' : isTransfer ? 'text-accent-300 light:text-accent-700' : 'text-rose-300 light:text-rose-700'
+              const showDayHeader = isDateSorted && (i === 0 || pageRows[i - 1].date !== t.date)
+              const dayTotal = dayTotals[t.date]
               return (
-                <div key={t.id} className="px-5 py-3 sm:py-4">
+                <Fragment key={t.id}>
+                {showDayHeader && (() => {
+                  const { weekday, day, month } = dayHeaderParts(t.date)
+                  return (
+                    <div className="flex items-center justify-between gap-3 bg-white/[.02] light:bg-black/[.02] px-5 py-2 sm:hidden">
+                      <div className="flex items-center gap-2">
+                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-white/[.06] light:bg-black/[.05] text-[11px] font-semibold text-slate-300 light:text-slate-700">{day}</span>
+                        <span className="text-xs text-slate-500">{weekday} · {month}</span>
+                      </div>
+                      {dayTotal && (
+                        <div className="flex items-center gap-2 text-xs font-semibold">
+                          {dayTotal.income > 0 && <span className="text-emerald-300 light:text-emerald-700">{showMoney ? `+${money(dayTotal.income)}` : '••••'}</span>}
+                          {dayTotal.expense > 0 && <span className="text-rose-300 light:text-rose-700">{showMoney ? `-${money(dayTotal.expense)}` : '••••'}</span>}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })()}
+                <div className="px-5 py-3 sm:py-4">
                   {/* Mobile: icon-bubble + name/subtitle + trailing amount, one row — tap opens
                       edit. No per-row delete icon here; long-press enters selection mode (tap
                       toggles rows, the toolbar above handles bulk delete) instead. */}
@@ -2042,6 +2084,7 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTx
                     </div>
                   </div>
                 </div>
+                </Fragment>
               )
             })}
           </div>
