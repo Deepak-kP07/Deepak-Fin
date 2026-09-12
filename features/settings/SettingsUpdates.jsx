@@ -13,6 +13,7 @@ const CHANGELOG = [
       'Category icons now also show in the Transactions ledger, account detail view, yearly budget cards, and Settings > Categories — not just when picking a category.',
       'Category icon matching now looks at the transaction description too (e.g. "Water bottle"), not just the category name, so more rows get a real icon instead of a generic mark.',
       'Long dropdowns (categories, accounts) now filter as you type — no search box, just start typing while it\'s open.',
+      'Net worth: fixed the Assets − Liabilities = Net worth line wrapping awkwardly on mobile — it now fits on one line.',
     ],
   },
   {

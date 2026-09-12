@@ -75,20 +75,20 @@ export function NetWorthDetailView({
         <>
           {/* The formula, spelled out with real numbers — the direct answer to "how is this calculated." */}
           <div className="rounded-3xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-black/[.025] glassy:glass-card p-6">
-            <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-center sm:gap-4 sm:text-center">
-              <div>
-                <div className="text-[11px] uppercase tracking-widest text-slate-500">Assets</div>
-                <div className="text-xl font-semibold text-white light:text-slate-900">{showMoney ? money(totalAssets) : '••••'}</div>
+            <div className="flex flex-nowrap items-end justify-center gap-1.5 overflow-x-auto pb-1 sm:gap-4">
+              <div className="shrink-0 text-center">
+                <div className="text-[9px] uppercase tracking-widest text-slate-500 sm:text-[11px]">Assets</div>
+                <div className="whitespace-nowrap text-sm font-semibold text-white light:text-slate-900 sm:text-xl">{showMoney ? money(totalAssets) : '••••'}</div>
               </div>
-              <div className="text-lg text-slate-500">−</div>
-              <div>
-                <div className="text-[11px] uppercase tracking-widest text-slate-500">Liabilities</div>
-                <div className="text-xl font-semibold text-white light:text-slate-900">{showMoney ? money(totalLiabilities) : '••••'}</div>
+              <div className="shrink-0 pb-0.5 text-sm text-slate-500 sm:pb-1 sm:text-lg">−</div>
+              <div className="shrink-0 text-center">
+                <div className="text-[9px] uppercase tracking-widest text-slate-500 sm:text-[11px]">Liabilities</div>
+                <div className="whitespace-nowrap text-sm font-semibold text-white light:text-slate-900 sm:text-xl">{showMoney ? money(totalLiabilities) : '••••'}</div>
               </div>
-              <div className="text-lg text-slate-500">=</div>
-              <div>
-                <div className="text-[11px] uppercase tracking-widest text-slate-500">Net worth</div>
-                <div className={`text-xl font-semibold ${netWorth < 0 ? 'text-rose-300 light:text-rose-700' : 'text-emerald-300 light:text-emerald-700'}`}>{showMoney ? money(netWorth) : '••••'}</div>
+              <div className="shrink-0 pb-0.5 text-sm text-slate-500 sm:pb-1 sm:text-lg">=</div>
+              <div className="shrink-0 text-center">
+                <div className="text-[9px] uppercase tracking-widest text-slate-500 sm:text-[11px]">Net worth</div>
+                <div className={`whitespace-nowrap text-sm font-semibold sm:text-xl ${netWorth < 0 ? 'text-rose-300 light:text-rose-700' : 'text-emerald-300 light:text-emerald-700'}`}>{showMoney ? money(netWorth) : '••••'}</div>
               </div>
             </div>
 
