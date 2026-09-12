@@ -6,6 +6,7 @@ import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recha
 import { EmptyState } from '@/components/shared/EmptyState'
 import { HeroStatTile } from '@/components/shared/HeroStatTile'
 import { budgetInsights, categoryBreakdown, monthLabel, planTotals } from '@/lib/budgets'
+import { getCategoryIcon } from '@/lib/categoryIcons'
 import { downloadBudgetsExport } from '@/lib/exportBudgets'
 import { money } from '@/lib/format'
 import { BudgetMonthDetailView } from '@/features/budgets/BudgetMonthDetailView'
@@ -332,11 +333,12 @@ export function BudgetsView({ data, onSetMonth, onCloseMonth, onReopenMonth, onD
               const pct = limit > 0 ? Math.min(100, Math.round((spent / limit) * 100)) : 0
               const tone = pct >= 100 ? 'bg-rose-400' : pct >= 80 ? 'bg-amber-400' : 'bg-emerald-400'
               const text = pct >= 100 ? 'text-rose-300 light:text-rose-700' : pct >= 80 ? 'text-amber-300 light:text-amber-700' : 'text-emerald-300 light:text-emerald-700'
+              const CatIcon = getCategoryIcon(cat?.name)
               return (
                 <div key={b.id} className="group rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card p-5">
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="h-9 w-9 rounded-xl" style={{ background: `${cat?.color || '#94a3b8'}22`, color: cat?.color }} />
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ background: `${cat?.color || '#94a3b8'}22`, color: cat?.color || '#94a3b8' }}><CatIcon size={16} /></div>
                       <div>
                         <div className="text-sm font-semibold text-white light:text-slate-900">{cat?.name || 'Category'}</div>
                         <div className="text-[11px] capitalize text-slate-400">yearly</div>

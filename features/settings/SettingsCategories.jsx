@@ -5,6 +5,7 @@ import { DndContext, PointerSensor, closestCenter, useSensor, useSensors } from 
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { CheckCircle2, Circle, GripVertical, Pencil, Plus, Trash2 } from 'lucide-react'
+import { getCategoryIcon } from '@/lib/categoryIcons'
 
 const MODULE_OPTIONS = [
   { key: 'transactions', label: 'Transactions' },
@@ -14,6 +15,15 @@ const MODULE_OPTIONS = [
   { key: 'family_company', label: 'Family / Company' },
 ]
 
+function CategoryRowIcon({ c }) {
+  const Icon = getCategoryIcon(c.name)
+  return (
+    <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md" style={{ background: `${c.color || '#94a3b8'}33`, color: c.color || '#94a3b8' }}>
+      <Icon size={12} />
+    </div>
+  )
+}
+
 function SortableCategoryTableRow({ c, onEditCategory, onDeleteCategory, onToggleCategoryModule }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: c.id })
   const style = { transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 10 : undefined }
@@ -22,7 +32,7 @@ function SortableCategoryTableRow({ c, onEditCategory, onDeleteCategory, onToggl
       <td className="px-2 py-2">
         <div className="flex items-center gap-2">
           <button type="button" {...attributes} {...listeners} className="shrink-0 touch-none rounded p-1 text-slate-500 hover:text-white hover:light:text-slate-900 active:cursor-grabbing" title="Drag to reorder"><GripVertical size={14} /></button>
-          <div className="h-5 w-5 shrink-0 rounded-md" style={{ background: `${c.color || '#94a3b8'}33` }} />
+          <CategoryRowIcon c={c} />
           <span className="truncate text-white light:text-slate-900">{c.name}</span>
         </div>
       </td>
@@ -59,7 +69,7 @@ function SortableCategoryCard({ c, onEditCategory, onDeleteCategory, onToggleCat
     <div ref={setNodeRef} style={style} className={`rounded-xl border border-white/10 light:border-black/10 bg-white/[.02] light:bg-black/[.02] p-3 ${isDragging ? 'opacity-60' : ''}`}>
       <div className="flex items-center gap-2">
         <button type="button" {...attributes} {...listeners} className="shrink-0 touch-none rounded p-1 text-slate-500 hover:text-white hover:light:text-slate-900 active:cursor-grabbing" title="Drag to reorder"><GripVertical size={16} /></button>
-        <div className="h-5 w-5 shrink-0 rounded-md" style={{ background: `${c.color || '#94a3b8'}33` }} />
+        <CategoryRowIcon c={c} />
         <span className="min-w-0 flex-1 truncate text-white light:text-slate-900">{c.name}</span>
         <div className="flex shrink-0 gap-1">
           <button onClick={() => onEditCategory(c)} className="rounded-lg p-1.5 text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900"><Pencil size={13} /></button>
