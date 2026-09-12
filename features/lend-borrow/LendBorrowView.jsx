@@ -5,6 +5,7 @@ import { Eye, EyeOff, Heart, History, Plus } from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { HeroStatTile } from '@/components/shared/HeroStatTile'
 import { capitalizeFirst, formatDate, money } from '@/lib/format'
+import { perspectiveType } from '@/lib/lendBorrowSharing'
 import { LendBorrowDetailView } from '@/features/lend-borrow/LendBorrowDetailView'
 
 export function LendBorrowView({ data, onAdd, onEdit, onDelete, onDeleteTx, onDeleteTxBulk, onLogRepayment, onAddMore, onEditAdditionNote, onManageAccess, showMoney, onToggleMoney, toast, onDetailChange, initialSelectedId }) {
@@ -39,8 +40,8 @@ export function LendBorrowView({ data, onAdd, onEdit, onDelete, onDeleteTx, onDe
     )
   }
 
-  const lent = lend_borrow.filter((l) => l.type === 'lent')
-  const borrowed = lend_borrow.filter((l) => l.type === 'borrowed')
+  const lent = lend_borrow.filter((l) => perspectiveType(l) === 'lent')
+  const borrowed = lend_borrow.filter((l) => perspectiveType(l) === 'borrowed')
   const lentPending = lent.reduce((s, l) => s + Math.max(0, Number(l.amount) - Number(l.amount_repaid || 0)), 0)
   const borrowedPending = borrowed.reduce((s, l) => s + Math.max(0, Number(l.amount) - Number(l.amount_repaid || 0)), 0)
   // Fully-settled records just pile up clutter once you've been using this a while — hide them
@@ -49,7 +50,7 @@ export function LendBorrowView({ data, onAdd, onEdit, onDelete, onDeleteTx, onDe
   const closedCount = lend_borrow.length - lend_borrow.filter((l) => l.status !== 'returned').length
 
   const card = (l) => {
-    const isLent = l.type === 'lent'
+    const isLent = perspectiveType(l) === 'lent'
     const isClosed = l.status === 'returned'
     const repaid = Number(l.amount_repaid || 0)
     const pending = Math.max(0, Number(l.amount) - repaid)

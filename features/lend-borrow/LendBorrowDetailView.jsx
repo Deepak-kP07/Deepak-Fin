@@ -5,11 +5,11 @@ import { ArrowDownRight, ArrowUpRight, CheckCircle2, ChevronRight, Eye, EyeOff, 
 import { EmptyState } from '@/components/shared/EmptyState'
 import { HeroStatTile } from '@/components/shared/HeroStatTile'
 import { capitalizeFirst, formatDate, money } from '@/lib/format'
-import { roleFor, canEditRecord, canDeleteRecord, canLogRepayment, canManageShares } from '@/lib/lendBorrowSharing'
+import { roleFor, canEditRecord, canDeleteRecord, canLogRepayment, canManageShares, perspectiveType } from '@/lib/lendBorrowSharing'
 
 export function LendBorrowDetailView({ record, repayments, additions = [], accounts, transactions, onBack, onEdit, onDelete, onDeleteTx, onDeleteTxBulk, onLogRepayment, onAddMore, onEditAdditionNote, onManageAccess, showMoney, onToggleMoney, toast }) {
   const role = roleFor(record)
-  const isLent = record.type === 'lent'
+  const isLent = perspectiveType(record) === 'lent'
   const isSettled = record.status === 'returned'
   const repaid = Number(record.amount_repaid || 0)
   const pending = Math.max(0, Number(record.amount) - repaid)

@@ -19,6 +19,7 @@ const CHANGELOG = [
       'Fixed lend/borrow repayments landing Uncategorised instead of tagged "Loan / Debt".',
       'Lend/Borrow top-ups: shows the note you wrote instead of "Top-up #N" when there is one — tap (or the pencil on desktop) to add or change a top-up\'s note anytime.',
       'Picking a category now shows a small animated icon matching it, in the transaction form and pending SMS cards.',
+      'Fixed a shared Lend/Borrow record showing the wrong direction for the other person — money lent to them now shows as borrowed (and vice versa) on their own net worth and Lend & Borrow list.',
     ],
   },
   {

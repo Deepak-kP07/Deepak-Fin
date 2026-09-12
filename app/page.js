@@ -21,7 +21,7 @@ import { Select } from '@/components/shared/Select'
 import { CsvBulkImport } from '@/components/shared/CsvBulkImport'
 import { CategorySelect } from '@/components/shared/CategorySelect'
 import { CategoryAnimatedIcon } from '@/components/shared/CategoryAnimatedIcon'
-import { getCategoryIcon } from '@/lib/categoryIcons'
+import { getTransactionIcon } from '@/lib/categoryIcons'
 import { DateInput } from '@/components/shared/DateInput'
 import { StatCard } from '@/components/shared/StatCard'
 import { StatDrilldown } from '@/components/shared/StatDrilldown'
@@ -36,6 +36,7 @@ import { SpotlightTour } from '@/components/shared/SpotlightTour'
 import { TOUR_STEPS } from '@/features/onboarding/tourSteps'
 import { BottomSheet } from '@/components/shared/BottomSheet'
 import { useIsMobile } from '@/hooks/use-mobile'
+import { perspectiveType } from '@/lib/lendBorrowSharing'
 import { ToggleSwitch } from '@/components/shared/ToggleSwitch'
 import { AuthScreen } from '@/features/auth/AuthScreen'
 import { CategoryForm } from '@/features/categories/CategoryForm'
@@ -738,8 +739,8 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
   // Money lent out is just as real an asset as cash sitting in an account (it's owed back to
   // you), and money borrowed is just as real a liability as a loan — only the still-outstanding
   // portion counts (amount minus whatever's already been repaid), never the original full amount.
-  const lendOutstanding = lend_borrow.filter((l) => l.type === 'lent').reduce((s, l) => s + Math.max(0, Number(l.amount) - Number(l.amount_repaid || 0)), 0)
-  const borrowOutstanding = lend_borrow.filter((l) => l.type === 'borrowed').reduce((s, l) => s + Math.max(0, Number(l.amount) - Number(l.amount_repaid || 0)), 0)
+  const lendOutstanding = lend_borrow.filter((l) => perspectiveType(l) === 'lent').reduce((s, l) => s + Math.max(0, Number(l.amount) - Number(l.amount_repaid || 0)), 0)
+  const borrowOutstanding = lend_borrow.filter((l) => perspectiveType(l) === 'borrowed').reduce((s, l) => s + Math.max(0, Number(l.amount) - Number(l.amount_repaid || 0)), 0)
   const totalAssets = totalBalance + currentInv + lendOutstanding
   const totalLiabilities = totalOutstanding + creditCardDebt + borrowOutstanding
   const netWorth = totalAssets - totalLiabilities
@@ -789,11 +790,11 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
   }))
   // Only the still-outstanding portion of each record — same "already settled drops off" rule
   // loanItems above applies to closed loans, just expressed as amount_repaid instead of a status.
-  const lendItems = lend_borrow.filter((l) => l.type === 'lent' && Number(l.amount) - Number(l.amount_repaid || 0) > 0).map((l) => ({
+  const lendItems = lend_borrow.filter((l) => perspectiveType(l) === 'lent' && Number(l.amount) - Number(l.amount_repaid || 0) > 0).map((l) => ({
     id: `lend-${l.id}`, name: l.person_name, sub: 'Lent out',
     amount: Number(l.amount) - Number(l.amount_repaid || 0), icon: Heart, color: '#6ee7b7', debt: false,
   }))
-  const borrowItems = lend_borrow.filter((l) => l.type === 'borrowed' && Number(l.amount) - Number(l.amount_repaid || 0) > 0).map((l) => ({
+  const borrowItems = lend_borrow.filter((l) => perspectiveType(l) === 'borrowed' && Number(l.amount) - Number(l.amount_repaid || 0) > 0).map((l) => ({
     id: `borrow-${l.id}`, name: l.person_name, sub: 'Borrowed',
     amount: Number(l.amount) - Number(l.amount_repaid || 0), icon: Heart, color: '#fda4af', debt: true,
   }))
@@ -2069,7 +2070,7 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTx
               const acc = resolveSource(t)
               const isIn = t.type === 'income' || (t.type === 'transfer' && t.transfer_direction === 'in')
               const isTransfer = t.type === 'transfer'
-              const CatIcon = cat ? getCategoryIcon(cat.name) : null
+              const CatIcon = getTransactionIcon(t.description, cat?.name)
               const sign = isIn ? '+' : '-'
               const color = isIn ? 'text-emerald-300 light:text-emerald-700' : isTransfer ? 'text-accent-300 light:text-accent-700' : 'text-rose-300 light:text-rose-700'
               const showDayHeader = isDateSorted && (i === 0 || pageRows[i - 1].date !== t.date)
