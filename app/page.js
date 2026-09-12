@@ -339,146 +339,153 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
     } catch (e) { toast.push(e.message, 'error') } finally { setBusy(false) }
   }
 
-  return (
+  const formBody = (
     <>
-    <div className={`fixed inset-0 z-40 flex justify-center bg-black/60 backdrop-blur-sm ${isMobile ? 'items-end' : 'items-center p-4'}`} onClick={onClose}>
-      <form
-        onSubmit={save}
-        onClick={(e) => e.stopPropagation()}
-        className={`flex w-full flex-col overflow-y-auto border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-6 shadow-2xl ${isMobile ? 'rounded-t-3xl border-t' : 'max-w-xl rounded-3xl border'}`}
-        style={isMobile
-          ? { maxHeight: 'calc(100dvh - max(env(safe-area-inset-top), 12px))', paddingBottom: 'max(1.5rem, calc(env(safe-area-inset-bottom) + 1.5rem))' }
-          : { maxHeight: '92vh', paddingBottom: 'max(1.5rem, calc(env(safe-area-inset-bottom) + 1.5rem))' }}
-      >
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-white light:text-slate-900">{editing ? 'Edit transaction' : 'Add transaction'}</h2>
-            <p className="mt-1 text-xs text-slate-500">Keep the context, not just the number</p>
-          </div>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 light:text-slate-500 hover:bg-white/5"><X size={18} /></button>
+      <div className="mt-5 grid grid-cols-3 gap-2">
+        {[{ v: 'expense', l: 'Expense', c: 'bg-rose-400/15 text-rose-200 light:text-rose-700 border-rose-400/30' }, { v: 'income', l: 'Income', c: 'bg-emerald-400/15 text-emerald-200 light:text-emerald-700 border-emerald-400/30' }, { v: 'transfer', l: 'Transfer', c: 'bg-accent-400/15 text-accent-200 light:text-accent-700 border-accent-400/30' }].map((t) => (
+          <button key={t.v} type="button" onClick={() => { setPurposeMode('category'); setForm({ ...form, type: t.v, category_id: t.v === 'transfer' ? '' : (categories.find((c) => c.type === (t.v === 'income' ? 'income' : 'expense'))?.id || ''), linked_module: '', linked_module_id: '', repay_value: '' }) }} className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${form.type === t.v ? t.c : 'border-white/10 light:border-black/10 text-slate-400 light:text-slate-500 hover:bg-white/5'}`}>{t.l}</button>
+        ))}
+      </div>
+
+      {!hasAnySource && (
+        <div className="mt-5 rounded-xl border border-amber-300/25 bg-amber-300/5 px-4 py-3 text-sm text-amber-200 light:text-amber-700">
+          <div className="flex items-center gap-2"><Landmark size={14} /> You don&apos;t have any accounts yet.</div>
+          <button type="button" onClick={onAddAccount} className="mt-2 rounded-lg bg-amber-300/20 px-3 py-1.5 text-xs font-semibold text-amber-100 light:text-amber-800 hover:bg-amber-300/30">+ Add your first account</button>
         </div>
+      )}
 
-        <div className="mt-5 grid grid-cols-3 gap-2">
-          {[{ v: 'expense', l: 'Expense', c: 'bg-rose-400/15 text-rose-200 light:text-rose-700 border-rose-400/30' }, { v: 'income', l: 'Income', c: 'bg-emerald-400/15 text-emerald-200 light:text-emerald-700 border-emerald-400/30' }, { v: 'transfer', l: 'Transfer', c: 'bg-accent-400/15 text-accent-200 light:text-accent-700 border-accent-400/30' }].map((t) => (
-            <button key={t.v} type="button" onClick={() => { setPurposeMode('category'); setForm({ ...form, type: t.v, category_id: t.v === 'transfer' ? '' : (categories.find((c) => c.type === (t.v === 'income' ? 'income' : 'expense'))?.id || ''), linked_module: '', linked_module_id: '', repay_value: '' }) }} className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${form.type === t.v ? t.c : 'border-white/10 light:border-black/10 text-slate-400 light:text-slate-500 hover:bg-white/5'}`}>{t.l}</button>
-          ))}
-        </div>
+      <div className="mt-5 grid grid-cols-2 gap-3 sm:gap-4">
+        <label className="text-sm text-slate-300 light:text-slate-700">Amount
+          <input required min="0.01" step="0.01" type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" placeholder="0.00" />
+        </label>
+        <label className="text-sm text-slate-300 light:text-slate-700">Date
+          <DateInput value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value, time: new Date().toTimeString().slice(0, 5) })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
+        </label>
 
-        {!hasAnySource && (
-          <div className="mt-5 rounded-xl border border-amber-300/25 bg-amber-300/5 px-4 py-3 text-sm text-amber-200 light:text-amber-700">
-            <div className="flex items-center gap-2"><Landmark size={14} /> You don&apos;t have any accounts yet.</div>
-            <button type="button" onClick={onAddAccount} className="mt-2 rounded-lg bg-amber-300/20 px-3 py-1.5 text-xs font-semibold text-amber-100 light:text-amber-800 hover:bg-amber-300/30">+ Add your first account</button>
-          </div>
-        )}
+        <label className="text-sm text-slate-300 light:text-slate-700">{form.type === 'transfer' ? 'From account' : 'Account'}
+          <Select required={hasAnySource} value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-[#101621] light:bg-white px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50">
+            <option value="">Choose account…</option>
+            {sourceOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </Select>
+        </label>
 
-        <div className="mt-5 grid grid-cols-2 gap-3 sm:gap-4">
-          <label className="text-sm text-slate-300 light:text-slate-700">Amount
-            <input required min="0.01" step="0.01" type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" placeholder="0.00" />
-          </label>
-          <label className="text-sm text-slate-300 light:text-slate-700">Date
-            <DateInput value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value, time: new Date().toTimeString().slice(0, 5) })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
-          </label>
-
-          <label className="text-sm text-slate-300 light:text-slate-700">{form.type === 'transfer' ? 'From account' : 'Account'}
-            <Select required={hasAnySource} value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-[#101621] light:bg-white px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50">
-              <option value="">Choose account…</option>
-              {sourceOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        {form.type === 'transfer' ? (
+          <label className="text-sm text-slate-300 light:text-slate-700">To account
+            <Select required value={form.to_account_id} onChange={(e) => setForm({ ...form, to_account_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-[#101621] light:bg-white px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50">
+              <option value="">Choose destination…</option>
+              {realAccounts.filter((a) => a.id !== form.account_id).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+              {creditCards.filter((c) => Number(c.current_outstanding) > 0).map((c) => <option key={c.id} value={`cc:${c.id}`}>{c.name} · pay bill</option>)}
             </Select>
           </label>
-
-          {form.type === 'transfer' ? (
-            <label className="text-sm text-slate-300 light:text-slate-700">To account
-              <Select required value={form.to_account_id} onChange={(e) => setForm({ ...form, to_account_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-[#101621] light:bg-white px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50">
-                <option value="">Choose destination…</option>
-                {realAccounts.filter((a) => a.id !== form.account_id).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-                {creditCards.filter((c) => Number(c.current_outstanding) > 0).map((c) => <option key={c.id} value={`cc:${c.id}`}>{c.name} · pay bill</option>)}
-              </Select>
-            </label>
-          ) : (
-            <div className="text-sm text-slate-300 light:text-slate-700 col-span-2">
-              <div className="flex items-center justify-between">
-                <span>{purposeMode === 'repayment' ? (form.type === 'income' ? 'Repayment from' : 'Repaying') : 'Category'}</span>
-                {canRepay && (
-                  <div className="flex gap-1">
-                    <button type="button" onClick={() => resetPurpose('category')} className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition ${purposeMode === 'category' ? 'bg-accent-400/15 text-accent-200 light:text-accent-700' : 'text-slate-500 hover:bg-white/5'}`}>Category</button>
-                    <button type="button" onClick={() => resetPurpose('repayment')} className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition ${purposeMode === 'repayment' ? 'bg-accent-400/15 text-accent-200 light:text-accent-700' : 'text-slate-500 hover:bg-white/5'}`}>{form.type === 'income' ? 'Repayment' : 'Prepayment'}</button>
-                  </div>
-                )}
-              </div>
-              {purposeMode === 'repayment' && canRepay ? (
-                <>
-                  <Select required value={form.repay_value || ''} onChange={(e) => setForm({ ...form, repay_value: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-[#101621] light:bg-white px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50">
-                    <option value="">Choose…</option>
-                    {repayOptions.map((o) => <option key={`${o.kind}:${o.id}`} value={`${o.kind}:${o.id}`}>{o.label}</option>)}
-                  </Select>
-                  <div className="mt-1 text-[11px] text-slate-500">Auto-marks the debt as partially/fully repaid.</div>
-                </>
-              ) : (
-                <CategorySelect value={form.category_id || ''} onChange={(e) => setForm({ ...form, category_id: e.target.value })} categories={catsForType} onAddCategory={onAddCategory} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-[#101621] light:bg-white px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
-              )}
-            </div>
-          )}
-
-          <label ref={descRef} className="relative text-sm text-slate-300 light:text-slate-700 col-span-2">Description
-            <input required value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} onFocus={() => setDescOpen(true)} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" placeholder={form.type === 'income' ? 'e.g. Salary, stipend, refund' : form.type === 'transfer' ? 'e.g. Moved to savings' : 'e.g. Groceries at BigBazaar'} />
-            {descOpen && filteredDescriptionSuggestions.length > 0 && (
-              <div className="absolute left-0 right-0 z-30 mt-1 max-h-56 overflow-y-auto rounded-xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-1.5 shadow-2xl">
-                {filteredDescriptionSuggestions.map((s) => (
-                  <button key={s.original} type="button" onClick={() => { setForm({ ...form, description: s.original }); setDescOpen(false) }} className="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm text-slate-300 light:text-slate-700 hover:bg-white/5">
-                    <span className="truncate">{s.original}</span>
-                    {s.count > 1 && <span className="shrink-0 text-[11px] text-slate-500">×{s.count}</span>}
-                  </button>
-                ))}
-              </div>
-            )}
-          </label>
-          <label className="text-sm text-slate-300 light:text-slate-700 col-span-2">Notes
-            <input value={form.notes || ''} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" placeholder="Optional context" />
-          </label>
-
+        ) : (
           <div className="text-sm text-slate-300 light:text-slate-700 col-span-2">
-            Receipt / attachment
-            {editing?.attachment_path && !attachmentRemoved ? (
-              <div className="mt-2 flex items-center justify-between rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3">
-                <button type="button" onClick={() => setViewingAttachment(editing)} className="flex min-w-0 items-center gap-2 truncate text-sm text-accent-200 light:text-accent-700 hover:underline"><Paperclip size={14} className="shrink-0 text-slate-500" />{editing.attachment_name || 'Attachment'}</button>
-                <button type="button" onClick={() => setAttachmentRemoved(true)} className="shrink-0 rounded-lg p-1.5 text-rose-300/70 light:text-rose-700 hover:bg-rose-300/10"><Trash2 size={14} /></button>
-              </div>
-            ) : (
-              <label className="mt-2 flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-white/15 light:border-black/10 bg-white/[.02] light:bg-black/[.02] px-3 py-3 text-sm text-slate-400 light:text-slate-500 hover:bg-white/[.04] hover:light:bg-black/[.03]">
-                <Paperclip size={14} />
-                {attachmentFile ? attachmentFile.name : 'Attach a photo of the receipt (optional)'}
-                <input type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => setAttachmentFile(e.target.files?.[0] || null)} />
-              </label>
-            )}
-          </div>
-
-          {editing && (
-            <div className="col-span-2">
-              <button type="button" onClick={toggleHistory} className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300 hover:light:text-slate-700"><History size={13} />{historyOpen ? 'Hide edit history' : 'View edit history'}</button>
-              {historyOpen && (
-                <div className="mt-2 space-y-1.5 rounded-xl border border-white/10 light:border-black/10 bg-white/[.02] light:bg-black/[.02] p-3">
-                  {history === null ? (
-                    <div className="text-xs text-slate-500">Loading…</div>
-                  ) : history.length === 0 ? (
-                    <div className="text-xs text-slate-500">No edits recorded yet.</div>
-                  ) : history.map((h) => (
-                    <div key={h.id} className="text-xs text-slate-400 light:text-slate-500">
-                      <span className="text-slate-500">{formatDateTime(h.changed_at?.slice(0, 10), h.changed_at?.slice(11, 16))}</span>{' — '}
-                      {Object.entries(h.previous_values).map(([field, prev]) => `${field} was "${prev}"`).join(', ')}
-                    </div>
-                  ))}
+            <div className="flex items-center justify-between">
+              <span>{purposeMode === 'repayment' ? (form.type === 'income' ? 'Repayment from' : 'Repaying') : 'Category'}</span>
+              {canRepay && (
+                <div className="flex gap-1">
+                  <button type="button" onClick={() => resetPurpose('category')} className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition ${purposeMode === 'category' ? 'bg-accent-400/15 text-accent-200 light:text-accent-700' : 'text-slate-500 hover:bg-white/5'}`}>Category</button>
+                  <button type="button" onClick={() => resetPurpose('repayment')} className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition ${purposeMode === 'repayment' ? 'bg-accent-400/15 text-accent-200 light:text-accent-700' : 'text-slate-500 hover:bg-white/5'}`}>{form.type === 'income' ? 'Repayment' : 'Prepayment'}</button>
                 </div>
               )}
             </div>
+            {purposeMode === 'repayment' && canRepay ? (
+              <>
+                <Select required value={form.repay_value || ''} onChange={(e) => setForm({ ...form, repay_value: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-[#101621] light:bg-white px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50">
+                  <option value="">Choose…</option>
+                  {repayOptions.map((o) => <option key={`${o.kind}:${o.id}`} value={`${o.kind}:${o.id}`}>{o.label}</option>)}
+                </Select>
+                <div className="mt-1 text-[11px] text-slate-500">Auto-marks the debt as partially/fully repaid.</div>
+              </>
+            ) : (
+              <CategorySelect value={form.category_id || ''} onChange={(e) => setForm({ ...form, category_id: e.target.value })} categories={catsForType} onAddCategory={onAddCategory} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-[#101621] light:bg-white px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
+            )}
+          </div>
+        )}
+
+        <label ref={descRef} className="relative text-sm text-slate-300 light:text-slate-700 col-span-2">Description
+          <input required value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} onFocus={() => setDescOpen(true)} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" placeholder={form.type === 'income' ? 'e.g. Salary, stipend, refund' : form.type === 'transfer' ? 'e.g. Moved to savings' : 'e.g. Groceries at BigBazaar'} />
+          {descOpen && filteredDescriptionSuggestions.length > 0 && (
+            <div className="absolute left-0 right-0 z-30 mt-1 max-h-56 overflow-y-auto rounded-xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-1.5 shadow-2xl">
+              {filteredDescriptionSuggestions.map((s) => (
+                <button key={s.original} type="button" onClick={() => { setForm({ ...form, description: s.original }); setDescOpen(false) }} className="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm text-slate-300 light:text-slate-700 hover:bg-white/5">
+                  <span className="truncate">{s.original}</span>
+                  {s.count > 1 && <span className="shrink-0 text-[11px] text-slate-500">×{s.count}</span>}
+                </button>
+              ))}
+            </div>
+          )}
+        </label>
+        <label className="text-sm text-slate-300 light:text-slate-700 col-span-2">Notes
+          <input value={form.notes || ''} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" placeholder="Optional context" />
+        </label>
+
+        <div className="text-sm text-slate-300 light:text-slate-700 col-span-2">
+          Receipt / attachment
+          {editing?.attachment_path && !attachmentRemoved ? (
+            <div className="mt-2 flex items-center justify-between rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3">
+              <button type="button" onClick={() => setViewingAttachment(editing)} className="flex min-w-0 items-center gap-2 truncate text-sm text-accent-200 light:text-accent-700 hover:underline"><Paperclip size={14} className="shrink-0 text-slate-500" />{editing.attachment_name || 'Attachment'}</button>
+              <button type="button" onClick={() => setAttachmentRemoved(true)} className="shrink-0 rounded-lg p-1.5 text-rose-300/70 light:text-rose-700 hover:bg-rose-300/10"><Trash2 size={14} /></button>
+            </div>
+          ) : (
+            <label className="mt-2 flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-white/15 light:border-black/10 bg-white/[.02] light:bg-black/[.02] px-3 py-3 text-sm text-slate-400 light:text-slate-500 hover:bg-white/[.04] hover:light:bg-black/[.03]">
+              <Paperclip size={14} />
+              {attachmentFile ? attachmentFile.name : 'Attach a photo of the receipt (optional)'}
+              <input type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => setAttachmentFile(e.target.files?.[0] || null)} />
+            </label>
           )}
         </div>
 
-        <button disabled={busy || !hasAnySource} className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">
-          {busy ? 'Saving…' : editing ? 'Update transaction' : 'Save transaction'} <ChevronRight size={16} />
-        </button>
-      </form>
-      {confirm.view}
-    </div>
+        {editing && (
+          <div className="col-span-2">
+            <button type="button" onClick={toggleHistory} className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300 hover:light:text-slate-700"><History size={13} />{historyOpen ? 'Hide edit history' : 'View edit history'}</button>
+            {historyOpen && (
+              <div className="mt-2 space-y-1.5 rounded-xl border border-white/10 light:border-black/10 bg-white/[.02] light:bg-black/[.02] p-3">
+                {history === null ? (
+                  <div className="text-xs text-slate-500">Loading…</div>
+                ) : history.length === 0 ? (
+                  <div className="text-xs text-slate-500">No edits recorded yet.</div>
+                ) : history.map((h) => (
+                  <div key={h.id} className="text-xs text-slate-400 light:text-slate-500">
+                    <span className="text-slate-500">{formatDateTime(h.changed_at?.slice(0, 10), h.changed_at?.slice(11, 16))}</span>{' — '}
+                    {Object.entries(h.previous_values).map(([field, prev]) => `${field} was "${prev}"`).join(', ')}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      <button disabled={busy || !hasAnySource} className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">
+        {busy ? 'Saving…' : editing ? 'Update transaction' : 'Save transaction'} <ChevronRight size={16} />
+      </button>
+    </>
+  )
+
+  return (
+    <>
+    {isMobile ? (
+      // Real vaul bottom sheet (drag-to-dismiss, shrink-to-content) — matches every other
+      // add/edit form on mobile instead of this one hand-rolling its own fixed-position modal.
+      <BottomSheet open={open} onOpenChange={(v) => { if (!v) onClose() }} title={editing ? 'Edit transaction' : 'Add transaction'}>
+        <p className="-mt-2 text-xs text-slate-500">Keep the context, not just the number</p>
+        <form onSubmit={save}>{formBody}</form>
+      </BottomSheet>
+    ) : (
+      <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={onClose}>
+        <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-xl overflow-y-auto rounded-3xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-6 shadow-2xl" style={{ maxHeight: '92vh', paddingBottom: 'max(1.5rem, calc(env(safe-area-inset-bottom) + 1.5rem))' }}>
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-white light:text-slate-900">{editing ? 'Edit transaction' : 'Add transaction'}</h2>
+              <p className="mt-1 text-xs text-slate-500">Keep the context, not just the number</p>
+            </div>
+            <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 light:text-slate-500 hover:bg-white/5"><X size={18} /></button>
+          </div>
+          {formBody}
+        </form>
+      </div>
+    )}
+    {confirm.view}
     <AttachmentViewer open={!!viewingAttachment} onClose={() => setViewingAttachment(null)} transaction={viewingAttachment} />
     </>
   )
