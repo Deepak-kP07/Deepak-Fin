@@ -14,6 +14,7 @@ const CHANGELOG = [
       'Category icon matching now looks at the transaction description too (e.g. "Water bottle"), not just the category name, so more rows get a real icon instead of a generic mark.',
       'Long dropdowns (categories, accounts) now filter as you type — no search box, just start typing while it\'s open.',
       'Net worth: fixed the Assets − Liabilities = Net worth line wrapping awkwardly on mobile — it now fits on one line.',
+      'Fixed Dashboard > Balances icons being nearly invisible for accounts/cards with a dark custom color (e.g. IPPB, SBI Elite).',
     ],
   },
   {
