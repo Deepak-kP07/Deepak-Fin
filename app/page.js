@@ -347,7 +347,7 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
         onClick={(e) => e.stopPropagation()}
         className={`flex w-full flex-col overflow-y-auto border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-6 shadow-2xl ${isMobile ? 'rounded-t-3xl border-t' : 'max-w-xl rounded-3xl border'}`}
         style={isMobile
-          ? { height: 'calc(100dvh - max(env(safe-area-inset-top), 12px))', paddingBottom: 'max(1.5rem, calc(env(safe-area-inset-bottom) + 1.5rem))' }
+          ? { maxHeight: 'calc(100dvh - max(env(safe-area-inset-top), 12px))', paddingBottom: 'max(1.5rem, calc(env(safe-area-inset-bottom) + 1.5rem))' }
           : { maxHeight: '92vh', paddingBottom: 'max(1.5rem, calc(env(safe-area-inset-bottom) + 1.5rem))' }}
       >
         <div className="flex items-center justify-between">
