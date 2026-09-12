@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { ArrowDownRight, ArrowLeftRight, ArrowUpRight, CheckCircle2, ChevronRight, Eye, EyeOff, Landmark, MoreVertical, Pencil, Plus, RefreshCw, Trash2, Wallet, X } from 'lucide-react'
+import { getCategoryIcon } from '@/lib/categoryIcons'
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { BankCardFace } from '@/components/shared/BankCardFace'
 import { StatCard } from '@/components/shared/StatCard'
@@ -242,6 +243,7 @@ export function AccountDetailView({ account, debitCard, transactions, categories
                 const cat = categories.find((c) => c.id === t.category_id)
                 const isIn = t.type === 'income' || (t.type === 'transfer' && t.transfer_direction === 'in')
                 const isTransfer = t.type === 'transfer'
+                const CatIcon = cat ? getCategoryIcon(cat.name) : null
                 const color = isIn ? 'text-emerald-300 light:text-emerald-700' : isTransfer ? 'text-accent-300 light:text-accent-700' : 'text-rose-300 light:text-rose-700'
                 return (
                   <div key={t.id} className="px-5 py-3 sm:py-4">
@@ -266,7 +268,7 @@ export function AccountDetailView({ account, debitCard, transactions, categories
                         )
                       ) : (
                         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/[.05] light:bg-black/[.035]" style={{ color: cat?.color || (isTransfer ? '#22d3ee' : '#94a3b8') }}>
-                          {isTransfer ? <ArrowLeftRight size={16} /> : isIn ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}
+                          {isTransfer ? <ArrowLeftRight size={16} /> : CatIcon ? <CatIcon size={16} /> : isIn ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}
                         </div>
                       )}
                       <div className="min-w-0 flex-1">
@@ -280,7 +282,7 @@ export function AccountDetailView({ account, debitCard, transactions, categories
                     <div className="hidden sm:grid sm:grid-cols-[1.4fr_.9fr_.6fr_.6fr_auto] sm:items-center sm:gap-4">
                       <div className="flex items-center gap-3">
                         <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/[.05] light:bg-black/[.035]" style={{ color: cat?.color || (isTransfer ? '#22d3ee' : '#94a3b8') }}>
-                          {isTransfer ? <ArrowLeftRight size={16} /> : isIn ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}
+                          {isTransfer ? <ArrowLeftRight size={16} /> : CatIcon ? <CatIcon size={16} /> : isIn ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}
                         </div>
                         <div className="min-w-0">
                           <div className="truncate text-sm font-medium text-white light:text-slate-900">{capitalizeFirst(t.description)}</div>
