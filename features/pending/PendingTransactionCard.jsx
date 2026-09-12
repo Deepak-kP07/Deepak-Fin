@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { ArrowDownRight, ArrowUpRight, Check, X } from 'lucide-react'
 import { Select } from '@/components/shared/Select'
+import { CategoryAnimatedIcon } from '@/components/shared/CategoryAnimatedIcon'
 import { capitalizeFirst, relativeTime } from '@/lib/format'
 
 // One approval card per pending SMS-detected transaction. Editing and approving are the same
@@ -62,10 +63,13 @@ export function PendingTransactionCard({ pending, accounts, creditCards = [], ca
       </label>
 
       <div className="mt-2 grid grid-cols-2 gap-2">
-        <Select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} placeholder="Category" className="w-full rounded-lg border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-2.5 py-2 text-xs text-white light:text-slate-900 outline-none">
-          <option value="">Uncategorised</option>
-          {relevantCategories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </Select>
+        <div className="flex items-center gap-1.5">
+          <CategoryAnimatedIcon category={relevantCategories.find((c) => c.id === categoryId)} size={26} />
+          <Select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} placeholder="Category" className="w-full rounded-lg border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-2.5 py-2 text-xs text-white light:text-slate-900 outline-none">
+            <option value="">Uncategorised</option>
+            {relevantCategories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </Select>
+        </div>
         <Select value={destination} onChange={(e) => setDestination(e.target.value)} placeholder="Account" className="w-full rounded-lg border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-2.5 py-2 text-xs text-white light:text-slate-900 outline-none">
           <option value="">Choose account…</option>
           {accounts.filter((a) => a.type !== 'debit_card').map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}

@@ -20,6 +20,7 @@ import { usePrompt } from '@/components/shared/PromptDialog'
 import { Select } from '@/components/shared/Select'
 import { CsvBulkImport } from '@/components/shared/CsvBulkImport'
 import { CategorySelect } from '@/components/shared/CategorySelect'
+import { CategoryAnimatedIcon } from '@/components/shared/CategoryAnimatedIcon'
 import { DateInput } from '@/components/shared/DateInput'
 import { StatCard } from '@/components/shared/StatCard'
 import { StatDrilldown } from '@/components/shared/StatDrilldown'
@@ -380,7 +381,10 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
         ) : (
           <div className="text-sm text-slate-300 light:text-slate-700 col-span-2">
             <div className="flex items-center justify-between">
-              <span>{purposeMode === 'repayment' ? (form.type === 'income' ? 'Repayment from' : 'Repaying') : 'Category'}</span>
+              <span className="flex items-center gap-2">
+                {purposeMode !== 'repayment' && <CategoryAnimatedIcon category={catsForType.find((c) => c.id === form.category_id)} size={26} />}
+                {purposeMode === 'repayment' ? (form.type === 'income' ? 'Repayment from' : 'Repaying') : 'Category'}
+              </span>
               {canRepay && (
                 <div className="flex gap-1">
                   <button type="button" onClick={() => resetPurpose('category')} className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition ${purposeMode === 'category' ? 'bg-accent-400/15 text-accent-200 light:text-accent-700' : 'text-slate-500 hover:bg-white/5'}`}>Category</button>
