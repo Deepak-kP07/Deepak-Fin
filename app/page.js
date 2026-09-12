@@ -1658,11 +1658,11 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTx
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE))
   const pageRows = sorted.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
 
-  // Mobile-only day-group headers (see the row loop below) — only meaningful when consecutive
-  // rows are actually grouped by date, i.e. sorted by date; sorting by amount/description would
-  // scatter a single day's rows across the list, so a header per date change there would just be
-  // noise. Computed across the full filtered set (not just this page) so a day split across a
-  // page boundary still shows its real total, not a partial one.
+  // Day-group headers (see the row loop below), desktop and mobile alike — only meaningful when
+  // consecutive rows are actually grouped by date, i.e. sorted by date; sorting by
+  // amount/description would scatter a single day's rows across the list, so a header per date
+  // change there would just be noise. Computed across the full filtered set (not just this page)
+  // so a day split across a page boundary still shows its real total, not a partial one.
   const isDateSorted = sortBy === 'date_asc' || sortBy === 'date_desc'
   const dayTotals = useMemo(() => {
     const map = {}
@@ -1996,7 +1996,7 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTx
                 {showDayHeader && (() => {
                   const { weekday, day, month } = dayHeaderParts(t.date)
                   return (
-                    <div className="flex items-center justify-between gap-3 bg-white/[.02] light:bg-black/[.02] px-5 py-2 sm:hidden">
+                    <div className="flex items-center justify-between gap-3 bg-white/[.02] light:bg-black/[.02] px-5 py-2">
                       <div className="flex items-center gap-2">
                         <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-white/[.06] light:bg-black/[.05] text-[11px] font-semibold text-slate-300 light:text-slate-700">{day}</span>
                         <span className="text-xs text-slate-500">{weekday} · {month}</span>

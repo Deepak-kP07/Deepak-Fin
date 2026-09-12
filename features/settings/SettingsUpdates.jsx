@@ -10,7 +10,7 @@ const CHANGELOG = [
   {
     date: '12 Sep 2026',
     points: [
-      'Transactions (mobile): grouped by day, with each day showing its own income/spend total.',
+      'Transactions: grouped by day (desktop and mobile), with each day showing its own income/spend total.',
     ],
   },
   {
