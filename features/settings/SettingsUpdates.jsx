@@ -16,6 +16,7 @@ const CHANGELOG = [
       'Net worth now counts money you\'ve lent out as an asset and money you\'ve borrowed as a liability.',
       'Fixed lend/borrow repayments landing Uncategorised instead of tagged "Loan / Debt".',
       'Lend/Borrow top-ups: shows the note you wrote instead of "Top-up #N" when there is one.',
+      'Picking a category now shows a small animated icon matching it, in the transaction form and pending SMS cards.',
     ],
   },
   {
