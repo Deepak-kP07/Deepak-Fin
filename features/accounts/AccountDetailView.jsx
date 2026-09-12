@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { ArrowDownRight, ArrowLeftRight, ArrowUpRight, CheckCircle2, ChevronRight, Eye, EyeOff, Landmark, MoreVertical, Pencil, Plus, RefreshCw, Trash2, Wallet, X } from 'lucide-react'
-import { getCategoryIcon } from '@/lib/categoryIcons'
+import { getTransactionIcon } from '@/lib/categoryIcons'
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { BankCardFace } from '@/components/shared/BankCardFace'
 import { StatCard } from '@/components/shared/StatCard'
@@ -243,7 +243,7 @@ export function AccountDetailView({ account, debitCard, transactions, categories
                 const cat = categories.find((c) => c.id === t.category_id)
                 const isIn = t.type === 'income' || (t.type === 'transfer' && t.transfer_direction === 'in')
                 const isTransfer = t.type === 'transfer'
-                const CatIcon = cat ? getCategoryIcon(cat.name) : null
+                const CatIcon = getTransactionIcon(t.description, cat?.name)
                 const color = isIn ? 'text-emerald-300 light:text-emerald-700' : isTransfer ? 'text-accent-300 light:text-accent-700' : 'text-rose-300 light:text-rose-700'
                 return (
                   <div key={t.id} className="px-5 py-3 sm:py-4">
