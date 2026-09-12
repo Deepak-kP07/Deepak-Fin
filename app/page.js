@@ -33,6 +33,7 @@ import { InstallPrompt } from '@/components/shared/InstallPrompt'
 import { SpotlightTour } from '@/components/shared/SpotlightTour'
 import { TOUR_STEPS } from '@/features/onboarding/tourSteps'
 import { BottomSheet } from '@/components/shared/BottomSheet'
+import { useIsMobile } from '@/hooks/use-mobile'
 import { ToggleSwitch } from '@/components/shared/ToggleSwitch'
 import { AuthScreen } from '@/features/auth/AuthScreen'
 import { CategoryForm } from '@/features/categories/CategoryForm'
@@ -129,6 +130,7 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
   const [descOpen, setDescOpen] = useState(false)
   const descRef = useRef(null)
   const confirm = useConfirm()
+  const isMobile = useIsMobile()
   useEffect(() => { setForm(initial); setPurposeMode(initial.repay_value ? 'repayment' : 'category'); setAttachmentFile(null); setAttachmentRemoved(false); setHistoryOpen(false); setHistory(null); setDescOpen(false) }, [initial])
   useEffect(() => {
     const onDocClick = (e) => { if (descRef.current && !descRef.current.contains(e.target)) setDescOpen(false) }
@@ -339,8 +341,15 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
 
   return (
     <>
-    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center sm:p-4" onClick={onClose}>
-      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="max-h-[92vh] w-full overflow-y-auto rounded-t-3xl border-t border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-6 shadow-2xl sm:max-w-xl sm:rounded-3xl sm:border" style={{ paddingBottom: 'max(1.5rem, calc(env(safe-area-inset-bottom) + 1.5rem))' }}>
+    <div className={`fixed inset-0 z-40 flex justify-center bg-black/60 backdrop-blur-sm ${isMobile ? 'items-end' : 'items-center p-4'}`} onClick={onClose}>
+      <form
+        onSubmit={save}
+        onClick={(e) => e.stopPropagation()}
+        className={`flex w-full flex-col overflow-y-auto border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-6 shadow-2xl ${isMobile ? 'rounded-t-3xl border-t' : 'max-w-xl rounded-3xl border'}`}
+        style={isMobile
+          ? { height: 'calc(100dvh - max(env(safe-area-inset-top), 12px))', paddingBottom: 'max(1.5rem, calc(env(safe-area-inset-bottom) + 1.5rem))' }
+          : { maxHeight: '92vh', paddingBottom: 'max(1.5rem, calc(env(safe-area-inset-bottom) + 1.5rem))' }}
+      >
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold text-white light:text-slate-900">{editing ? 'Edit transaction' : 'Add transaction'}</h2>
@@ -362,7 +371,7 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
           </div>
         )}
 
-        <div className="mt-5 grid gap-4 sm:grid-cols-2">
+        <div className="mt-5 grid grid-cols-2 gap-3 sm:gap-4">
           <label className="text-sm text-slate-300 light:text-slate-700">Amount
             <input required min="0.01" step="0.01" type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" placeholder="0.00" />
           </label>
@@ -386,7 +395,7 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
               </Select>
             </label>
           ) : (
-            <div className="text-sm text-slate-300 light:text-slate-700 sm:col-span-2">
+            <div className="text-sm text-slate-300 light:text-slate-700 col-span-2">
               <div className="flex items-center justify-between">
                 <span>{purposeMode === 'repayment' ? (form.type === 'income' ? 'Repayment from' : 'Repaying') : 'Category'}</span>
                 {canRepay && (
@@ -410,7 +419,7 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
             </div>
           )}
 
-          <label ref={descRef} className="relative text-sm text-slate-300 light:text-slate-700 sm:col-span-2">Description
+          <label ref={descRef} className="relative text-sm text-slate-300 light:text-slate-700 col-span-2">Description
             <input required value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} onFocus={() => setDescOpen(true)} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" placeholder={form.type === 'income' ? 'e.g. Salary, stipend, refund' : form.type === 'transfer' ? 'e.g. Moved to savings' : 'e.g. Groceries at BigBazaar'} />
             {descOpen && filteredDescriptionSuggestions.length > 0 && (
               <div className="absolute left-0 right-0 z-30 mt-1 max-h-56 overflow-y-auto rounded-xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-1.5 shadow-2xl">
@@ -423,11 +432,11 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
               </div>
             )}
           </label>
-          <label className="text-sm text-slate-300 light:text-slate-700 sm:col-span-2">Notes
+          <label className="text-sm text-slate-300 light:text-slate-700 col-span-2">Notes
             <input value={form.notes || ''} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" placeholder="Optional context" />
           </label>
 
-          <div className="text-sm text-slate-300 light:text-slate-700 sm:col-span-2">
+          <div className="text-sm text-slate-300 light:text-slate-700 col-span-2">
             Receipt / attachment
             {editing?.attachment_path && !attachmentRemoved ? (
               <div className="mt-2 flex items-center justify-between rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3">
@@ -444,7 +453,7 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
           </div>
 
           {editing && (
-            <div className="sm:col-span-2">
+            <div className="col-span-2">
               <button type="button" onClick={toggleHistory} className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300 hover:light:text-slate-700"><History size={13} />{historyOpen ? 'Hide edit history' : 'View edit history'}</button>
               {historyOpen && (
                 <div className="mt-2 space-y-1.5 rounded-xl border border-white/10 light:border-black/10 bg-white/[.02] light:bg-black/[.02] p-3">

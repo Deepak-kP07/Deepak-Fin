@@ -19,14 +19,14 @@ function MoneyProfileEntryFormFields({ form, setForm, profile, accounts, creditC
         ))}
       </div>
 
-      <div className="mt-5 grid gap-4 sm:grid-cols-2">
+      <div className="mt-5 grid grid-cols-2 gap-3 sm:gap-4">
         <label className="text-sm text-slate-300 light:text-slate-700">Date
           <DateInput value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
         </label>
         <label className="text-sm text-slate-300 light:text-slate-700">Amount
           <input required type="number" step="0.01" min="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
         </label>
-        <label className="text-sm text-slate-300 light:text-slate-700 sm:col-span-2">Description
+        <label className="text-sm text-slate-300 light:text-slate-700 col-span-2">Description
           <input required value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" placeholder="Rent, groceries, salary…" />
         </label>
         <div className="text-sm text-slate-300 light:text-slate-700">
@@ -36,7 +36,7 @@ function MoneyProfileEntryFormFields({ form, setForm, profile, accounts, creditC
         <label className="text-sm text-slate-300 light:text-slate-700">Paid to / Received from <span className="text-xs text-slate-500">(optional)</span>
           <input value={form.paid_party} onChange={(e) => setForm({ ...form, paid_party: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
         </label>
-        <label className="text-sm text-slate-300 light:text-slate-700 sm:col-span-2">Notes <span className="text-xs text-slate-500">(optional)</span>
+        <label className="text-sm text-slate-300 light:text-slate-700 col-span-2">Notes <span className="text-xs text-slate-500">(optional)</span>
           <input value={form.notes || ''} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
         </label>
       </div>
