@@ -649,6 +649,9 @@ export function InvestmentsView({
           <div className="max-h-96 divide-y divide-white/5 light:divide-black/5 overflow-y-auto">
             {kite_orders.map((o) => {
               const isBuy = o.transaction_type === 'BUY'
+              const unitPrice = Number(o.average_price || o.price)
+              const qty = Number(o.quantity)
+              const filled = unitPrice > 0 && qty > 0
               return (
                 <div key={o.id} className="flex items-center justify-between gap-3 px-5 py-3 text-sm">
                   <div className="flex items-center gap-3">
@@ -661,8 +664,12 @@ export function InvestmentsView({
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className={`font-medium ${isBuy ? 'text-emerald-300 light:text-emerald-700' : 'text-rose-300 light:text-rose-700'}`}>{isBuy ? '+' : '-'}{Number(o.quantity)}</div>
-                    <div className="text-[11px] text-slate-500">{money2(o.average_price || o.price)}</div>
+                    <div className={`font-medium ${isBuy ? 'text-emerald-300 light:text-emerald-700' : 'text-rose-300 light:text-rose-700'}`}>{isBuy ? '+' : '-'}{qty} unit{qty === 1 ? '' : 's'}</div>
+                    {filled ? (
+                      <div className="text-[11px] text-slate-500">{money(qty * unitPrice)} {isBuy ? 'invested' : 'received'} <span className="opacity-70">· {money2(unitPrice)}/unit</span></div>
+                    ) : (
+                      <div className="text-[11px] text-slate-500">Not filled yet</div>
+                    )}
                   </div>
                 </div>
               )
