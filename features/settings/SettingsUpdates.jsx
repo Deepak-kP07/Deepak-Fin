@@ -11,6 +11,7 @@ const CHANGELOG = [
     date: '12 Sep 2026',
     points: [
       'Transactions: grouped by day (desktop and mobile), with each day showing its own income/spend total.',
+      'Transactions > By category: Overall/Income/Expense tabs, and same-named or same-colored categories no longer look identical.',
     ],
   },
   {
