@@ -13,6 +13,8 @@ const CHANGELOG = [
       'Transactions: grouped by day (desktop and mobile), with each day showing its own income/spend total.',
       'Transactions > By category: Overall/Income/Expense tabs, and same-named or same-colored categories no longer look identical.',
       'Net worth now counts money you\'ve lent out as an asset and money you\'ve borrowed as a liability.',
+      'Fixed lend/borrow repayments landing Uncategorised instead of tagged "Loan / Debt".',
+      'Lend/Borrow top-ups: shows the note you wrote instead of "Top-up #N" when there is one.',
     ],
   },
   {

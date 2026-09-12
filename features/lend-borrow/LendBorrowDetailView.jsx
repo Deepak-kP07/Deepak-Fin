@@ -334,7 +334,7 @@ export function LendBorrowDetailView({ record, repayments, additions = [], accou
                         </div>
                       )}
                       <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm font-medium text-white light:text-slate-900">Top-up #{additionsForThis.length - i}</div>
+                        <div className="truncate text-sm font-medium text-white light:text-slate-900">{a.notes ? capitalizeFirst(a.notes) : `Top-up #${additionsForThis.length - i}`}</div>
                         <div className="truncate text-[11px] text-slate-500">{formatDate(a.date)}{acc ? ` · ${acc.name}` : ''}</div>
                       </div>
                       <div className="shrink-0 text-sm font-semibold text-amber-300 light:text-amber-700">+{showMoney ? money(a.amount) : '••••'}</div>
@@ -347,8 +347,7 @@ export function LendBorrowDetailView({ record, repayments, additions = [], accou
                           <Plus size={16} />
                         </div>
                         <div className="min-w-0">
-                          <div className="truncate text-sm font-medium text-white light:text-slate-900">Top-up #{additionsForThis.length - i}</div>
-                          {a.notes && <div className="truncate text-[11px] text-slate-500">{capitalizeFirst(a.notes)}</div>}
+                          <div className="truncate text-sm font-medium text-white light:text-slate-900">{a.notes ? capitalizeFirst(a.notes) : `Top-up #${additionsForThis.length - i}`}</div>
                         </div>
                       </div>
                       <div className="text-xs text-slate-400 light:text-slate-500">
