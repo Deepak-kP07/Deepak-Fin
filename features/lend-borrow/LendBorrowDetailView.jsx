@@ -7,7 +7,7 @@ import { HeroStatTile } from '@/components/shared/HeroStatTile'
 import { capitalizeFirst, formatDate, money } from '@/lib/format'
 import { roleFor, canEditRecord, canDeleteRecord, canLogRepayment, canManageShares } from '@/lib/lendBorrowSharing'
 
-export function LendBorrowDetailView({ record, repayments, additions = [], accounts, transactions, onBack, onEdit, onDelete, onDeleteTx, onDeleteTxBulk, onLogRepayment, onAddMore, onManageAccess, showMoney, onToggleMoney, toast }) {
+export function LendBorrowDetailView({ record, repayments, additions = [], accounts, transactions, onBack, onEdit, onDelete, onDeleteTx, onDeleteTxBulk, onLogRepayment, onAddMore, onEditAdditionNote, onManageAccess, showMoney, onToggleMoney, toast }) {
   const role = roleFor(record)
   const isLent = record.type === 'lent'
   const isSettled = record.status === 'returned'
@@ -74,6 +74,14 @@ export function LendBorrowDetailView({ record, repayments, additions = [], accou
   const handleRowTap = (section, id) => {
     if (longPressFired.current) { longPressFired.current = false; return }
     if (selectSection === section) toggleSelect(id)
+  }
+  // A top-up row has no detail page of its own to drill into, so — outside of select mode, where
+  // a plain tap is otherwise a no-op — tapping it opens the same "edit the note" prompt the
+  // desktop pencil button does, instead of adding new mobile-only chrome for it.
+  const handleAdditionTap = (a) => {
+    if (longPressFired.current) { longPressFired.current = false; return }
+    if (selectSection === 'additions') { toggleSelect(a.id); return }
+    onEditAdditionNote?.(a)
   }
   // Both lists are really just filtered views of the shared `transactions` table (a repayment/
   // addition row's own id isn't what the server deletes — its linked_transaction_id is, same as
@@ -314,7 +322,7 @@ export function LendBorrowDetailView({ record, repayments, additions = [], accou
                         before). */}
                     <button
                       type="button"
-                      onClick={() => handleRowTap('additions', a.id)}
+                      onClick={() => handleAdditionTap(a)}
                       onTouchStart={() => startLongPress('additions', a.id)}
                       onTouchEnd={cancelLongPress}
                       onTouchMove={cancelLongPress}
@@ -355,7 +363,8 @@ export function LendBorrowDetailView({ record, repayments, additions = [], accou
                       </div>
                       <div className="text-xs text-slate-500">{formatDate(a.date)}</div>
                       <div className="text-sm font-semibold text-amber-300 light:text-amber-700 sm:text-right">+{showMoney ? money(a.amount) : '••••'}</div>
-                      <div className="flex justify-end">
+                      <div className="flex justify-end gap-1">
+                        {canLogRepayment(role) && <button onClick={() => onEditAdditionNote?.(a)} className="rounded-lg p-1.5 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900" title="Edit note"><Pencil size={13} /></button>}
                         {canLogRepayment(role) && <button onClick={() => deleteAddition(a)} className="rounded-lg p-1.5 text-rose-300/70 light:text-rose-700 hover:bg-rose-300/10"><Trash2 size={13} /></button>}
                       </div>
                     </div>

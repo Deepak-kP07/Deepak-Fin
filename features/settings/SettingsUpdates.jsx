@@ -17,7 +17,7 @@ const CHANGELOG = [
       'Transactions > By category: Overall/Income/Expense tabs, and same-named or same-colored categories no longer look identical.',
       'Net worth now counts money you\'ve lent out as an asset and money you\'ve borrowed as a liability.',
       'Fixed lend/borrow repayments landing Uncategorised instead of tagged "Loan / Debt".',
-      'Lend/Borrow top-ups: shows the note you wrote instead of "Top-up #N" when there is one.',
+      'Lend/Borrow top-ups: shows the note you wrote instead of "Top-up #N" when there is one — tap (or the pencil on desktop) to add or change a top-up\'s note anytime.',
       'Picking a category now shows a small animated icon matching it, in the transaction form and pending SMS cards.',
     ],
   },

@@ -21,6 +21,7 @@ import { Select } from '@/components/shared/Select'
 import { CsvBulkImport } from '@/components/shared/CsvBulkImport'
 import { CategorySelect } from '@/components/shared/CategorySelect'
 import { CategoryAnimatedIcon } from '@/components/shared/CategoryAnimatedIcon'
+import { getCategoryIcon } from '@/lib/categoryIcons'
 import { DateInput } from '@/components/shared/DateInput'
 import { StatCard } from '@/components/shared/StatCard'
 import { StatDrilldown } from '@/components/shared/StatDrilldown'
@@ -2068,6 +2069,7 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTx
               const acc = resolveSource(t)
               const isIn = t.type === 'income' || (t.type === 'transfer' && t.transfer_direction === 'in')
               const isTransfer = t.type === 'transfer'
+              const CatIcon = cat ? getCategoryIcon(cat.name) : null
               const sign = isIn ? '+' : '-'
               const color = isIn ? 'text-emerald-300 light:text-emerald-700' : isTransfer ? 'text-accent-300 light:text-accent-700' : 'text-rose-300 light:text-rose-700'
               const showDayHeader = isDateSorted && (i === 0 || pageRows[i - 1].date !== t.date)
@@ -2119,7 +2121,7 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTx
                         )
                       ) : (
                         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/[.05] light:bg-black/[.035]" style={{ color: cat?.color || (isTransfer ? 'hsl(var(--accent-h) var(--accent-s) 69%)' : '#94a3b8') }}>
-                          {isTransfer ? <ArrowLeftRight size={16} /> : isIn ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}
+                          {isTransfer ? <ArrowLeftRight size={16} /> : CatIcon ? <CatIcon size={16} /> : isIn ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}
                         </div>
                       )}
                       <div className="min-w-0 flex-1">
@@ -2140,7 +2142,7 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTx
                   <div className="hidden sm:grid sm:grid-cols-[1.4fr_.9fr_.6fr_.6fr_auto] sm:items-center sm:gap-4">
                     <div className="flex items-center gap-3">
                       <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/[.05] light:bg-black/[.035]" style={{ color: cat?.color || (isTransfer ? 'hsl(var(--accent-h) var(--accent-s) 69%)' : '#94a3b8') }}>
-                        {isTransfer ? <ArrowLeftRight size={16} /> : isIn ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}
+                        {isTransfer ? <ArrowLeftRight size={16} /> : CatIcon ? <CatIcon size={16} /> : isIn ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}
                       </div>
                       <div>
                         <div className="flex items-center gap-1.5 text-sm font-medium text-white light:text-slate-900">
@@ -2640,6 +2642,15 @@ function Shell({ user, onLogout }) {
   const openLendAddForm = (record) => { setLendAddRecord(record); setLendAddFormOpen(true) }
   const closeLendAddForm = () => { setLendAddFormOpen(false); setLendAddRecord(null) }
   const onLendAdded = async () => { closeLendAddForm(); await refresh() }
+  // Editing just the note on an already-logged top-up — not a generic edit (amount/date/account
+  // are set once at creation and have no reconciliation path if changed later), only what
+  // LendBorrowDetailView shows as that top-up's title.
+  const editAdditionNote = async (a) => {
+    const value = await prompt.ask('Note for this top-up', { defaultValue: a.notes || '', placeholder: 'e.g. Diwali advance' })
+    if (value === null) return
+    const response = await fetch(`/api/finance/lend_borrow_additions/${a.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notes: value.trim() }) })
+    if (response.ok) { toast.push('Note updated'); await refresh() } else { toast.push('Could not update', 'error') }
+  }
 
   // Portfolio funds
   const openFundsForm = (p) => { setFundsPortfolio(p); setFundsFormOpen(true) }
@@ -3222,7 +3233,7 @@ function Shell({ user, onLogout }) {
               {view === 'cards' && <CreditCardsView data={data} onAdd={() => openCardForm()} onEdit={openCardForm} onDelete={deleteCard} onSpend={openCardSpend} onPay={openCardPay} onDeleteSpend={deleteCardSpend} onDeleteTx={deleteTx} onDeleteActivityBulk={deleteCardActivityBulk} onDeleteTxBulk={deleteTxBulk} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onDetailChange={onDetailChange} initialSelectedId={initialNavState.current.detailId} />}
               {view === 'scholarships' && <ScholarshipsView data={data} onAdd={() => openScholarshipForm()} onEdit={openScholarshipForm} onDelete={deleteScholarship} onPay={openScholarshipPay} onRefresh={refresh} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} toast={toast} onDetailChange={onDetailChange} initialSelectedId={initialNavState.current.detailId} />}
               {view === 'loans' && <LoansView data={data} onAdd={() => openLoanForm()} onEdit={openLoanForm} onDelete={deleteLoan} onPay={openLoanPay} onDeletePayment={deleteLoanPayment} onDeletePaymentBulk={deleteLoanPaymentBulk} onSync={syncLoanOutstanding} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onDetailChange={onDetailChange} initialSelectedId={initialNavState.current.detailId} />}
-              {view === 'lend' && <LendBorrowView data={data} onAdd={() => openLendForm()} onEdit={openLendForm} onDelete={deleteLend} onDeleteTx={deleteTx} onDeleteTxBulk={deleteTxBulk} onLogRepayment={(record) => openTxForm(null, '', { value: `lend:${record.id}`, type: record.type === 'lent' ? 'income' : 'expense' })} onAddMore={openLendAddForm} onManageAccess={openManageLendAccess} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} toast={toast} onDetailChange={onDetailChange} initialSelectedId={initialNavState.current.detailId} />}
+              {view === 'lend' && <LendBorrowView data={data} onAdd={() => openLendForm()} onEdit={openLendForm} onDelete={deleteLend} onDeleteTx={deleteTx} onDeleteTxBulk={deleteTxBulk} onLogRepayment={(record) => openTxForm(null, '', { value: `lend:${record.id}`, type: record.type === 'lent' ? 'income' : 'expense' })} onAddMore={openLendAddForm} onEditAdditionNote={editAdditionNote} onManageAccess={openManageLendAccess} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} toast={toast} onDetailChange={onDetailChange} initialSelectedId={initialNavState.current.detailId} />}
               {view === 'family_company' && <FamilyCompanyView data={data} onAddProfile={() => openMoneyProfileForm()} onEditProfile={openMoneyProfileForm} onDeleteProfile={deleteMoneyProfile} onAddEntry={openMoneyProfileEntryForm} onEditEntry={openMoneyProfileEntryEdit} onDeleteEntry={deleteMoneyProfileEntry} onDeleteEntryBulk={deleteMoneyProfileEntryBulk} onBulkImport={openMoneyProfileBulkImport} onToggleStatus={toggleMoneyProfileStatus} onManageAccess={openManageAccess} onSyncBalance={syncMoneyProfileBalance} onOpenRecurring={openRecurringEntryManager} onDetailChange={onDetailChange} initialSelectedId={initialNavState.current.detailId} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'bucket' && <BucketListView data={data} onAdd={() => openBucketForm()} onEdit={openBucketForm} onDelete={deleteBucket} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'pending' && <PendingTransactionsView data={data} onApprove={approvePending} onReject={rejectPending} />}
