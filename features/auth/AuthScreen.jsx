@@ -5,6 +5,7 @@ import Script from 'next/script'
 import { MotionConfig, motion, useMotionValue, useTransform } from 'framer-motion'
 import { createClient } from '@/lib/supabase/browser'
 import { isNativePlatform, listenForNativeGoogleCallback, startNativeGoogleSignIn } from '@/lib/auth/nativeGoogleAuth'
+import { InstallPrompt } from '@/components/shared/InstallPrompt'
 import {
   ArrowLeft, Banknote, ChevronRight, CreditCard, Eye, EyeOff, Landmark, LayoutDashboard,
   LineChart, Repeat, ShieldCheck, Sparkle, Wifi,
@@ -530,6 +531,8 @@ export function AuthScreen({ onAuth, initialError, initialMode = 'landing', init
             </div>
           </div>
         )}
+
+        <InstallPrompt />
       </main>
     </MotionConfig>
   )
