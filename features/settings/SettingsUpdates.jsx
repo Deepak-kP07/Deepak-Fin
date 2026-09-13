@@ -19,6 +19,7 @@ const CHANGELOG = [
       'Investments: Combined holdings/SIPs now show how much you invested next to the current value, not just the P&L.',
       'Investments > Order history: each order now spells out units, total amount invested (or received), and price per unit, instead of two unlabeled numbers.',
       'Fixed adding/deleting a transaction sometimes feeling stuck for a few seconds — it no longer waits on background cache housekeeping to finish.',
+      'The "Install the app" nudge now also shows on iPhone (with Add to Home Screen steps, since iOS has no one-tap install) and before you even sign in.',
     ],
   },
   {
