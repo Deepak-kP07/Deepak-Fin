@@ -67,6 +67,16 @@ export function CategorySelect({ value, onChange, categories, onAddCategory, cla
       {open && rect && typeof document !== 'undefined' && createPortal(
         <div
           ref={panelRef}
+          // Tells vaul's Drawer (BottomSheet) not to treat a touch/drag starting in here as a
+          // "drag the sheet" gesture. vaul's shouldDrag() walks up the DOM from the touched
+          // element looking for an already-mid-scroll ancestor before falling back to "drag the
+          // sheet" — since this panel is portaled to document.body (a sibling of the Drawer's
+          // content, not a descendant), and starts at scrollTop 0 on every fresh open, the very
+          // first swipe inside it fell through that check entirely and got hijacked as a sheet
+          // drag instead of actually scrolling, silently capping the list at whatever fit in the
+          // panel's maxHeight with no way to reach anything past it. data-vaul-no-drag is vaul's
+          // own documented escape hatch for exactly this scrollable-region case.
+          data-vaul-no-drag
           style={{
             position: 'fixed',
             left,
