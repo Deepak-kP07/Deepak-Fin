@@ -8,6 +8,12 @@ import { triggerAppUpdate } from '@/lib/pwaUpdate'
 // whenever something user-visible ships; no need to log every internal fix.
 const CHANGELOG = [
   {
+    date: '16 Sep 2026',
+    points: [
+      'Redesigned the weekly/monthly report email — a proper Net worth headline, and every section (categories, biggest transactions, by account, upcoming) now in its own clearly separated card instead of a cramped, run-together list.',
+    ],
+  },
+  {
     date: '13 Sep 2026',
     points: [
       'Category icons now also show in the Transactions ledger, account detail view, yearly budget cards, and Settings > Categories — not just when picking a category.',
