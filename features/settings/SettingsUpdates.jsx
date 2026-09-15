@@ -11,6 +11,7 @@ const CHANGELOG = [
     date: '16 Sep 2026',
     points: [
       'Redesigned the weekly/monthly report email — a proper Net worth headline, and every section (categories, biggest transactions, by account, upcoming) now in its own clearly separated card instead of a cramped, run-together list.',
+      'Fixed the category picker list not scrolling past the first screenful on mobile — every category is reachable again, not just however many fit before you had to scroll.',
     ],
   },
   {
