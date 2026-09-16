@@ -5,6 +5,7 @@ import { Coins, Eye, EyeOff, History, Plus } from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { HeroStatTile } from '@/components/shared/HeroStatTile'
 import { formatDate, money } from '@/lib/format'
+import { nextChitFundDueDate } from '@/lib/chitFunds'
 import { ChitFundDetailView } from '@/features/chit-funds/ChitFundDetailView'
 
 // Net contribution paid so far for one fund = gross amount minus any dividend received against
@@ -63,12 +64,15 @@ export function ChitFundsView({ data, onAdd, onEdit, onDelete, onLogPayment, onE
     const isTaken = c.payout_status === 'taken'
     const paid = netPaid(chit_fund_payments, c.id)
     const remaining = Math.max(0, Number(c.duration_months) - monthsPaid) * Number(c.monthly_contribution)
+    const dueDate = !isCompleted ? nextChitFundDueDate(c, monthsPaid) : null
+    const dueDays = dueDate ? Math.ceil((dueDate - new Date()) / 86400000) : null
     return (
       <div key={c.id} onClick={() => setSelectedId(c.id)} className={`cursor-pointer rounded-2xl border p-5 transition ${isCompleted ? 'border-white/5 light:border-black/5 bg-white/[.02] light:bg-black/[.02] hover:bg-white/[.035] hover:light:bg-black/[.025]' : isTaken ? 'border-amber-400/10 bg-amber-500/[.03] hover:bg-white/[.02] hover:light:bg-black/[.02]' : 'border-accent-300/10 bg-accent-400/[.03] hover:bg-white/[.02] hover:light:bg-black/[.02]'}`}>
         <div className="flex items-center gap-2">
           <div className="text-base font-semibold text-white light:text-slate-900">{c.name}</div>
           <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-widest ${isCompleted ? 'bg-slate-500/15 text-slate-400 light:text-slate-500' : isTaken ? 'bg-amber-400/15 text-amber-200 light:text-amber-700' : 'bg-accent-400/15 text-accent-200 light:text-accent-700'}`}>{isTaken ? 'Payout Taken' : 'Not Taken'}</span>
           {isCompleted && <span className="rounded-full bg-slate-500/15 px-2 py-0.5 text-[10px] uppercase tracking-widest text-slate-400 light:text-slate-500">Completed</span>}
+          {dueDays !== null && dueDays <= 4 && <span className="rounded-full bg-rose-400/15 px-2 py-0.5 text-[10px] uppercase tracking-widest text-rose-200 light:text-rose-700">{dueDays > 0 ? `due in ${dueDays}d` : dueDays === 0 ? 'due today' : 'overdue'}</span>}
         </div>
         <div className="mt-1 text-xs text-slate-500">{money(c.monthly_contribution)}/mo · {formatDate(c.start_date)}</div>
         <div className="mt-4 flex items-baseline justify-between">

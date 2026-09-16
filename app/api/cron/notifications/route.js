@@ -3,10 +3,11 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { cardsDueSoon } from '@/lib/creditCards'
 import { budgetInsights } from '@/lib/budgets'
 import { nextLoanDueDate } from '@/lib/amortization'
+import { nextChitFundDueDate } from '@/lib/chitFunds'
 import { generateDueRecurring } from '@/lib/server/services/recurring'
 import { generateDueRecurringMoneyProfileEntries } from '@/lib/server/services/recurringMoneyProfileEntries'
 import { sendPushToUser } from '@/lib/server/services/pushSend'
-import { money } from '@/lib/format'
+import { dateToLocalISO, money } from '@/lib/format'
 import { isValidCronSecret } from '@/lib/server/cronAuth'
 
 const DUE_SOON_DAYS = 4
@@ -107,6 +108,36 @@ async function checkUser(supabase, userId, buildId) {
     notifications.push({
       type: 'loan_due', entityId: loan.id, periodKey: due,
       title: `${loan.name} EMI due soon`, body: `Due ${due} — ${money(loan.emi_amount)}`, url: '/?view=loans',
+    })
+  }
+
+  // Chit fund payments due soon — the obligation continues even after payout is taken, until the
+  // fund's full duration is paid off, matching the net-worth liability's own "keeps counting
+  // until completed" rule (app/page.js's DashboardView). Its own, tighter 2-day threshold rather
+  // than the shared DUE_SOON_DAYS (4) credit cards/loans use, per how this was specifically asked
+  // for — everything else here follows the identical alreadyNotified/periodKey dedup shape.
+  const CHIT_FUND_DUE_SOON_DAYS = 2
+  const [{ data: chitFunds }, { data: chitFundPayments }] = await Promise.all([
+    supabase.from('chit_funds').select('*').eq('user_id', userId).eq('status', 'active'),
+    supabase.from('chit_fund_payments').select('chit_fund_id').eq('user_id', userId),
+  ])
+  for (const fund of chitFunds || []) {
+    const monthsPaid = (chitFundPayments || []).filter((p) => p.chit_fund_id === fund.id).length
+    const due = nextChitFundDueDate(fund, monthsPaid)
+    if (!due) continue
+    const days = Math.ceil((due - now) / 86400000)
+    if (days > CHIT_FUND_DUE_SOON_DAYS) continue
+    // dateToLocalISO, not due.toISOString().slice(0, 10) — this server runs in Asia/Calcutta
+    // (IST, UTC+5:30), so a local-midnight Date's toISOString() rolls back to the *previous*
+    // day in UTC (e.g. local Sep 17 00:00 IST becomes "2026-09-16" once ISO-stringified),
+    // which would both mis-key the dedup row and — more visibly — tell the user their payment
+    // is "Due 2026-09-16" for something actually due the 17th. dateToLocalISO reads the Date's
+    // own local y/m/d fields directly instead of round-tripping through UTC.
+    const periodKey = dateToLocalISO(due)
+    if (await alreadyNotified(supabase, userId, 'chit_fund_due', fund.id, periodKey)) continue
+    notifications.push({
+      type: 'chit_fund_due', entityId: fund.id, periodKey,
+      title: `${fund.name} payment due soon`, body: `Due ${periodKey} — ${money(fund.monthly_contribution)}`, url: '/?view=chitfunds',
     })
   }
 

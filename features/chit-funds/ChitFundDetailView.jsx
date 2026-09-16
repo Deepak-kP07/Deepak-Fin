@@ -4,7 +4,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { CheckCircle2, ChevronDown, ChevronRight, Clock, Coins, Eye, EyeOff, MoreVertical, Pencil, RefreshCw, Trash2, TrendingDown, TrendingUp, X } from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { HeroStatTile } from '@/components/shared/HeroStatTile'
-import { dateToLocalISO, formatDate, money, monthAbbr } from '@/lib/format'
+import { DismissibleBanner } from '@/components/shared/DismissibleBanner'
+import { dateToLocalISO, formatDate, money, monthAbbr, ordinal } from '@/lib/format'
+import { nextChitFundDueDate } from '@/lib/chitFunds'
 
 export function ChitFundDetailView({ fund, payments, accounts, onBack, onEdit, onDelete, onLogPayment, onEditPayment, onTakePayout, onUndoPayout, onComplete, onReopen, onDeletePayment, showMoney, onToggleMoney, toast }) {
   const isTaken = fund.payout_status === 'taken'
@@ -18,6 +20,13 @@ export function ChitFundDetailView({ fund, payments, accounts, onBack, onEdit, o
   // Only meaningful once completed — payout received minus everything ever paid in, net of
   // dividends, across the fund's whole life (not just before payout).
   const finalGainLoss = Number(fund.payout_amount || 0) - netPaid
+
+  // Next unpaid month's due date — same "keep paying every month regardless of payout" rule the
+  // net-worth liability math already follows, so this banner (and the cron push 2 days out, see
+  // app/api/cron/notifications/route.js) keeps showing even after payout, until the fund is fully
+  // completed.
+  const dueDate = !isCompleted ? nextChitFundDueDate(fund, monthsPaid) : null
+  const dueSoon = dueDate ? { days: Math.ceil((dueDate - new Date()) / 86400000), date: dueDate } : null
 
   // The fund's full N-month schedule, one entry per month starting at start_date itself (a chit
   // fund's first contribution is due the same month it starts, unlike a loan's first EMI a month
@@ -138,6 +147,12 @@ export function ChitFundDetailView({ fund, payments, accounts, onBack, onEdit, o
           </div>
         </div>
       </div>
+
+      {dueSoon && dueSoon.days <= 4 && (
+        <DismissibleBanner id={`chit-due-${fund.id}-${monthsPaid}`} tone={dueSoon.days <= 2 ? 'amber' : 'slate'}>
+          Next payment due on the {ordinal(dueSoon.date.getDate())} · {dueSoon.days > 0 ? `in ${dueSoon.days} day${dueSoon.days === 1 ? '' : 's'}` : dueSoon.days === 0 ? 'today' : 'overdue'}
+        </DismissibleBanner>
+      )}
 
       {isCompleted && (
         <div className={`rounded-2xl border p-5 ${finalGainLoss >= 0 ? 'border-emerald-400/15 bg-emerald-500/[.03]' : 'border-rose-400/15 bg-rose-500/[.03]'}`}>
