@@ -16,6 +16,7 @@ const CHANGELOG = [
       'Chit funds now show a payment calendar — which months are paid vs. still to come, same as Loans\' EMI calendar.',
       'Chit fund payments are now editable, and each one shows its month (e.g. "Mar · Payment #3"), matching Loans.',
       'Chit funds now show a due-soon/overdue reminder for the next payment, plus a push notification 2 days before it\'s due.',
+      'Fixed the category picker still not scrolling past the first screenful on some forms — the earlier fix wasn\'t enough on its own; every category should be reachable now.',
     ],
   },
   {
