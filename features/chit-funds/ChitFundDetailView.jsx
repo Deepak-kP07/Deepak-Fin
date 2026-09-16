@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import { CheckCircle2, ChevronRight, Coins, Eye, EyeOff, MoreVertical, Pencil, RefreshCw, Trash2, TrendingDown, TrendingUp, X } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { CheckCircle2, ChevronDown, ChevronRight, Clock, Coins, Eye, EyeOff, MoreVertical, Pencil, RefreshCw, Trash2, TrendingDown, TrendingUp, X } from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { HeroStatTile } from '@/components/shared/HeroStatTile'
-import { formatDate, money } from '@/lib/format'
+import { dateToLocalISO, formatDate, money } from '@/lib/format'
 
 export function ChitFundDetailView({ fund, payments, accounts, onBack, onEdit, onDelete, onLogPayment, onTakePayout, onUndoPayout, onComplete, onReopen, onDeletePayment, showMoney, onToggleMoney, toast }) {
   const isTaken = fund.payout_status === 'taken'
@@ -18,6 +18,36 @@ export function ChitFundDetailView({ fund, payments, accounts, onBack, onEdit, o
   // Only meaningful once completed — payout received minus everything ever paid in, net of
   // dividends, across the fund's whole life (not just before payout).
   const finalGainLoss = Number(fund.payout_amount || 0) - netPaid
+
+  // The fund's full N-month schedule, one entry per month starting at start_date itself (a chit
+  // fund's first contribution is due the same month it starts, unlike a loan's first EMI a month
+  // after disbursal) — the first `monthsPaid` are marked paid, matching Loans' EMI calendar
+  // (features/loans/LoanDetailView.jsx) but simpler: no interest/prepayment math here, just a
+  // plain paid/upcoming split off the real payment count.
+  const paymentCalendar = useMemo(() => {
+    const total = Number(fund.duration_months || 0)
+    if (total <= 0 || !fund.start_date) return []
+    const day = new Date(`${fund.start_date}T00:00:00`).getDate()
+    const cursor = new Date(`${fund.start_date}T00:00:00`)
+    const months = []
+    for (let i = 0; i < total; i++) {
+      const daysInMonth = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate()
+      const date = new Date(cursor.getFullYear(), cursor.getMonth(), Math.min(day, daysInMonth))
+      months.push({ date, status: i < monthsPaid ? 'paid' : 'upcoming' })
+      cursor.setMonth(cursor.getMonth() + 1)
+    }
+    return months
+  }, [fund.duration_months, fund.start_date, monthsPaid])
+  const calendarByYear = useMemo(() => {
+    const groups = {}
+    paymentCalendar.forEach((m) => {
+      const y = m.date.getFullYear()
+      if (!groups[y]) groups[y] = []
+      groups[y].push(m)
+    })
+    return groups
+  }, [paymentCalendar])
+  const [scheduleOpen, setScheduleOpen] = useState(false)
 
   // Mobile: long-press a payment row to enter multi-select, same pattern as Loans' payment
   // history (features/loans/LoanDetailView.jsx) — no sharing/roles here, so no need for
@@ -202,6 +232,32 @@ export function ChitFundDetailView({ fund, payments, accounts, onBack, onEdit, o
           </>
         )}
       </div>
+
+      {paymentCalendar.length > 0 && (
+        <div className="rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card">
+          <button type="button" onClick={() => setScheduleOpen((o) => !o)} className="flex w-full items-center justify-between px-5 py-3 text-xs uppercase tracking-widest text-slate-500 hover:text-slate-300 hover:light:text-slate-700">
+            <span>Payment calendar · {monthsPaid} paid, {Math.max(0, fund.duration_months - monthsPaid)} to go of {fund.duration_months} months</span>
+            <ChevronDown size={14} className={`transition-transform ${scheduleOpen ? 'rotate-180' : ''}`} />
+          </button>
+          {scheduleOpen && (
+            <div className="max-h-[28rem] overflow-y-auto border-t border-white/10 light:border-black/10">
+              {Object.entries(calendarByYear).map(([year, months]) => (
+                <div key={year}>
+                  <div className="sticky top-0 border-b border-white/5 light:border-black/5 bg-[#161d2c] px-5 py-2 text-xs font-semibold text-accent-200/80 light:text-accent-700">{year}</div>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 px-5 py-3 sm:grid-cols-3">
+                    {months.map((m) => (
+                      <div key={m.date.toISOString()} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-slate-300 light:text-slate-700">
+                        {m.status === 'paid' ? <CheckCircle2 size={14} className="shrink-0 text-emerald-400 light:text-emerald-700" /> : <Clock size={14} className="shrink-0 text-slate-500" />}
+                        <span>{formatDate(dateToLocalISO(m.date))}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
