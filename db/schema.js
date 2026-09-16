@@ -561,6 +561,73 @@ export const scholarshipPayments = pgTable('scholarship_payments', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [check('scholarship_payments_amount_check', sql`${t.amount} > 0`), index('scholarship_payments_scholarship_idx').on(t.scholarshipId), index('scholarship_payments_user_idx').on(t.userId)])
 
+// A chit fund is a rotating savings/credit group: N members each pay monthly_contribution for
+// duration_months months, and one member takes the pooled payout each month. Before this user's
+// own payout (payout_status = 'not_taken'), everything paid in so far (net of any dividend) is a
+// RECEIVABLE — an asset, since it's owed back via the eventual payout. After taking payout
+// (payout_status = 'taken'), the months still left to pay become a LIABILITY instead.
+// Deliberately no denormalized "total paid" column (contrast lend_borrow.amount_repaid) — total
+// paid is always summed on the fly from chit_fund_payments (see app/page.js's DashboardView).
+export const chitFunds = pgTable('chit_funds', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  durationMonths: integer('duration_months').notNull().default(0),
+  monthlyContribution: numeric('monthly_contribution', { precision: 14, scale: 2 }).notNull().default('0'),
+  startDate: date('start_date').notNull().defaultNow(),
+  // Default account for payments/payout — a form-prefill convenience only, never authoritative
+  // (each chit_fund_payments row, and the payout itself, carries its own account_id).
+  accountId: uuid('account_id').references(() => accounts.id, { onDelete: 'set null' }),
+  // Excluded from safeFields.js — only ever changes via the dedicated take_payout/undo_payout
+  // action routes (lib/server/services/chitFunds.js), never a raw PATCH.
+  payoutStatus: text('payout_status').notNull().default('not_taken'),
+  payoutDate: date('payout_date'),
+  // Not always duration_months * monthly_contribution — real payouts often net out a foreman's
+  // commission or an auction/bidding discount.
+  payoutAmount: numeric('payout_amount', { precision: 14, scale: 2 }),
+  payoutAccountId: uuid('payout_account_id').references(() => accounts.id, { onDelete: 'set null' }),
+  payoutLinkedTransactionId: uuid('payout_linked_transaction_id').references(() => transactions.id, { onDelete: 'set null' }),
+  // Display label only ("payout taken in month N"), auto-suggested at take_payout time from the
+  // count of logged payments — net-worth math never trusts this, it always recounts real
+  // chit_fund_payments rows instead.
+  payoutMonth: integer('payout_month'),
+  // Excluded from safeFields.js — only via the dedicated complete/reopen action routes, matching
+  // budget_months' status.
+  status: text('status').notNull().default('active'),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+  notes: text('notes'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  check('chit_funds_duration_months_check', sql`${t.durationMonths} > 0`),
+  check('chit_funds_monthly_contribution_check', sql`${t.monthlyContribution} >= 0`),
+  check('chit_funds_payout_status_check', sql`${t.payoutStatus} in ('not_taken','taken')`),
+  check('chit_funds_status_check', sql`${t.status} in ('active','completed')`),
+  index('chit_funds_user_idx').on(t.userId),
+])
+
+// Deliberately no month_number column — "months paid" is just the count of rows for a fund,
+// avoiding a manually-entered label that can drift from what was actually logged (the same class
+// of bug fixed in lend_borrow's status field). Backfilling still works fine; the money math only
+// ever needs the total count, never which calendar month a given payment was "for."
+export const chitFundPayments = pgTable('chit_fund_payments', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  chitFundId: uuid('chit_fund_id').notNull().references(() => chitFunds.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
+  amount: numeric('amount', { precision: 14, scale: 2 }).notNull(),
+  // Auction-based funds distribute the winning bidder's discount to other members as a dividend
+  // — logging it here nets it out of this payment's contribution for receivable/gain-loss math.
+  dividendReceived: numeric('dividend_received', { precision: 14, scale: 2 }).notNull().default('0'),
+  paymentDate: date('payment_date').notNull().defaultNow(),
+  accountId: uuid('account_id').references(() => accounts.id, { onDelete: 'set null' }),
+  linkedTransactionId: uuid('linked_transaction_id').references(() => transactions.id, { onDelete: 'set null' }),
+  notes: text('notes'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  check('chit_fund_payments_amount_check', sql`${t.amount} > 0`),
+  index('chit_fund_payments_fund_idx').on(t.chitFundId),
+  index('chit_fund_payments_user_idx').on(t.userId),
+])
+
 export const moneyProfiles = pgTable('money_profiles', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),

@@ -9,6 +9,7 @@ import { applyOrder } from '@/lib/server/applyOrder'
 import { ensureDefaults, ensureCategory } from '@/lib/server/services/categories'
 import { applyLendRepayment, reverseLendRepayment } from '@/lib/server/services/lendRepayment'
 import { applyLendAddition, reverseLendAddition } from '@/lib/server/services/lendAddition'
+import { applyChitFundPayment, reverseChitFundPayment } from '@/lib/server/services/chitFunds'
 import { addInterval, generateDueRecurring } from '@/lib/server/services/recurring'
 import { generateDueRecurringMoneyProfileEntries } from '@/lib/server/services/recurringMoneyProfileEntries'
 import { syncProfileFromAuth } from '@/lib/server/services/profile'
@@ -140,7 +141,7 @@ async function handleRoute(request, { params }) {
       // A single indexed UPDATE, no-op when nothing's stale — cheap enough to run unconditionally
       // on every load rather than gating it behind a staleness check like the Kite syncs below.
       await closeStaleBudgetMonths(supabase, user.id).catch(() => {})
-      let [accounts, categories, transactions, budgets, portfolios, holdings, sips, other_investments, kite_orders, loans, loan_payments, bucket_list, lend_borrow, lend_repayments, lend_borrow_additions, credit_cards, credit_card_transactions, scholarships, scholarship_payments, money_rules, recurring_transactions, money_profiles, money_profile_entries, recurring_money_profile_entries, budget_months, budget_month_categories, vault_items, pending_transactions, sms_parse_patterns, profile] = await Promise.all([
+      let [accounts, categories, transactions, budgets, portfolios, holdings, sips, other_investments, kite_orders, loans, loan_payments, bucket_list, lend_borrow, lend_repayments, lend_borrow_additions, credit_cards, credit_card_transactions, scholarships, scholarship_payments, money_rules, recurring_transactions, money_profiles, money_profile_entries, recurring_money_profile_entries, budget_months, budget_month_categories, vault_items, pending_transactions, sms_parse_patterns, chit_funds, chit_fund_payments, profile] = await Promise.all([
         readAll('accounts'),
         readAll('categories'),
         readAll('transactions'),
@@ -177,6 +178,8 @@ async function handleRoute(request, { params }) {
         // Global config, no user_id — can't go through readAll's owner-scoped filter. RLS makes
         // this SELECT-only for every authenticated user regardless (see drizzle/0048).
         supabase.from('sms_parse_patterns').select('*').eq('is_active', true).then((r) => r.data || []),
+        readAll('chit_funds'),
+        readAll('chit_fund_payments'),
         supabase.from('profiles').select('*').eq('id', user.id).maybeSingle().then((r) => r.data),
       ])
       // Both of these are rare-path side effects (first-ever use of the app; a recurring rule
@@ -241,7 +244,7 @@ async function handleRoute(request, { params }) {
       // fields, not the original SMS text; keeping it server-side only limits its exposure
       // window even before the 7-day purge cron clears it (see app/api/cron/pending_transactions/purge).
       const pendingTransactionsSafe = pending_transactions.map(({ raw_message, ...rest }) => rest)
-      return cors(NextResponse.json({ accounts, categories, transactions, budgets, portfolios, holdings, sips, other_investments, kite_orders, loans, loan_payments, bucket_list, lend_borrow, lend_repayments, lend_borrow_additions, credit_cards, credit_card_transactions, scholarships, scholarship_payments, money_rules, recurring_transactions, money_profiles, money_profile_entries, recurring_money_profile_entries, budget_months, budget_month_categories, vault_items: vaultItemsSafe, pending_transactions: pendingTransactionsSafe, sms_parse_patterns, profile: profileSafe }))
+      return cors(NextResponse.json({ accounts, categories, transactions, budgets, portfolios, holdings, sips, other_investments, kite_orders, loans, loan_payments, bucket_list, lend_borrow, lend_repayments, lend_borrow_additions, credit_cards, credit_card_transactions, scholarships, scholarship_payments, money_rules, recurring_transactions, money_profiles, money_profile_entries, recurring_money_profile_entries, budget_months, budget_month_categories, vault_items: vaultItemsSafe, pending_transactions: pendingTransactionsSafe, sms_parse_patterns, chit_funds, chit_fund_payments, profile: profileSafe }))
     }
 
     // ---- PRICES: Yahoo Finance fallback (public); Kite when creds set ----
@@ -795,6 +798,12 @@ async function handleRoute(request, { params }) {
           if (updated.linked_module === 'lend_addition' && updated.linked_module_id) {
             await applyLendAddition(supabase, user.id, updated.id, updated.linked_module_id, updated.amount, { date: updated.date, account_id: updated.account_id, notes: updated.notes || null })
           }
+          if (oldRow?.linked_module === 'chit_fund_payment' && oldRow.linked_module_id) {
+            await reverseChitFundPayment(supabase, user.id, id)
+          }
+          if (updated.linked_module === 'chit_fund_payment' && updated.linked_module_id) {
+            await applyChitFundPayment(supabase, user.id, updated.id, updated.linked_module_id, updated.amount, { payment_date: updated.date, account_id: updated.account_id, notes: updated.notes || null })
+          }
           if (oldRow?.linked_module === 'credit_card' && oldRow.linked_module_id) {
             const delta = oldRow.type === 'income' ? Number(oldRow.amount) : -Number(oldRow.amount)
             await supabase.rpc('adjust_credit_card_outstanding', { p_card_id: oldRow.linked_module_id, p_delta: delta })
@@ -829,6 +838,10 @@ async function handleRoute(request, { params }) {
           // Reverse the lend/borrow addition this transaction had recorded
           if (row?.linked_module === 'lend_addition' && row.linked_module_id) {
             await reverseLendAddition(supabase, user.id, id, row.linked_module_id, row.amount)
+          }
+          // Reverse the chit fund payment this transaction had recorded
+          if (row?.linked_module === 'chit_fund_payment' && row.linked_module_id) {
+            await reverseChitFundPayment(supabase, user.id, id)
           }
         }
         const { error } = await supabase.from(table).delete().eq('id', id).eq('user_id', user.id)

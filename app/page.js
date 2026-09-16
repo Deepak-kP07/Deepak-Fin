@@ -73,6 +73,10 @@ import { LendForm } from '@/features/lend-borrow/LendForm'
 import { LendAddMoreForm } from '@/features/lend-borrow/LendAddMoreForm'
 import { LendBorrowView } from '@/features/lend-borrow/LendBorrowView'
 import { ManageLendAccessSheet } from '@/features/lend-borrow/ManageLendAccessSheet'
+import { ChitFundForm } from '@/features/chit-funds/ChitFundForm'
+import { ChitFundPaymentForm } from '@/features/chit-funds/ChitFundPaymentForm'
+import { ChitFundPayoutForm } from '@/features/chit-funds/ChitFundPayoutForm'
+import { ChitFundsView } from '@/features/chit-funds/ChitFundsView'
 import { CreditCardForm } from '@/features/credit-cards/CreditCardForm'
 import { CardSpendForm } from '@/features/credit-cards/CardSpendForm'
 import { CardPayForm } from '@/features/credit-cards/CardPayForm'
@@ -97,7 +101,7 @@ import {
   Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Sector, Tooltip, XAxis, YAxis, Legend,
 } from 'recharts'
 import {
-  ArrowDownRight, ArrowLeftRight, ArrowUpDown, ArrowUpRight, BarChart3, Briefcase, Calculator, Calendar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock, CreditCard,
+  ArrowDownRight, ArrowLeftRight, ArrowUpDown, ArrowUpRight, BarChart3, Briefcase, Calculator, Calendar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock, Coins, CreditCard,
   Download, Eye, EyeOff, FileText, Heart, History, Info, Landmark, LayoutDashboard, LineChart, ListChecks, LogOut, Menu, MoreHorizontal, MoreVertical, Mountain, Paperclip, PieChart as PieChartIcon, Plus,
   RefreshCw, Repeat, Search, Settings, ShieldCheck, Star, Tag, Target, TrendingDown, TrendingUp, Trash2, Pencil, Users,
   Wallet, X, Zap,
@@ -705,7 +709,7 @@ function GlassyCashflowTooltip({ active, payload, showMoney }) {
 
 /* ---------------- Views ---------------- */
 function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, onManageMoneyRules, onPayCardBill }) {
-  const { profile, accounts, transactions, categories, holdings = [], loans = [], loan_payments = [], bucket_list = [], money_rules = [], credit_cards = [], portfolios = [], budget_months = [], sips = [], other_investments: otherInvestments = [], lend_borrow = [] } = data
+  const { profile, accounts, transactions, categories, holdings = [], loans = [], loan_payments = [], bucket_list = [], money_rules = [], credit_cards = [], portfolios = [], budget_months = [], sips = [], other_investments: otherInvestments = [], lend_borrow = [], chit_funds = [], chit_fund_payments = [] } = data
   // Only the glassy theme gets the glowing area-chart treatment below — dark/light keep the plain
   // bar chart, so this doesn't touch either of their look.
   const { theme } = useTheme()
@@ -741,8 +745,21 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
   // portion counts (amount minus whatever's already been repaid), never the original full amount.
   const lendOutstanding = lend_borrow.filter((l) => perspectiveType(l) === 'lent').reduce((s, l) => s + Math.max(0, Number(l.amount) - Number(l.amount_repaid || 0)), 0)
   const borrowOutstanding = lend_borrow.filter((l) => perspectiveType(l) === 'borrowed').reduce((s, l) => s + Math.max(0, Number(l.amount) - Number(l.amount_repaid || 0)), 0)
-  const totalAssets = totalBalance + currentInv + lendOutstanding
-  const totalLiabilities = totalOutstanding + creditCardDebt + borrowOutstanding
+  // A chit fund contribution paid so far is just as real an asset as cash in an account (it's
+  // owed back via the eventual payout) — counts only before this user's own payout is taken, and
+  // only while the fund itself hasn't fully run its course. Once taken, the months still left to
+  // pay become a liability instead, using the ACTUAL count of logged chit_fund_payments rather
+  // than trusting payout_month alone, so a user behind or ahead of the calendar schedule still
+  // gets a correct figure. Once status flips to 'completed' the fund contributes nothing further
+  // either way — just a realized gain/loss, shown only in its own detail view.
+  const chitNetPaid = (fundId) => chit_fund_payments.filter((p) => p.chit_fund_id === fundId).reduce((s, p) => s + Number(p.amount) - Number(p.dividend_received || 0), 0)
+  const chitFundReceivable = chit_funds.filter((c) => c.status !== 'completed' && c.payout_status === 'not_taken').reduce((s, c) => s + chitNetPaid(c.id), 0)
+  const chitFundLiability = chit_funds.filter((c) => c.status !== 'completed' && c.payout_status === 'taken').reduce((s, c) => {
+    const monthsPaid = chit_fund_payments.filter((p) => p.chit_fund_id === c.id).length
+    return s + Math.max(0, Number(c.duration_months) - monthsPaid) * Number(c.monthly_contribution)
+  }, 0)
+  const totalAssets = totalBalance + currentInv + lendOutstanding + chitFundReceivable
+  const totalLiabilities = totalOutstanding + creditCardDebt + borrowOutstanding + chitFundLiability
   const netWorth = totalAssets - totalLiabilities
 
   // Net worth detail page — same filters/formulas as the totals just above, so each section's
@@ -798,6 +815,16 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
     id: `borrow-${l.id}`, name: l.person_name, sub: 'Borrowed',
     amount: Number(l.amount) - Number(l.amount_repaid || 0), icon: Heart, color: '#fda4af', debt: true,
   }))
+  const chitFundAssetItems = chit_funds.filter((c) => c.status !== 'completed' && c.payout_status === 'not_taken')
+    .map((c) => ({ id: `chit-${c.id}`, name: c.name, sub: 'Chit fund (contributions)', amount: chitNetPaid(c.id), icon: Coins, color: '#38bdf8', debt: false }))
+    .filter((it) => it.amount > 0)
+  const chitFundLiabilityItems = chit_funds.filter((c) => c.status !== 'completed' && c.payout_status === 'taken')
+    .map((c) => {
+      const monthsPaid = chit_fund_payments.filter((p) => p.chit_fund_id === c.id).length
+      const monthsLeft = Math.max(0, Number(c.duration_months) - monthsPaid)
+      return { id: `chit-${c.id}`, name: c.name, sub: 'Chit fund (remaining dues)', amount: monthsLeft * Number(c.monthly_contribution), icon: Coins, color: '#fb923c', debt: true }
+    })
+    .filter((it) => it.amount > 0)
 
   // Drilldown state for the Income/Expense/Savings stat cards (StatDrilldown) — declared here,
   // above every early return in this component, same as every other hook below: React requires
@@ -893,8 +920,10 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
         netWorth={netWorth} totalAssets={totalAssets} totalLiabilities={totalLiabilities}
         totalBalance={totalBalance} currentInv={currentInv} totalOutstanding={totalOutstanding} creditCardDebt={creditCardDebt}
         lendOutstanding={lendOutstanding} borrowOutstanding={borrowOutstanding}
+        chitFundReceivable={chitFundReceivable} chitFundLiability={chitFundLiability}
         cashBankItems={cashBankItems} investmentItems={investmentItems} loanItems={loanItems} creditCardItems={creditCardItems}
         lendItems={lendItems} borrowItems={borrowItems}
+        chitFundAssetItems={chitFundAssetItems} chitFundLiabilityItems={chitFundLiabilityItems}
         investmentsModuleEnabled={moduleSettings.investments.enabled}
         creditCardsModuleEnabled={moduleSettings.credit_cards.enabled}
       />
@@ -2233,7 +2262,7 @@ function Shell({ user, onLogout }) {
     setActiveDetailId(id)
     if (initialNavState.current.detailId != null) initialNavState.current = { ...initialNavState.current, detailId: null }
   }
-  const [data, setData] = useState({ accounts: [], categories: [], transactions: [], budgets: [], portfolios: [], holdings: [], sips: [], other_investments: [], kite_orders: [], loans: [], loan_payments: [], bucket_list: [], lend_borrow: [], lend_repayments: [], lend_borrow_additions: [], credit_cards: [], credit_card_transactions: [], scholarships: [], scholarship_payments: [], money_rules: [], recurring_transactions: [], money_profiles: [], money_profile_entries: [], recurring_money_profile_entries: [], budget_months: [], budget_month_categories: [], vault_items: [], pending_transactions: [], sms_parse_patterns: [], profile: null })
+  const [data, setData] = useState({ accounts: [], categories: [], transactions: [], budgets: [], portfolios: [], holdings: [], sips: [], other_investments: [], kite_orders: [], loans: [], loan_payments: [], bucket_list: [], lend_borrow: [], lend_repayments: [], lend_borrow_additions: [], credit_cards: [], credit_card_transactions: [], scholarships: [], scholarship_payments: [], money_rules: [], recurring_transactions: [], money_profiles: [], money_profile_entries: [], recurring_money_profile_entries: [], budget_months: [], budget_month_categories: [], vault_items: [], pending_transactions: [], sms_parse_patterns: [], chit_funds: [], chit_fund_payments: [], profile: null })
   const [loading, setLoading] = useState(true)
   const [pendingCount, setPendingCount] = useState(0)
   const mutate = useMemo(() => createMutate(setData, setPendingCount), [])
@@ -2278,6 +2307,12 @@ function Shell({ user, onLogout }) {
   const [lendAddRecord, setLendAddRecord] = useState(null)
   const [manageLendAccessOpen, setManageLendAccessOpen] = useState(false)
   const [manageLendAccessRecord, setManageLendAccessRecord] = useState(null)
+  const [chitFundFormOpen, setChitFundFormOpen] = useState(false)
+  const [chitFundEditing, setChitFundEditing] = useState(null)
+  const [chitFundPaymentFormOpen, setChitFundPaymentFormOpen] = useState(false)
+  const [chitFundPaymentTarget, setChitFundPaymentTarget] = useState(null)
+  const [chitFundPayoutFormOpen, setChitFundPayoutFormOpen] = useState(false)
+  const [chitFundPayoutTarget, setChitFundPayoutTarget] = useState(null)
   const [fundsFormOpen, setFundsFormOpen] = useState(false)
   const [fundsPortfolio, setFundsPortfolio] = useState(null)
   const [withdrawFormOpen, setWithdrawFormOpen] = useState(false)
@@ -2366,6 +2401,7 @@ function Shell({ user, onLogout }) {
         vault_items: result.vault_items || [],
         pending_transactions: result.pending_transactions || [],
         sms_parse_patterns: result.sms_parse_patterns || [],
+        chit_funds: result.chit_funds || [], chit_fund_payments: result.chit_fund_payments || [],
         profile: result.profile || null,
       }
       setData(snapshot)
@@ -2651,6 +2687,48 @@ function Shell({ user, onLogout }) {
     if (value === null) return
     const response = await fetch(`/api/finance/lend_borrow_additions/${a.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notes: value.trim() }) })
     if (response.ok) { toast.push('Note updated'); await refresh() } else { toast.push('Could not update', 'error') }
+  }
+
+  // Chit Funds — take_payout/undo_payout/complete/reopen are dedicated action endpoints (not a
+  // generic PATCH), same reasoning as budget_months' close/reopen and Pending's approve/reject
+  // above: a direct online-only call, not mutate(), so a queued offline edit can never race the
+  // real state transition. Delete also bypasses mutate() since the server removes any linked
+  // transaction(s) first (same as deleteLend above) — an optimistic local delete could never
+  // reflect that cleanup.
+  const openChitFundForm = (c = null) => { setChitFundEditing(c); setChitFundFormOpen(true) }
+  const closeChitFundForm = () => { setChitFundFormOpen(false); setChitFundEditing(null) }
+  const onChitFundSaved = async () => { closeChitFundForm(); await refresh() }
+  const openChitFundPayment = (fund) => { setChitFundPaymentTarget(fund); setChitFundPaymentFormOpen(true) }
+  const closeChitFundPayment = () => { setChitFundPaymentFormOpen(false); setChitFundPaymentTarget(null) }
+  const onChitFundPaymentSaved = async () => { closeChitFundPayment(); await refresh() }
+  const openChitFundPayout = (fund) => { setChitFundPayoutTarget(fund); setChitFundPayoutFormOpen(true) }
+  const closeChitFundPayout = () => { setChitFundPayoutFormOpen(false); setChitFundPayoutTarget(null) }
+  const onChitFundPayoutSaved = async () => { closeChitFundPayout(); await refresh() }
+  const deleteChitFund = async (c) => {
+    if (!(await confirm.ask(`Delete chit fund "${c.name}"? All payment records and any linked transactions will be removed.`))) return
+    const response = await fetch(`/api/finance/chit_funds/${c.id}`, { method: 'DELETE' })
+    if (response.ok) { toast.push('Chit fund deleted'); await refresh() } else { toast.push('Delete failed', 'error') }
+  }
+  const deleteChitFundPayment = async (paymentId) => {
+    if (!(await confirm.ask('Delete this payment? Its linked transaction (if any) will be removed too.'))) return
+    const response = await fetch(`/api/finance/chit_fund_payments/${paymentId}`, { method: 'DELETE' })
+    if (response.ok) { toast.push('Payment deleted'); await refresh() } else { toast.push('Delete failed', 'error') }
+  }
+  const undoChitFundPayout = async (fund) => {
+    if (!(await confirm.ask('Undo this payout? Its linked transaction (if any) will be removed.'))) return
+    const response = await fetch(`/api/finance/chit_funds/${fund.id}/undo_payout`, { method: 'POST' })
+    const result = await response.json().catch(() => ({}))
+    if (response.ok) { toast.push('Payout undone'); await refresh() } else { toast.push(result.error || 'Could not undo', 'error') }
+  }
+  const completeChitFund = async (fund) => {
+    const response = await fetch(`/api/finance/chit_funds/${fund.id}/complete`, { method: 'POST' })
+    const result = await response.json().catch(() => ({}))
+    if (response.ok) { toast.push('Marked completed'); await refresh() } else { toast.push(result.error || 'Could not complete', 'error') }
+  }
+  const reopenChitFund = async (fund) => {
+    const response = await fetch(`/api/finance/chit_funds/${fund.id}/reopen`, { method: 'POST' })
+    const result = await response.json().catch(() => ({}))
+    if (response.ok) { toast.push('Reopened'); await refresh() } else { toast.push(result.error || 'Could not reopen', 'error') }
   }
 
   // Portfolio funds
@@ -3067,6 +3145,10 @@ function Shell({ user, onLogout }) {
           ? openTxForm(null, '', { value: `lend:${record.id}`, type: record.type === 'lent' ? 'income' : 'expense' })
           : openLendForm()
       }
+      case 'chitfunds': {
+        const fund = data.chit_funds.find((c) => c.id === activeDetailId)
+        return fund ? openChitFundPayment(fund) : openChitFundForm()
+      }
       case 'family_company':
         return activeDetailId ? openMoneyProfileEntryForm(activeDetailId) : openMoneyProfileForm()
       case 'bucket':
@@ -3235,6 +3317,7 @@ function Shell({ user, onLogout }) {
               {view === 'scholarships' && <ScholarshipsView data={data} onAdd={() => openScholarshipForm()} onEdit={openScholarshipForm} onDelete={deleteScholarship} onPay={openScholarshipPay} onRefresh={refresh} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} toast={toast} onDetailChange={onDetailChange} initialSelectedId={initialNavState.current.detailId} />}
               {view === 'loans' && <LoansView data={data} onAdd={() => openLoanForm()} onEdit={openLoanForm} onDelete={deleteLoan} onPay={openLoanPay} onDeletePayment={deleteLoanPayment} onDeletePaymentBulk={deleteLoanPaymentBulk} onSync={syncLoanOutstanding} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onDetailChange={onDetailChange} initialSelectedId={initialNavState.current.detailId} />}
               {view === 'lend' && <LendBorrowView data={data} onAdd={() => openLendForm()} onEdit={openLendForm} onDelete={deleteLend} onDeleteTx={deleteTx} onDeleteTxBulk={deleteTxBulk} onLogRepayment={(record) => openTxForm(null, '', { value: `lend:${record.id}`, type: record.type === 'lent' ? 'income' : 'expense' })} onAddMore={openLendAddForm} onEditAdditionNote={editAdditionNote} onManageAccess={openManageLendAccess} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} toast={toast} onDetailChange={onDetailChange} initialSelectedId={initialNavState.current.detailId} />}
+              {view === 'chitfunds' && <ChitFundsView data={data} onAdd={() => openChitFundForm()} onEdit={openChitFundForm} onDelete={deleteChitFund} onLogPayment={openChitFundPayment} onTakePayout={openChitFundPayout} onUndoPayout={undoChitFundPayout} onComplete={completeChitFund} onReopen={reopenChitFund} onDeletePayment={deleteChitFundPayment} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} toast={toast} onDetailChange={onDetailChange} initialSelectedId={initialNavState.current.detailId} />}
               {view === 'family_company' && <FamilyCompanyView data={data} onAddProfile={() => openMoneyProfileForm()} onEditProfile={openMoneyProfileForm} onDeleteProfile={deleteMoneyProfile} onAddEntry={openMoneyProfileEntryForm} onEditEntry={openMoneyProfileEntryEdit} onDeleteEntry={deleteMoneyProfileEntry} onDeleteEntryBulk={deleteMoneyProfileEntryBulk} onBulkImport={openMoneyProfileBulkImport} onToggleStatus={toggleMoneyProfileStatus} onManageAccess={openManageAccess} onSyncBalance={syncMoneyProfileBalance} onOpenRecurring={openRecurringEntryManager} onDetailChange={onDetailChange} initialSelectedId={initialNavState.current.detailId} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'bucket' && <BucketListView data={data} onAdd={() => openBucketForm()} onEdit={openBucketForm} onDelete={deleteBucket} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'pending' && <PendingTransactionsView data={data} onApprove={approvePending} onReject={rejectPending} />}
@@ -3328,6 +3411,9 @@ function Shell({ user, onLogout }) {
       <LendForm open={lendFormOpen} onClose={closeLendForm} onSaved={onLendSaved} editing={lendEditing} accounts={dropdownAccounts} creditCards={data.credit_cards} toast={toast} />
       <LendAddMoreForm open={lendAddFormOpen} onClose={closeLendAddForm} onSaved={onLendAdded} record={lendAddRecord} accounts={dropdownAccounts} creditCards={data.credit_cards} toast={toast} />
       <ManageLendAccessSheet open={manageLendAccessOpen} onClose={closeManageLendAccess} record={manageLendAccessRecord} toast={toast} />
+      <ChitFundForm open={chitFundFormOpen} onClose={closeChitFundForm} onSaved={onChitFundSaved} editing={chitFundEditing} accounts={dropdownAccounts} toast={toast} />
+      <ChitFundPaymentForm open={chitFundPaymentFormOpen} onClose={closeChitFundPayment} onSaved={onChitFundPaymentSaved} fund={chitFundPaymentTarget} accounts={dropdownAccounts} toast={toast} />
+      <ChitFundPayoutForm open={chitFundPayoutFormOpen} onClose={closeChitFundPayout} onSaved={onChitFundPayoutSaved} fund={chitFundPayoutTarget} accounts={dropdownAccounts} toast={toast} />
       <PortfolioFundsForm open={fundsFormOpen} onClose={closeFundsForm} onSaved={onFundsSaved} portfolio={fundsPortfolio} accounts={dropdownAccounts} toast={toast} />
       <WithdrawFundsForm open={withdrawFormOpen} onClose={closeWithdrawForm} onSaved={onWithdrawSaved} portfolio={withdrawPortfolio} accounts={dropdownAccounts} toast={toast} />
       <SipForm open={sipFormOpen} onClose={closeSipForm} onSaved={onSipSaved} editing={sipEditing} portfolios={data.portfolios} toast={toast} mutate={mutate} />

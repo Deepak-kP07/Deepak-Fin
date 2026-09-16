@@ -1,6 +1,6 @@
 'use client'
 
-import { ChevronRight, CreditCard, Heart, Landmark, TrendingUp, Wallet } from 'lucide-react'
+import { ChevronRight, Coins, CreditCard, Heart, Landmark, TrendingUp, Wallet } from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { money } from '@/lib/format'
 
@@ -42,8 +42,8 @@ function ItemSection({ title, subtotal, items, showMoney, caption, emptyIcon: Em
 export function NetWorthDetailView({
   onBack, showMoney, setView,
   netWorth, totalAssets, totalLiabilities,
-  totalBalance, currentInv, totalOutstanding, creditCardDebt, lendOutstanding, borrowOutstanding,
-  cashBankItems, investmentItems, loanItems, creditCardItems, lendItems, borrowItems,
+  totalBalance, currentInv, totalOutstanding, creditCardDebt, lendOutstanding, borrowOutstanding, chitFundReceivable, chitFundLiability,
+  cashBankItems, investmentItems, loanItems, creditCardItems, lendItems, borrowItems, chitFundAssetItems, chitFundLiabilityItems,
   investmentsModuleEnabled, creditCardsModuleEnabled,
 }) {
   const nothingTracked = totalAssets === 0 && totalLiabilities === 0
@@ -100,20 +100,22 @@ export function NetWorthDetailView({
               <div className="bg-emerald-400" style={{ width: nwPct(totalBalance) }} />
               <div className="bg-emerald-400/50" style={{ width: nwPct(currentInv) }} />
               {lendOutstanding > 0 && <div className="bg-emerald-200" style={{ width: nwPct(lendOutstanding) }} />}
+              {chitFundReceivable > 0 && <div className="bg-sky-300" style={{ width: nwPct(chitFundReceivable) }} />}
             </div>
             <div
               role="img"
-              aria-label={showMoney ? `Liabilities: loans ${money(totalOutstanding)}, credit cards ${money(creditCardDebt)}, borrowed ${money(borrowOutstanding)}` : 'Liabilities breakdown, amounts hidden'}
+              aria-label={showMoney ? `Liabilities: loans ${money(totalOutstanding)}, credit cards ${money(creditCardDebt)}, borrowed ${money(borrowOutstanding)}, chit fund dues ${money(chitFundLiability)}` : 'Liabilities breakdown, amounts hidden'}
               className="mt-1.5 flex h-2 gap-px overflow-hidden rounded-full bg-white/[.07] light:bg-black/[.07]"
             >
               <div className="bg-rose-400" style={{ width: nwPct(totalOutstanding) }} />
               <div className="bg-rose-400/50" style={{ width: nwPct(creditCardDebt) }} />
               {borrowOutstanding > 0 && <div className="bg-rose-200" style={{ width: nwPct(borrowOutstanding) }} />}
+              {chitFundLiability > 0 && <div className="bg-orange-300" style={{ width: nwPct(chitFundLiability) }} />}
             </div>
 
             <div className="mt-4 space-y-1 text-[11px] text-slate-500">
-              <div>Assets = Cash &amp; bank ({showMoney ? money(totalBalance) : '••••'}) + Investments ({showMoney ? money(currentInv) : '••••'}){lendOutstanding > 0 ? ` + Lent out (${showMoney ? money(lendOutstanding) : '••••'})` : ''}</div>
-              <div>Liabilities = Loans ({showMoney ? money(totalOutstanding) : '••••'}) + Credit cards ({showMoney ? money(creditCardDebt) : '••••'}){borrowOutstanding > 0 ? ` + Borrowed (${showMoney ? money(borrowOutstanding) : '••••'})` : ''}</div>
+              <div>Assets = Cash &amp; bank ({showMoney ? money(totalBalance) : '••••'}) + Investments ({showMoney ? money(currentInv) : '••••'}){lendOutstanding > 0 ? ` + Lent out (${showMoney ? money(lendOutstanding) : '••••'})` : ''}{chitFundReceivable > 0 ? ` + Chit funds (${showMoney ? money(chitFundReceivable) : '••••'})` : ''}</div>
+              <div>Liabilities = Loans ({showMoney ? money(totalOutstanding) : '••••'}) + Credit cards ({showMoney ? money(creditCardDebt) : '••••'}){borrowOutstanding > 0 ? ` + Borrowed (${showMoney ? money(borrowOutstanding) : '••••'})` : ''}{chitFundLiability > 0 ? ` + Chit fund dues (${showMoney ? money(chitFundLiability) : '••••'})` : ''}</div>
             </div>
           </div>
 
@@ -145,6 +147,16 @@ export function NetWorthDetailView({
             title="Borrowed" subtotal={borrowOutstanding} items={borrowItems} showMoney={showMoney}
             caption={borrowItems.length > 0 ? 'Only the still-outstanding portion of each record.' : null}
             emptyIcon={Heart} emptyTitle="Nothing borrowed" emptyMessage="Money you've borrowed that's still owed will show up here." emptyCta="Add a lend/borrow record" onEmptyCta={() => setView('lend')}
+          />
+          <ItemSection
+            title="Chit funds (receivable)" subtotal={chitFundReceivable} items={chitFundAssetItems} showMoney={showMoney}
+            caption={chitFundAssetItems.length > 0 ? 'Contributions paid so far, before taking the payout.' : null}
+            emptyIcon={Coins} emptyTitle="Nothing pending" emptyMessage="A chit fund you haven't taken the payout for will show up here." emptyCta="Add chit fund" onEmptyCta={() => setView('chitfunds')}
+          />
+          <ItemSection
+            title="Chit fund dues" subtotal={chitFundLiability} items={chitFundLiabilityItems} showMoney={showMoney}
+            caption={chitFundLiabilityItems.length > 0 ? 'Months still owed after taking the payout.' : null}
+            emptyIcon={Coins} emptyTitle="Nothing owed" emptyMessage="A chit fund whose payout you've already taken will show up here." emptyCta="Add chit fund" onEmptyCta={() => setView('chitfunds')}
           />
         </>
       )}
