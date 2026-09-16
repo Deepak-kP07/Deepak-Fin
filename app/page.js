@@ -2311,6 +2311,7 @@ function Shell({ user, onLogout }) {
   const [chitFundEditing, setChitFundEditing] = useState(null)
   const [chitFundPaymentFormOpen, setChitFundPaymentFormOpen] = useState(false)
   const [chitFundPaymentTarget, setChitFundPaymentTarget] = useState(null)
+  const [chitFundPaymentEditing, setChitFundPaymentEditing] = useState(null)
   const [chitFundPayoutFormOpen, setChitFundPayoutFormOpen] = useState(false)
   const [chitFundPayoutTarget, setChitFundPayoutTarget] = useState(null)
   const [fundsFormOpen, setFundsFormOpen] = useState(false)
@@ -2698,8 +2699,8 @@ function Shell({ user, onLogout }) {
   const openChitFundForm = (c = null) => { setChitFundEditing(c); setChitFundFormOpen(true) }
   const closeChitFundForm = () => { setChitFundFormOpen(false); setChitFundEditing(null) }
   const onChitFundSaved = async () => { closeChitFundForm(); await refresh() }
-  const openChitFundPayment = (fund) => { setChitFundPaymentTarget(fund); setChitFundPaymentFormOpen(true) }
-  const closeChitFundPayment = () => { setChitFundPaymentFormOpen(false); setChitFundPaymentTarget(null) }
+  const openChitFundPayment = (fund, editing = null) => { setChitFundPaymentTarget(fund); setChitFundPaymentEditing(editing); setChitFundPaymentFormOpen(true) }
+  const closeChitFundPayment = () => { setChitFundPaymentFormOpen(false); setChitFundPaymentTarget(null); setChitFundPaymentEditing(null) }
   const onChitFundPaymentSaved = async () => { closeChitFundPayment(); await refresh() }
   const openChitFundPayout = (fund) => { setChitFundPayoutTarget(fund); setChitFundPayoutFormOpen(true) }
   const closeChitFundPayout = () => { setChitFundPayoutFormOpen(false); setChitFundPayoutTarget(null) }
@@ -3317,7 +3318,7 @@ function Shell({ user, onLogout }) {
               {view === 'scholarships' && <ScholarshipsView data={data} onAdd={() => openScholarshipForm()} onEdit={openScholarshipForm} onDelete={deleteScholarship} onPay={openScholarshipPay} onRefresh={refresh} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} toast={toast} onDetailChange={onDetailChange} initialSelectedId={initialNavState.current.detailId} />}
               {view === 'loans' && <LoansView data={data} onAdd={() => openLoanForm()} onEdit={openLoanForm} onDelete={deleteLoan} onPay={openLoanPay} onDeletePayment={deleteLoanPayment} onDeletePaymentBulk={deleteLoanPaymentBulk} onSync={syncLoanOutstanding} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onDetailChange={onDetailChange} initialSelectedId={initialNavState.current.detailId} />}
               {view === 'lend' && <LendBorrowView data={data} onAdd={() => openLendForm()} onEdit={openLendForm} onDelete={deleteLend} onDeleteTx={deleteTx} onDeleteTxBulk={deleteTxBulk} onLogRepayment={(record) => openTxForm(null, '', { value: `lend:${record.id}`, type: record.type === 'lent' ? 'income' : 'expense' })} onAddMore={openLendAddForm} onEditAdditionNote={editAdditionNote} onManageAccess={openManageLendAccess} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} toast={toast} onDetailChange={onDetailChange} initialSelectedId={initialNavState.current.detailId} />}
-              {view === 'chitfunds' && <ChitFundsView data={data} onAdd={() => openChitFundForm()} onEdit={openChitFundForm} onDelete={deleteChitFund} onLogPayment={openChitFundPayment} onTakePayout={openChitFundPayout} onUndoPayout={undoChitFundPayout} onComplete={completeChitFund} onReopen={reopenChitFund} onDeletePayment={deleteChitFundPayment} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} toast={toast} onDetailChange={onDetailChange} initialSelectedId={initialNavState.current.detailId} />}
+              {view === 'chitfunds' && <ChitFundsView data={data} onAdd={() => openChitFundForm()} onEdit={openChitFundForm} onDelete={deleteChitFund} onLogPayment={openChitFundPayment} onEditPayment={openChitFundPayment} onTakePayout={openChitFundPayout} onUndoPayout={undoChitFundPayout} onComplete={completeChitFund} onReopen={reopenChitFund} onDeletePayment={deleteChitFundPayment} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} toast={toast} onDetailChange={onDetailChange} initialSelectedId={initialNavState.current.detailId} />}
               {view === 'family_company' && <FamilyCompanyView data={data} onAddProfile={() => openMoneyProfileForm()} onEditProfile={openMoneyProfileForm} onDeleteProfile={deleteMoneyProfile} onAddEntry={openMoneyProfileEntryForm} onEditEntry={openMoneyProfileEntryEdit} onDeleteEntry={deleteMoneyProfileEntry} onDeleteEntryBulk={deleteMoneyProfileEntryBulk} onBulkImport={openMoneyProfileBulkImport} onToggleStatus={toggleMoneyProfileStatus} onManageAccess={openManageAccess} onSyncBalance={syncMoneyProfileBalance} onOpenRecurring={openRecurringEntryManager} onDetailChange={onDetailChange} initialSelectedId={initialNavState.current.detailId} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'bucket' && <BucketListView data={data} onAdd={() => openBucketForm()} onEdit={openBucketForm} onDelete={deleteBucket} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'pending' && <PendingTransactionsView data={data} onApprove={approvePending} onReject={rejectPending} />}
@@ -3412,7 +3413,7 @@ function Shell({ user, onLogout }) {
       <LendAddMoreForm open={lendAddFormOpen} onClose={closeLendAddForm} onSaved={onLendAdded} record={lendAddRecord} accounts={dropdownAccounts} creditCards={data.credit_cards} toast={toast} />
       <ManageLendAccessSheet open={manageLendAccessOpen} onClose={closeManageLendAccess} record={manageLendAccessRecord} toast={toast} />
       <ChitFundForm open={chitFundFormOpen} onClose={closeChitFundForm} onSaved={onChitFundSaved} editing={chitFundEditing} accounts={dropdownAccounts} toast={toast} />
-      <ChitFundPaymentForm open={chitFundPaymentFormOpen} onClose={closeChitFundPayment} onSaved={onChitFundPaymentSaved} fund={chitFundPaymentTarget} accounts={dropdownAccounts} toast={toast} />
+      <ChitFundPaymentForm open={chitFundPaymentFormOpen} onClose={closeChitFundPayment} onSaved={onChitFundPaymentSaved} fund={chitFundPaymentTarget} editing={chitFundPaymentEditing} accounts={dropdownAccounts} toast={toast} />
       <ChitFundPayoutForm open={chitFundPayoutFormOpen} onClose={closeChitFundPayout} onSaved={onChitFundPayoutSaved} fund={chitFundPayoutTarget} accounts={dropdownAccounts} toast={toast} />
       <PortfolioFundsForm open={fundsFormOpen} onClose={closeFundsForm} onSaved={onFundsSaved} portfolio={fundsPortfolio} accounts={dropdownAccounts} toast={toast} />
       <WithdrawFundsForm open={withdrawFormOpen} onClose={closeWithdrawForm} onSaved={onWithdrawSaved} portfolio={withdrawPortfolio} accounts={dropdownAccounts} toast={toast} />

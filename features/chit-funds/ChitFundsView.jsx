@@ -14,7 +14,7 @@ function netPaid(payments, fundId) {
   return payments.filter((p) => p.chit_fund_id === fundId).reduce((s, p) => s + Number(p.amount) - Number(p.dividend_received || 0), 0)
 }
 
-export function ChitFundsView({ data, onAdd, onEdit, onDelete, onLogPayment, onTakePayout, onUndoPayout, onComplete, onReopen, onDeletePayment, showMoney, onToggleMoney, toast, onDetailChange, initialSelectedId }) {
+export function ChitFundsView({ data, onAdd, onEdit, onDelete, onLogPayment, onEditPayment, onTakePayout, onUndoPayout, onComplete, onReopen, onDeletePayment, showMoney, onToggleMoney, toast, onDetailChange, initialSelectedId }) {
   const { chit_funds = [], chit_fund_payments = [], accounts } = data
   const [showHistory, setShowHistory] = useState(false)
   const [selectedId, setSelectedId] = useState(initialSelectedId ?? null)
@@ -31,6 +31,7 @@ export function ChitFundsView({ data, onAdd, onEdit, onDelete, onLogPayment, onT
         onEdit={onEdit}
         onDelete={(c) => { onDelete(c); setSelectedId(null) }}
         onLogPayment={onLogPayment}
+        onEditPayment={onEditPayment}
         onTakePayout={onTakePayout}
         onUndoPayout={onUndoPayout}
         onComplete={onComplete}

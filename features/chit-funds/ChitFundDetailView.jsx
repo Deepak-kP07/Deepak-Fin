@@ -4,9 +4,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { CheckCircle2, ChevronDown, ChevronRight, Clock, Coins, Eye, EyeOff, MoreVertical, Pencil, RefreshCw, Trash2, TrendingDown, TrendingUp, X } from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { HeroStatTile } from '@/components/shared/HeroStatTile'
-import { dateToLocalISO, formatDate, money } from '@/lib/format'
+import { dateToLocalISO, formatDate, money, monthAbbr } from '@/lib/format'
 
-export function ChitFundDetailView({ fund, payments, accounts, onBack, onEdit, onDelete, onLogPayment, onTakePayout, onUndoPayout, onComplete, onReopen, onDeletePayment, showMoney, onToggleMoney, toast }) {
+export function ChitFundDetailView({ fund, payments, accounts, onBack, onEdit, onDelete, onLogPayment, onEditPayment, onTakePayout, onUndoPayout, onComplete, onReopen, onDeletePayment, showMoney, onToggleMoney, toast }) {
   const isTaken = fund.payout_status === 'taken'
   const isCompleted = fund.status === 'completed'
   const account = accounts.find((a) => a.id === fund.account_id)
@@ -65,9 +65,13 @@ export function ChitFundDetailView({ fund, payments, accounts, onBack, onEdit, o
     longPressTimer.current = setTimeout(() => { longPressFired.current = true; setSelectMode(true); toggleSelect(id) }, LONG_PRESS_MS)
   }
   const exitSelectMode = () => { setSelectMode(false); setSelectedIds(new Set()) }
-  const handleRowTap = (id) => {
+  // Outside select mode, a plain tap opens the edit form directly — same "tap opens, long-press
+  // selects" convention as Lend/Borrow's top-up rows, since there's no dedicated per-payment
+  // detail page to drill into.
+  const handleRowTap = (p) => {
     if (longPressFired.current) { longPressFired.current = false; return }
-    if (selectMode) toggleSelect(id)
+    if (selectMode) { toggleSelect(p.id); return }
+    onEditPayment(fund, p)
   }
   const handleBulkDelete = async () => {
     for (const id of selectedIds) await onDeletePayment(id)
@@ -184,7 +188,7 @@ export function ChitFundDetailView({ fund, payments, accounts, onBack, onEdit, o
                   <div key={p.id} className="px-5 py-3 sm:py-4">
                     <button
                       type="button"
-                      onClick={() => handleRowTap(p.id)}
+                      onClick={() => handleRowTap(p)}
                       onTouchStart={() => startLongPress(p.id)}
                       onTouchEnd={cancelLongPress}
                       onTouchMove={cancelLongPress}
@@ -202,7 +206,7 @@ export function ChitFundDetailView({ fund, payments, accounts, onBack, onEdit, o
                         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/[.05] light:bg-black/[.035] text-accent-200 light:text-accent-700"><Coins size={16} /></div>
                       )}
                       <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm font-medium text-white light:text-slate-900">Payment #{paymentsForThis.length - i}</div>
+                        <div className="truncate text-sm font-medium text-white light:text-slate-900">{monthAbbr(p.payment_date)} · Payment #{paymentsForThis.length - i}</div>
                         <div className="truncate text-[11px] text-slate-500">{formatDate(p.payment_date)}{acc ? ` · ${acc.name}` : ''}{dividend > 0 ? ` · ${money(dividend)} dividend` : ''}</div>
                       </div>
                       <div className="shrink-0 text-sm font-semibold text-white light:text-slate-900">{showMoney ? money(p.amount) : '••••'}</div>
@@ -212,7 +216,7 @@ export function ChitFundDetailView({ fund, payments, accounts, onBack, onEdit, o
                       <div className="flex items-center gap-3">
                         <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/[.05] light:bg-black/[.035] text-accent-200 light:text-accent-700"><Coins size={16} /></div>
                         <div className="min-w-0">
-                          <div className="truncate text-sm font-medium text-white light:text-slate-900">Payment #{paymentsForThis.length - i}</div>
+                          <div className="truncate text-sm font-medium text-white light:text-slate-900">{monthAbbr(p.payment_date)} · Payment #{paymentsForThis.length - i}</div>
                           {dividend > 0 && <div className="truncate text-[11px] text-slate-500">{money(dividend)} dividend</div>}
                         </div>
                       </div>
@@ -221,7 +225,8 @@ export function ChitFundDetailView({ fund, payments, accounts, onBack, onEdit, o
                       </div>
                       <div className="text-xs text-slate-500">{formatDate(p.payment_date)}</div>
                       <div className="text-sm font-semibold text-white light:text-slate-900 sm:text-right">{showMoney ? money(p.amount) : '••••'}</div>
-                      <div className="flex justify-end">
+                      <div className="flex justify-end gap-1">
+                        <button onClick={() => onEditPayment(fund, p)} className="rounded-lg p-1.5 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900" title="Edit payment"><Pencil size={13} /></button>
                         <button onClick={() => onDeletePayment(p.id)} className="rounded-lg p-1.5 text-rose-300/70 light:text-rose-700 hover:bg-rose-300/10"><Trash2 size={13} /></button>
                       </div>
                     </div>

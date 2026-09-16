@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireUser } from '@/lib/server/auth'
 import { getOne } from '@/lib/server/genericCrud'
-import { deleteChitFundPayment } from '@/lib/server/services/chitFunds'
+import { deleteChitFundPayment, updateChitFundPayment } from '@/lib/server/services/chitFunds'
 
 export async function GET(request, { params }) {
   const { id } = await params
@@ -12,9 +12,19 @@ export async function GET(request, { params }) {
   return cors(NextResponse.json(row))
 }
 
-// No PATCH — a payment's amount/account/date directly drive an optional linked transaction, so
-// changing it goes through editing that transaction (which reapplies via the linked_module hook
-// in the transactions catch-all), not a raw PATCH of this row.
+// Amount/dividend/date/notes only — never account_id (see updateChitFundPayment's own comment).
+export async function PATCH(request, { params }) {
+  const { id } = await params
+  const { supabase, user, cors, response } = await requireUser(request)
+  if (response) return response
+  const body = await request.json()
+  const result = await updateChitFundPayment(supabase, user.id, id, body)
+  if (result.error) return cors(NextResponse.json({ error: result.error.message }, { status: result.error.status || 400 }))
+  return cors(NextResponse.json(result))
+}
+
+export { PATCH as PUT }
+
 export async function DELETE(request, { params }) {
   const { id } = await params
   const { supabase, user, cors, response } = await requireUser(request)
