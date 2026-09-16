@@ -14,6 +14,8 @@ const CHANGELOG = [
       'Fixed the category picker list not scrolling past the first screenful on mobile — every category is reachable again, not just however many fit before you had to scroll.',
       'New: Chit Funds — track a chit fund you\'re a member of. Log monthly payments, record your payout, and it automatically counts as a receivable before the payout and a remaining liability after, in your net worth. Off by default — turn it on in Settings > Modules.',
       'Chit funds now show a payment calendar — which months are paid vs. still to come, same as Loans\' EMI calendar.',
+      'Chit fund payments are now editable, and each one shows its month (e.g. "Mar · Payment #3"), matching Loans.',
+      'Chit funds now show a due-soon/overdue reminder for the next payment, plus a push notification 2 days before it\'s due.',
     ],
   },
   {
