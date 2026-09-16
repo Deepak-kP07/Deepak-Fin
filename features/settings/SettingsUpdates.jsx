@@ -13,6 +13,7 @@ const CHANGELOG = [
       'Redesigned the weekly/monthly report email — a proper Net worth headline, and every section (categories, biggest transactions, by account, upcoming) now in its own clearly separated card instead of a cramped, run-together list.',
       'Fixed the category picker list not scrolling past the first screenful on mobile — every category is reachable again, not just however many fit before you had to scroll.',
       'New: Chit Funds — track a chit fund you\'re a member of. Log monthly payments, record your payout, and it automatically counts as a receivable before the payout and a remaining liability after, in your net worth. Off by default — turn it on in Settings > Modules.',
+      'Chit funds now show a payment calendar — which months are paid vs. still to come, same as Loans\' EMI calendar.',
     ],
   },
   {
