@@ -75,7 +75,25 @@ export function CategorySelect({ value, onChange, categories, onAddCategory, cla
           // first swipe inside it fell through that check entirely and got hijacked as a sheet
           // drag instead of actually scrolling, silently capping the list at whatever fit in the
           // panel's maxHeight with no way to reach anything past it. data-vaul-no-drag is vaul's
-          // own documented escape hatch for exactly this scrollable-region case.
+          // own documented escape hatch for exactly this scrollable-region case — necessary, but
+          // (confirmed via a real touch-swipe test, not just code reading) not sufficient on its
+          // own: React portals bubble their events through the REACT component tree, not the DOM
+          // tree, so a pointerdown/pointermove that starts in here still reaches vaul's
+          // Drawer.Content — which is a sibling in the DOM but an ANCESTOR in the React tree,
+          // since this panel is rendered from inside BottomSheet's own children — and
+          // Drawer.Content's own onPointerDown/onPointerMove handlers still ran and still
+          // interfered with the browser's native scroll, even though shouldDrag() correctly
+          // never dragged the sheet itself. Explicitly stopping propagation on every pointer/
+          // touch event here is what actually stops vaul's handlers from seeing these events at
+          // all, letting native scrolling proceed completely undisturbed — verified by rendering
+          // this in a real mobile browser context and dispatching an actual touch-swipe gesture.
+          onPointerDown={(e) => e.stopPropagation()}
+          onPointerMove={(e) => e.stopPropagation()}
+          onPointerUp={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
+          onTouchEnd={(e) => e.stopPropagation()}
+          onWheel={(e) => e.stopPropagation()}
           data-vaul-no-drag
           style={{
             position: 'fixed',
