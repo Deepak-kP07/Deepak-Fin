@@ -6,6 +6,7 @@ import { MotionConfig, motion, useMotionValue, useTransform } from 'framer-motio
 import { createClient } from '@/lib/supabase/browser'
 import { isNativePlatform, listenForNativeGoogleCallback, startNativeGoogleSignIn } from '@/lib/auth/nativeGoogleAuth'
 import { InstallPrompt } from '@/components/shared/InstallPrompt'
+import { useIsMobile } from '@/hooks/use-mobile'
 import {
   ArrowLeft, Banknote, ChevronRight, CreditCard, Eye, EyeOff, Landmark, LayoutDashboard,
   LineChart, Repeat, ShieldCheck, Sparkle, Wifi,
@@ -273,12 +274,14 @@ export function AuthScreen({ onAuth, initialError, initialMode = 'landing', init
   const [name, setName] = useState('')
   const [feedback, setFeedback] = useState(initialError ? { type: 'error', message: initialError } : null)
   const [busy, setBusy] = useState(false)
+  const [resendBusy, setResendBusy] = useState(false)
   const [googleBusy, setGoogleBusy] = useState(false)
   const [googleScriptReady, setGoogleScriptReady] = useState(false)
   // Read after mount, not during render, so the server-rendered markup (which never knows it'll
   // end up in a native shell) matches the client's first paint — avoids a hydration mismatch.
   const [isNative, setIsNative] = useState(false)
   useEffect(() => { setIsNative(isNativePlatform()) }, [])
+  const isMobile = useIsMobile()
   const googleButtonRef = useRef(null)
   const googleNonceRef = useRef(null)
   const heroX = useMotionValue(0)
@@ -299,14 +302,33 @@ export function AuthScreen({ onAuth, initialError, initialMode = 'landing', init
         body: JSON.stringify({ email, password, name }),
       })
       const data = await response.json()
-      if (!response.ok) throw new Error(data.msg || data.error_description || data.message || 'Please check your details and try again.')
+      if (!response.ok) {
+        const message = data.msg || data.error_description || data.message || 'Please check your details and try again.'
+        // The welcome email that used to fire at signup (before confirmation) looked enough like
+        // a "you're all set" email that people missed the real confirmation link entirely and got
+        // stuck here with no visible way out — this is that way out.
+        const unconfirmed = data.code === 'email_not_confirmed' || /email.*not.*confirmed/i.test(message)
+        throw Object.assign(new Error(message), { unconfirmed })
+      }
       if (mode === 'signup' && !data.access_token) {
         setFeedback({ type: 'notice', message: 'Account created. Check your inbox to confirm your email, then sign in.' })
         setMode('login')
       } else {
         onAuth(data.user)
       }
-    } catch (caught) { setFeedback({ type: 'error', message: caught.message }) } finally { setBusy(false) }
+    } catch (caught) { setFeedback({ type: 'error', message: caught.message, unconfirmed: caught.unconfirmed }) } finally { setBusy(false) }
+  }
+
+  const resendConfirmation = async () => {
+    setResendBusy(true)
+    try {
+      const response = await fetch('/api/auth/resend_confirmation', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }),
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.message || 'Could not resend — try again shortly.')
+      setFeedback({ type: 'notice', message: `Confirmation email resent to ${email}. Check your inbox (and spam folder).` })
+    } catch (caught) { setFeedback({ type: 'error', message: caught.message }) } finally { setResendBusy(false) }
   }
 
   // Renders Google's own "Continue with Google" button (its click flow runs entirely on this
@@ -325,27 +347,49 @@ export function AuthScreen({ onAuth, initialError, initialMode = 'landing', init
         const hashedNonce = await sha256Hex(nonce)
         if (cancelled || !googleButtonRef.current) return
         googleNonceRef.current = nonce
-        window.google.accounts.id.initialize({
-          client_id: clientId,
-          nonce: hashedNonce,
-          use_fedcm_for_prompt: true,
-          callback: async (response) => {
-            setFeedback(null); setGoogleBusy(true)
-            try {
-              const supabase = createClient()
-              const { data, error: idTokenError } = await supabase.auth.signInWithIdToken({
-                provider: 'google',
-                token: response.credential,
-                nonce: googleNonceRef.current,
-              })
-              if (idTokenError) throw idTokenError
-              fetch('/api/auth/google_welcome', { method: 'POST' }).catch(() => {})
-              onAuth(data.user)
-            } catch (caught) {
-              setFeedback({ type: 'error', message: caught.message }); setGoogleBusy(false)
-            }
-          },
-        })
+        // Mobile browsers: GIS's popup/FedCM-based credential flow is a well-documented source
+        // of "picks an account, then the screen just sits there — no error, nothing happens"
+        // failures, especially on Android Chrome — a reliability gap in Google's own client
+        // library, not something fixable from inside the popup-mode code below. ux_mode:'redirect'
+        // sidesteps that whole popup/cross-origin-iframe mechanism with a plain top-level
+        // navigation to Google and a real HTML form POST back to our own server
+        // (app/api/[[...path]]/route.js's /auth/google_redirect_callback) — the same shape as a
+        // standard non-JS OAuth flow, and far more robust on mobile. Desktop keeps the existing
+        // popup + JS callback, which already works fine there, so it's left alone.
+        if (isMobile) {
+          // The nonce only ever lived in googleNonceRef (in-memory JS) before — gone the moment
+          // the page fully navigates away for the redirect. Stashed in a short-lived cookie
+          // instead so the server-side callback can read it back once Google redirects here.
+          document.cookie = `pf_google_nonce=${nonce}; path=/; max-age=300; samesite=lax`
+          window.google.accounts.id.initialize({
+            client_id: clientId,
+            nonce: hashedNonce,
+            ux_mode: 'redirect',
+            login_uri: `${window.location.origin}/api/auth/google_redirect_callback`,
+          })
+        } else {
+          window.google.accounts.id.initialize({
+            client_id: clientId,
+            nonce: hashedNonce,
+            use_fedcm_for_prompt: true,
+            callback: async (response) => {
+              setFeedback(null); setGoogleBusy(true)
+              try {
+                const supabase = createClient()
+                const { data, error: idTokenError } = await supabase.auth.signInWithIdToken({
+                  provider: 'google',
+                  token: response.credential,
+                  nonce: googleNonceRef.current,
+                })
+                if (idTokenError) throw idTokenError
+                fetch('/api/auth/google_welcome', { method: 'POST' }).catch(() => {})
+                onAuth(data.user)
+              } catch (caught) {
+                setFeedback({ type: 'error', message: caught.message }); setGoogleBusy(false)
+              }
+            },
+          })
+        }
         googleButtonRef.current.innerHTML = ''
         window.google.accounts.id.renderButton(googleButtonRef.current, {
           // filled_black — Google's own dark-mode button variant. This screen is always dark
@@ -362,7 +406,7 @@ export function AuthScreen({ onAuth, initialError, initialMode = 'landing', init
       }
     })()
     return () => { cancelled = true }
-  }, [isNative, googleScriptReady, mode])
+  }, [isNative, googleScriptReady, mode, isMobile])
 
   // Native-only: listen for the OS handing the OAuth redirect back to the app (see
   // lib/auth/nativeGoogleAuth.js) — no-op on web (isNativePlatform() guards it internally too).
@@ -501,6 +545,11 @@ export function AuthScreen({ onAuth, initialError, initialMode = 'landing', init
                 {feedback && (
                   <div className={`rounded-xl border px-4 py-3 text-sm leading-5 ${feedback.type === 'error' ? 'border-rose-300/20 bg-rose-300/10 text-rose-200' : 'border-amber-300/20 bg-amber-300/10 text-amber-200'}`}>
                     {feedback.message}
+                    {feedback.unconfirmed && (
+                      <button type="button" onClick={resendConfirmation} disabled={resendBusy || !email} className="mt-2 block font-semibold text-rose-100 underline underline-offset-2 hover:text-white disabled:opacity-60">
+                        {resendBusy ? 'Resending…' : 'Resend confirmation email'}
+                      </button>
+                    )}
                   </div>
                 )}
                 <button disabled={busy} className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[.10] px-4 py-3.5 font-semibold text-white transition hover:border-accent-300 hover:bg-accent-300 hover:text-[#07101c] disabled:opacity-60">

@@ -8,6 +8,14 @@ import { triggerAppUpdate } from '@/lib/pwaUpdate'
 // whenever something user-visible ships; no need to log every internal fix.
 const CHANGELOG = [
   {
+    date: '17 Sep 2026',
+    points: [
+      'Fixed a signup bug where the welcome email could arrive before your account was actually confirmed, with a button that looked like it finished setup but didn\'t — leaving some accounts stuck unable to sign in.',
+      'Sign-in now offers a "Resend confirmation email" button right on the "Email not confirmed" error, instead of leaving you stuck with no way to get a working link.',
+      'Fixed Google sign-in on the website getting stuck after picking an account, on mobile browsers — it now completes properly instead of hanging on a blank screen.',
+    ],
+  },
+  {
     date: '16 Sep 2026',
     points: [
       'Redesigned the weekly/monthly report email — a proper Net worth headline, and every section (categories, biggest transactions, by account, upcoming) now in its own clearly separated card instead of a cramped, run-together list.',

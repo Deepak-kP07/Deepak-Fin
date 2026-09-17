@@ -66,17 +66,38 @@ async function handleRoute(request, { params }) {
         },
       })
       if (error) return cors(NextResponse.json({ message: error.message }, { status: error.status || 400 }))
-      // Best-effort, same as every other non-critical side effect in this app (push
-      // notifications, Kite syncs) — signUp() only ever succeeds once per email, so this never
-      // re-sends on a later login without needing any "already welcomed" bookkeeping.
-      if (data.user?.email) sendWelcomeEmail({ to: data.user.email, name: body.name }).catch(() => {})
+      // signUp() only returns a session when the project's "Confirm email" setting is off (or
+      // this address was already confirmed some other way) — with it on, as it is here,
+      // data.session is null until they actually click the confirmation link, and this is the
+      // ONLY signal that distinguishes that case from the other side-effects. Sending "your
+      // account is ready" now, unconditionally, was wrong on the confirm-required path: it landed
+      // ahead of Supabase's own real confirmation email, its "Open Personal Fin" button didn't
+      // confirm anything, and it read as the definitive signup email — several real users got
+      // stuck on "Email not confirmed" at login having only ever seen this one, never realizing a
+      // second, real confirmation email existed. The confirmed case is instead covered by
+      // /auth/oauth_callback below, which already welcomes on confirmation (its own "first sign-in"
+      // check), so nothing is dropped — it just moves to when the account is actually usable.
+      if (data.session && data.user?.email) sendWelcomeEmail({ to: data.user.email, name: body.name }).catch(() => {})
       return cors(NextResponse.json({ user: data.user, access_token: data.session?.access_token || null }))
     }
     if (route === '/auth/login' && method === 'POST') {
       const body = await request.json()
       const { data, error } = await supabase.auth.signInWithPassword({ email: body.email, password: body.password })
-      if (error) return cors(NextResponse.json({ message: error.message }, { status: 400 }))
+      if (error) return cors(NextResponse.json({ message: error.message, code: error.code }, { status: 400 }))
       return cors(NextResponse.json({ user: data.user }))
+    }
+    // The one recovery path for the "Email not confirmed" dead end above: AuthScreen offers this
+    // as a button right on that error instead of leaving the user stuck with no visible way to
+    // get a working confirmation link resent.
+    if (route === '/auth/resend_confirmation' && method === 'POST') {
+      const body = await request.json()
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: body.email,
+        options: { emailRedirectTo: `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/auth/oauth_callback` },
+      })
+      if (error) return cors(NextResponse.json({ message: error.message }, { status: error.status || 400 }))
+      return cors(NextResponse.json({ ok: true }))
     }
     if (route === '/auth/me' && method === 'GET') {
       const user = await currentUser(supabase)
@@ -128,6 +149,47 @@ async function handleRoute(request, { params }) {
         if (isFirstSignIn) sendWelcomeEmail({ to: user.email, name: user.user_metadata?.full_name }).catch(() => {})
       }
       return cors(NextResponse.json({ ok: true }))
+    }
+    // Google Identity Services' redirect-mode credential POST (AuthScreen.jsx's mobile branch
+    // only — desktop keeps the existing popup + JS callback above). GIS's popup/FedCM-based
+    // credential flow is a well-documented source of "stuck after picking an account, nothing
+    // happens" failures on mobile browsers — a Google client-library reliability issue, not
+    // something fixable in our own popup-mode code. Redirect mode sidesteps that entirely with a
+    // plain top-level navigation to Google and a real HTML form POST back here, exactly the same
+    // shape as a standard non-JS OAuth flow. A real form POST, not JSON — GIS submits it as
+    // application/x-www-form-urlencoded, hence formData() rather than request.json() here.
+    if (route === '/auth/google_redirect_callback' && method === 'POST') {
+      const redirectUrl = new URL('/', request.url)
+      try {
+        const form = await request.formData()
+        const credential = form.get('credential')
+        // Double-submit CSRF check — GIS itself sets the g_csrf_token cookie before redirecting
+        // to Google, and POSTs the same value back as a form field; they must match, or this
+        // request didn't originate from a real GIS redirect this browser just initiated.
+        const csrfToken = form.get('g_csrf_token')
+        const csrfCookie = request.cookies.get('g_csrf_token')?.value
+        if (!credential || !csrfToken || !csrfCookie || csrfToken !== csrfCookie) {
+          throw new Error('Sign-in request could not be verified — try again.')
+        }
+        // The nonce only ever lived in AuthScreen's in-memory ref before — gone once the page
+        // fully navigated away for the redirect, so it's stashed in this short-lived cookie
+        // instead (set right before initialize() in the mobile branch) for this exact moment.
+        const nonce = request.cookies.get('pf_google_nonce')?.value
+        const { data, error } = await supabase.auth.signInWithIdToken({ provider: 'google', token: credential, nonce })
+        if (error) throw error
+        const user = data?.user
+        if (user?.email && user.created_at && user.last_sign_in_at) {
+          const isFirstSignIn = Math.abs(new Date(user.last_sign_in_at) - new Date(user.created_at)) < 15000
+          if (isFirstSignIn) sendWelcomeEmail({ to: user.email, name: user.user_metadata?.full_name }).catch(() => {})
+        }
+      } catch (err) {
+        redirectUrl.searchParams.set('auth_error', err.message)
+      }
+      // 303 (not the default 307) so the browser follows up with a plain GET, matching the
+      // standard Post/Redirect/Get pattern — this response is itself answering a POST.
+      const response = applyCookies(NextResponse.redirect(redirectUrl, 303), cookiesToSet)
+      response.cookies.delete('pf_google_nonce')
+      return response
     }
 
     // ---- FINANCE SUMMARY ----
