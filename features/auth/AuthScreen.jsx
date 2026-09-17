@@ -360,7 +360,15 @@ export function AuthScreen({ onAuth, initialError, initialMode = 'landing', init
           // The nonce only ever lived in googleNonceRef (in-memory JS) before — gone the moment
           // the page fully navigates away for the redirect. Stashed in a short-lived cookie
           // instead so the server-side callback can read it back once Google redirects here.
-          document.cookie = `pf_google_nonce=${nonce}; path=/; max-age=300; samesite=lax`
+          // Must be SameSite=None (not Lax): Google's redirect mode POSTs back here as a
+          // cross-site, top-level form submission, and SameSite=Lax cookies are only sent on
+          // cross-site top-level navigations for "safe" methods (GET) — never on POST. With
+          // Lax this cookie silently never reached the server on the callback, nonce came back
+          // undefined, and signInWithIdToken failed — invisible on desktop since that branch
+          // never touched this cookie at all (still popup + JS callback, no cross-site POST).
+          // Secure is required alongside None, and works fine on http://localhost too (browsers
+          // special-case localhost as a secure context).
+          document.cookie = `pf_google_nonce=${nonce}; path=/; max-age=300; samesite=none; secure`
           window.google.accounts.id.initialize({
             client_id: clientId,
             nonce: hashedNonce,
