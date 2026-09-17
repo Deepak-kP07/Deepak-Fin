@@ -279,6 +279,15 @@
         ],
         "createdAt": "2026-09-17T05:32:13.194Z",
         "reason": "Badge className strings are ternaries across isClosed/isLent/isBorrowed (or isClosed/partial/other); only one branch ever renders per badge. text-slate-400 only ever pairs with bg-slate-500/15 (not a colored bg) — the other branches use emerald-200/rose-200/amber-200/accent-200 text, never gray. The regex scanner reads all ternary branches as one string and cross-matches slate text from one branch against a colored bg from another, a combo that never co-occurs in the DOM."
+      },
+      {
+        "rule": "gray-on-color",
+        "value": "*",
+        "files": [
+          "features/loans/LoanPaymentForm.jsx"
+        ],
+        "createdAt": "2026-09-17T07:33:01.170Z",
+        "reason": "Toggle button className is a ternary between selected (emerald-200 text on emerald-400/15 bg) and unselected (slate-400 text, no colored bg — just a white/10 border) states. Only one branch ever renders per button; the regex scanner conflates both branches into one string and cross-matches slate text from the unselected branch against the emerald bg from the selected branch, a combo that never co-occurs in the DOM."
       }
     ]
   }

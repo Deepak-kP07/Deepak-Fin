@@ -8,6 +8,13 @@ import { triggerAppUpdate } from '@/lib/pwaUpdate'
 // whenever something user-visible ships; no need to log every internal fix.
 const CHANGELOG = [
   {
+    date: '18 Sep 2026',
+    points: [
+      'Fixed a Family/Company entry paid by a credit card sometimes never posting to that card — no transaction, no outstanding-balance update, and "Bank" showing blank in the entries list — when the profile itself had no default linked account. Re-saving an already-affected entry (Edit > Update) fixes it retroactively.',
+      'Add SIP / Add holding / Add other investment: a more compact layout on desktop so the form fits on screen without needing to scroll, instead of just capping and scrolling a tall one.',
+    ],
+  },
+  {
     date: '17 Sep 2026',
     points: [
       'Fixed a signup bug where the welcome email could arrive before your account was actually confirmed, with a button that looked like it finished setup but didn\'t — leaving some accounts stuck unable to sign in.',
