@@ -122,7 +122,7 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
     // and it's still just a starting value, freely changeable before submitting. defaultRepayment
     // is the same idea for Lend/Borrow's own "+ Log repayment" button — pre-selects that exact
     // person in Repayment mode instead of leaving the user to find them in a dropdown themselves.
-    return { type: defaultRepayment?.type || 'expense', amount: '', description: '', date: now, time: nowTime, account_id: defaultAccountId || '', to_account_id: '', category_id: '', notes: '', linked_module: '', linked_module_id: '', repay_value: defaultRepayment?.value || '' }
+    return { type: defaultRepayment?.type || 'expense', amount: '', description: '', date: now, time: nowTime, account_id: defaultAccountId || '', to_account_id: '', category_id: '', notes: '', is_reimbursable: false, linked_module: '', linked_module_id: '', repay_value: defaultRepayment?.value || '' }
   }, [editing, open, defaultAccountId, defaultRepayment])
   const [form, setForm] = useState(initial)
   // 'category' = normal spending/income category selected; 'repayment' = this transaction is
@@ -306,6 +306,9 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
       delete payload.repay_value
       // category_id is a nullable UUID column — an empty string (not NULL) makes Postgres reject it.
       payload.category_id = payload.category_id || null
+      // Only meaningful for a credit-card-funded expense (the one place the toggle shows) — a
+      // stale `true` from switching away from a card mid-edit shouldn't silently persist.
+      payload.is_reimbursable = payload.type === 'expense' && typeof payload.account_id === 'string' && payload.account_id.startsWith('cc:') ? !!payload.is_reimbursable : false
       if (payload.type !== 'transfer') delete payload.to_account_id
       if (repayKind === 'lend' && repayId) {
         payload.linked_module = 'lend'
@@ -409,6 +412,20 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
             ) : (
               <CategorySelect value={form.category_id || ''} onChange={(e) => setForm({ ...form, category_id: e.target.value })} categories={catsForType} onAddCategory={onAddCategory} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-[#101621] light:bg-white px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
             )}
+          </div>
+        )}
+
+        {form.type === 'expense' && purposeMode !== 'repayment' && typeof form.account_id === 'string' && form.account_id.startsWith('cc:') && (
+          /* The div (not ToggleSwitch) owns the click handler — ToggleSwitch gets a no-op
+             onChange so it's purely the visual state indicator. Putting the real handler on both
+             would let a click on the switch itself bubble into the row's own handler too,
+             toggling it twice. */
+          <div onClick={() => setForm({ ...form, is_reimbursable: !form.is_reimbursable })} className="col-span-2 flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-white/10 light:border-black/10 bg-white/[.02] light:bg-black/[.02] px-4 py-3">
+            <div>
+              <div className="text-sm text-slate-300 light:text-slate-700">Not my spending</div>
+              <div className="text-[11px] text-slate-500">Someone else will pay this back to you</div>
+            </div>
+            <ToggleSwitch checked={!!form.is_reimbursable} onChange={() => {}} />
           </div>
         )}
 

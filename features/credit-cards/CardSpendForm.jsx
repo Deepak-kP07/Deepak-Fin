@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import { CategorySelect } from '@/components/shared/CategorySelect'
 import { DateInput } from '@/components/shared/DateInput'
+import { ToggleSwitch } from '@/components/shared/ToggleSwitch'
 import { useConfirm } from '@/components/shared/ConfirmDialog'
 import { money, todayISO } from '@/lib/format'
 import { BottomSheet } from '@/components/shared/BottomSheet'
@@ -24,6 +25,16 @@ function CardSpendFormFields({ form, setForm, expenseCats }) {
       <label className="text-sm text-slate-300 light:text-slate-700">Date
         <DateInput value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value, time: new Date().toTimeString().slice(0, 5) })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
       </label>
+      {/* The div (not ToggleSwitch) owns the click handler — ToggleSwitch gets a no-op onChange
+          so it's purely the visual state indicator. Putting the real handler on both would let a
+          click on the switch itself bubble into the row's own handler too, toggling it twice. */}
+      <div onClick={() => setForm({ ...form, is_reimbursable: !form.is_reimbursable })} className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-white/10 light:border-black/10 bg-white/[.02] light:bg-black/[.02] px-4 py-3">
+        <div>
+          <div className="text-sm text-slate-300 light:text-slate-700">Not my spending</div>
+          <div className="text-[11px] text-slate-500">Someone else will pay this back to you</div>
+        </div>
+        <ToggleSwitch checked={!!form.is_reimbursable} onChange={() => {}} />
+      </div>
     </div>
   )
 }
@@ -32,7 +43,7 @@ function CardSpendFormFields({ form, setForm, expenseCats }) {
 // own `cc:`-prefix rule (it touches the card's current_outstanding beyond a plain balance
 // trigger). Stays online-only, BottomSheet treatment only, no mutate() here.
 export function CardSpendForm({ open, onClose, onSaved, card, categories, toast }) {
-  const initial = { amount: '', description: '', category_id: '', date: todayISO(), time: new Date().toTimeString().slice(0, 5), notes: '' }
+  const initial = { amount: '', description: '', category_id: '', date: todayISO(), time: new Date().toTimeString().slice(0, 5), notes: '', is_reimbursable: false }
   const [form, setForm] = useState(initial)
   const [busy, setBusy] = useState(false)
   const confirm = useConfirm()
@@ -74,7 +85,7 @@ export function CardSpendForm({ open, onClose, onSaved, card, categories, toast 
       // instead of living only in this card's own log.
       const response = await fetch('/api/finance/transactions', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ credit_card_id: card.id, type: 'expense', amount: Number(form.amount), description: form.description, category_id: form.category_id || null, date: form.date, time: form.time, notes: form.notes || null }),
+        body: JSON.stringify({ credit_card_id: card.id, type: 'expense', amount: Number(form.amount), description: form.description, category_id: form.category_id || null, date: form.date, time: form.time, notes: form.notes || null, is_reimbursable: form.is_reimbursable }),
       })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || data.message || 'Could not save')

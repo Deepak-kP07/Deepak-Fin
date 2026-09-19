@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { ArrowDownRight, ArrowUpRight, CheckCircle2, ChevronRight, Eye, EyeOff, MoreVertical, Pencil, Target, Trash2, X } from 'lucide-react'
+import { ArrowDownRight, ArrowUpRight, CheckCircle2, ChevronLeft, ChevronRight, Eye, EyeOff, MoreVertical, Pencil, Target, Trash2, X } from 'lucide-react'
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { BankCardFace } from '@/components/shared/BankCardFace'
 import { StatCard } from '@/components/shared/StatCard'
@@ -44,14 +44,25 @@ export function CreditCardDetailView({ card, cardTransactions, allTransactions, 
   const [monthCursor, setMonthCursor] = useState(() => { const d = new Date(); return { year: d.getFullYear(), month: d.getMonth() } })
   const [showAllMonths, setShowAllMonths] = useState(false)
   const [cycleMode, setCycleMode] = useState(false)
+  // 0 = current cycle, -1 = one cycle back, etc. — never > 0, there's no future cycle to view.
+  // Cycles are calendar-month-long, so shifting the reference date by whole months lands exactly
+  // on the previous/next cycle (currentSpendingCycle finds whichever cycle contains that date).
+  const [cycleOffset, setCycleOffset] = useState(0)
   const shiftMonth = (delta) => { setShowAllMonths(false); setMonthCursor((c) => { const d = new Date(c.year, c.month + delta, 1); return { year: d.getFullYear(), month: d.getMonth() } }) }
   const monthActivity = showAllMonths ? activity : activity.filter((a) => {
     const d = new Date(a.date)
     return d.getFullYear() === monthCursor.year && d.getMonth() === monthCursor.month
   })
-  const cycle = currentSpendingCycle(card)
+  const cycleRefDate = (() => { const n = new Date(); return new Date(n.getFullYear(), n.getMonth() + cycleOffset, n.getDate()) })()
+  const cycle = currentSpendingCycle(card, cycleRefDate)
   const cycleActivity = activity.filter((a) => { const d = new Date(a.date); return d >= cycle.start && d < cycle.end })
   const displayedActivity = cycleMode ? cycleActivity : monthActivity
+  // Net spend (debits minus credits) for whatever's currently displayed — same netting
+  // "Net spend by month" already does below — plus a yours/to-be-repaid split of the debit side.
+  const displayedDebits = displayedActivity.filter((a) => a.direction === 'debit')
+  const displayedTotal = displayedActivity.reduce((s, a) => s + (a.direction === 'debit' ? a.amount : -a.amount), 0)
+  const reimbursableTotal = displayedDebits.filter((a) => a.row?.is_reimbursable).reduce((s, a) => s + a.amount, 0)
+  const ownTotal = displayedDebits.reduce((s, a) => s + a.amount, 0) - reimbursableTotal
 
   const now = new Date()
   const months = []
@@ -222,9 +233,15 @@ export function CreditCardDetailView({ card, cardTransactions, allTransactions, 
                 title={`Spends since the ${ordinal(card.billing_date)} (this cycle's bill)`}
                 className={`rounded-xl border px-3 py-2 text-[11px] font-semibold uppercase tracking-wider transition ${cycleMode ? 'border-accent-300/40 bg-accent-400/15 text-accent-200 light:text-accent-700' : 'border-white/10 light:border-black/10 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900'}`}
               >This billing cycle</button>
-              <div className={cycleMode ? 'pointer-events-none opacity-40' : ''}>
+              {cycleMode ? (
+                <div className="flex items-center rounded-xl border border-white/10 light:border-black/10">
+                  <button type="button" onClick={() => setCycleOffset((o) => o - 1)} className="rounded-l-xl p-2 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900" title="Previous cycle"><ChevronLeft size={14} /></button>
+                  <span className="px-1.5 text-xs font-semibold uppercase tracking-wider text-slate-300 light:text-slate-700">{cycleOffset === 0 ? 'Current' : `${Math.abs(cycleOffset)} back`}</span>
+                  <button type="button" disabled={cycleOffset >= 0} onClick={() => setCycleOffset((o) => Math.min(0, o + 1))} className="rounded-r-xl p-2 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900 disabled:opacity-30 disabled:pointer-events-none" title="Next cycle"><ChevronRight size={14} /></button>
+                </div>
+              ) : (
                 <MonthCursor cursor={monthCursor} onShift={shiftMonth} showAll={showAllMonths} onToggleAll={() => setShowAllMonths((v) => !v)} />
-              </div>
+              )}
             </div>
           </div>
         )}
@@ -301,6 +318,22 @@ export function CreditCardDetailView({ card, cardTransactions, allTransactions, 
             })}
             </div>
           </>
+        )}
+        {displayedActivity.length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-white/10 light:border-black/10 px-5 py-3">
+            <span className="text-xs uppercase tracking-widest text-slate-500">Total</span>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+              <span className="font-semibold text-white light:text-slate-900">{showMoney ? money(displayedTotal) : '••••'}</span>
+              {reimbursableTotal > 0 && (
+                <>
+                  <span className="text-slate-600">·</span>
+                  <span className="text-slate-400 light:text-slate-500">Yours <span className="font-semibold text-white light:text-slate-900">{showMoney ? money(ownTotal) : '••••'}</span></span>
+                  <span className="text-slate-600">·</span>
+                  <span className="text-amber-300 light:text-amber-700">To be repaid <span className="font-semibold">{showMoney ? money(reimbursableTotal) : '••••'}</span></span>
+                </>
+              )}
+            </div>
+          </div>
         )}
       </div>
 

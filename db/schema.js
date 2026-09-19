@@ -71,6 +71,9 @@ export const transactions = pgTable('transactions', {
   date: date('date').notNull().defaultNow(),
   time: time('time'),
   notes: text('notes'),
+  // Money spent on someone else's behalf (common with credit cards — you put their purchase on
+  // your card and they pay you back later). Plain display flag, never touches balance math.
+  isReimbursable: boolean('is_reimbursable').notNull().default(false),
   linkedModule: text('linked_module'),
   linkedModuleId: uuid('linked_module_id'),
   transferGroupId: uuid('transfer_group_id'),

@@ -8,6 +8,13 @@ import { triggerAppUpdate } from '@/lib/pwaUpdate'
 // whenever something user-visible ships; no need to log every internal fix.
 const CHANGELOG = [
   {
+    date: '20 Sep 2026',
+    points: [
+      'Credit cards > This billing cycle: step back through past cycles with new < > arrows, not just the current one — plus a total for whatever\'s shown.',
+      'Credit card spends (Log spend, and Add transaction funded by a card): a "Not my spending" toggle for a purchase someone else will pay you back for — the card activity total now splits into Yours and To be repaid.',
+    ],
+  },
+  {
     date: '18 Sep 2026',
     points: [
       'Fixed a Family/Company entry paid by a credit card sometimes never posting to that card — no transaction, no outstanding-balance update, and "Bank" showing blank in the entries list — when the profile itself had no default linked account. Re-saving an already-affected entry (Edit > Update) fixes it retroactively.',
