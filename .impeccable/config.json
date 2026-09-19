@@ -288,6 +288,14 @@
         ],
         "createdAt": "2026-09-17T07:33:01.170Z",
         "reason": "Toggle button className is a ternary between selected (emerald-200 text on emerald-400/15 bg) and unselected (slate-400 text, no colored bg — just a white/10 border) states. Only one branch ever renders per button; the regex scanner conflates both branches into one string and cross-matches slate text from the unselected branch against the emerald bg from the selected branch, a combo that never co-occurs in the DOM."
+      },
+      {
+        "rule": "gray-on-color",
+        "value": "text-slate-400 on transparent (chart legend dot, existing pattern)",
+        "files": [
+          "features/admin/AdminDashboardView.jsx"
+        ],
+        "createdAt": "2026-09-19T19:17:57.104Z"
       }
     ]
   }
