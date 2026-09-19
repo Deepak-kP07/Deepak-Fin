@@ -12,6 +12,7 @@ const CHANGELOG = [
     points: [
       'Credit cards > This billing cycle: step back through past cycles with new < > arrows, not just the current one — plus a total for whatever\'s shown.',
       'Credit card spends (Log spend, and Add transaction funded by a card): a "Not my spending" toggle for a purchase someone else will pay you back for — the card activity total now splits into Yours and To be repaid.',
+      'Credit cards > Card activity: an edit icon on each row, so you can fix a spend without deleting and re-logging it.',
     ],
   },
   {

@@ -36,7 +36,7 @@ function buildActivity(card, cardTransactions, allTransactions) {
   return [...fromLog, ...fromLinked].sort((a, b) => new Date(b.date) - new Date(a.date) || String(b.time || '').localeCompare(String(a.time || '')))
 }
 
-export function CreditCardDetailView({ card, cardTransactions, allTransactions, categories, onBack, onSpend, onPay, onDeleteSpend, onDeleteTx, onDeleteActivityBulk, onDeleteTxBulk, onEdit, onDelete, showMoney, onToggleMoney }) {
+export function CreditCardDetailView({ card, cardTransactions, allTransactions, categories, onBack, onSpend, onPay, onDeleteSpend, onDeleteTx, onEditTx, onDeleteActivityBulk, onDeleteTxBulk, onEdit, onDelete, showMoney, onToggleMoney }) {
   const util = Number(card.credit_limit) > 0 ? Math.min(100, Math.round((Number(card.current_outstanding) / Number(card.credit_limit)) * 100)) : 0
   const activity = buildActivity(card, cardTransactions, allTransactions)
   const nd = nextBillDue(card)
@@ -103,6 +103,14 @@ export function CreditCardDetailView({ card, cardTransactions, allTransactions, 
   const handleRowTap = (section, id) => {
     if (longPressFired.current) { longPressFired.current = false; return }
     if (selectSection === section) toggleSelect(id)
+  }
+  // Only a 'linked' activity row is a real transactions row that the shared edit form knows how
+  // to open — a 'log' row (the legacy credit_card_transactions table) has no edit path anywhere
+  // in the app today, so a tap on one of those outside select mode stays a no-op, same as before.
+  const handleActivityTap = (a) => {
+    if (longPressFired.current) { longPressFired.current = false; return }
+    if (selectSection === 'activity') { toggleSelect(a.id); return }
+    if (a.source === 'linked') onEditTx?.(a.row)
   }
   // "Card activity" mixes two sources (log spends vs. this-card-linked transactions, see
   // buildActivity above) — onDeleteActivityBulk splits the selection by source itself, so this
@@ -267,7 +275,7 @@ export function CreditCardDetailView({ card, cardTransactions, allTransactions, 
                       same icon-bubble + name/subtitle + trailing amount pattern as Accounts/Transactions. */}
                   <button
                     type="button"
-                    onClick={() => handleRowTap('activity', a.id)}
+                    onClick={() => handleActivityTap(a)}
                     onTouchStart={() => startLongPress('activity', a.id)}
                     onTouchEnd={cancelLongPress}
                     onTouchMove={cancelLongPress}
@@ -309,7 +317,8 @@ export function CreditCardDetailView({ card, cardTransactions, allTransactions, 
                     </div>
                     <div className="text-xs text-slate-500">{formatDateTime(a.date, a.time)}</div>
                     <div className={`text-sm font-semibold sm:text-right ${color}`}>{isDebit ? '-' : '+'}{showMoney ? money(a.amount) : '••••'}</div>
-                    <div className="flex justify-end">
+                    <div className="flex justify-end gap-1">
+                      {a.source === 'linked' && <button onClick={() => onEditTx?.(a.row)} className="rounded-lg p-1.5 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900" title="Edit"><Pencil size={13} /></button>}
                       <button onClick={() => deleteActivity(a)} className="rounded-lg p-1.5 text-rose-300/70 light:text-rose-700 hover:bg-rose-300/10"><Trash2 size={13} /></button>
                     </div>
                   </div>
