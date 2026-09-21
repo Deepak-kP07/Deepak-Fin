@@ -17,8 +17,15 @@ export async function POST(request) {
   }
   clearAttempts(ip)
 
+  let token
+  try {
+    token = signAdminSession()
+  } catch {
+    return NextResponse.json({ error: 'Admin login is not fully configured — ADMIN_SESSION_SECRET is missing on the server' }, { status: 500 })
+  }
+
   const response = NextResponse.json({ ok: true })
-  response.cookies.set(ADMIN_COOKIE_NAME, signAdminSession(), {
+  response.cookies.set(ADMIN_COOKIE_NAME, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',

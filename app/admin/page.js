@@ -29,5 +29,7 @@ export default function AdminPage() {
     return <div className="flex min-h-screen items-center justify-center bg-[#080b12] text-sm text-slate-500">Loading…</div>
   }
 
-  return authed ? <AdminDashboardView onLogout={handleLogout} /> : <AdminLoginScreen onSuccess={() => setAuthed(true)} />
+  return authed
+    ? <AdminDashboardView onLogout={handleLogout} onAuthExpired={() => setAuthed(false)} />
+    : <AdminLoginScreen onSuccess={() => setAuthed(true)} />
 }

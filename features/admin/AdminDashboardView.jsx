@@ -37,7 +37,7 @@ function ChartTooltip({ active, payload, label }) {
   )
 }
 
-export function AdminDashboardView({ onLogout }) {
+export function AdminDashboardView({ onLogout, onAuthExpired }) {
   const [days, setDays] = useState(30)
   const [stats, setStats] = useState(null)
   const [error, setError] = useState('')
@@ -45,8 +45,12 @@ export function AdminDashboardView({ onLogout }) {
   useEffect(() => {
     let cancelled = false
     fetch(`/api/admin/stats?days=${days}`)
-      .then((res) => {
-        if (!res.ok) throw new Error('Could not load stats')
+      .then(async (res) => {
+        if (res.status === 401) { onAuthExpired?.(); throw new Error('Session expired — signing you out') }
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}))
+          throw new Error(body.error || `Could not load stats (${res.status})`)
+        }
         return res.json()
       })
       .then((data) => { if (!cancelled) setStats(data) })
