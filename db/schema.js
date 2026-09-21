@@ -641,6 +641,11 @@ export const moneyProfiles = pgTable('money_profiles', {
   linkedAccountId: uuid('linked_account_id').references(() => accounts.id, { onDelete: 'set null' }),
   openingBalance: numeric('opening_balance', { precision: 14, scale: 2 }).notNull().default('0'),
   openingBalanceDate: date('opening_balance_date').notNull().defaultNow(),
+  // Set only by syncOpeningBalanceMirror (lib/server/moneyProfileCrud.js), never a raw PATCH —
+  // the transaction that mirrors opening_balance onto linked_account_id, kept separate from
+  // money_profile_entries.linked_transaction_id so it never double-counts against the profile's
+  // own opening_balance in profileTotals.
+  openingBalanceLinkedTransactionId: uuid('opening_balance_linked_transaction_id').references(() => transactions.id, { onDelete: 'set null' }),
   // 'closed' blocks new entries (manual and bulk-import) until switched back to 'active' —
   // existing entries stay fully visible/editable either way, only creation is gated.
   status: text('status').notNull().default('active'),

@@ -8,6 +8,12 @@ import { triggerAppUpdate } from '@/lib/pwaUpdate'
 // whenever something user-visible ships; no need to log every internal fix.
 const CHANGELOG = [
   {
+    date: '22 Sep 2026',
+    points: [
+      'Family/Company: a profile\'s opening balance now posts to its linked account too (as a one-time entry), same as every entry logged afterward already did — previously only entries mirrored, so a freshly-linked profile\'s starting balance never showed up in Accounts. An already-linked profile with this gap fixes itself the next time you open it in Edit and save.',
+    ],
+  },
+  {
     date: '20 Sep 2026',
     points: [
       'Credit cards > This billing cycle: step back through past cycles with new < > arrows, not just the current one — plus a total for whatever\'s shown.',

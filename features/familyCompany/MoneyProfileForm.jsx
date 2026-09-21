@@ -46,8 +46,8 @@ function MoneyProfileFormFields({ form, setForm, editing, accounts }) {
         </Select>
         <p className="mt-1.5 text-[11px] text-slate-500">
           {editing
-            ? 'Changing this only affects entries you add from now on — transactions already mirrored from past entries stay exactly as they are, under whichever account was linked when they were logged.'
-            : form.linked_account_id ? 'Every income/capital/expense entry here will also post as a transaction on this account.' : "Entries here won't show up anywhere outside this module."}
+            ? 'Changing this only affects entries you add from now on — transactions already mirrored from past entries stay exactly as they are, under whichever account was linked when they were logged. The opening balance itself moves to the new account (or stops posting anywhere, if unlinked).'
+            : form.linked_account_id ? 'Every income/capital/expense entry here will also post as a transaction on this account — including a nonzero opening balance above, as a one-time entry.' : "Entries here won't show up anywhere outside this module."}
         </p>
       </label>
 
