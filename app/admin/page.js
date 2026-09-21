@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { AdminLoginScreen } from '@/features/admin/AdminLoginScreen'
-import { AdminDashboardView } from '@/features/admin/AdminDashboardView'
+import { AdminShell } from '@/features/admin/AdminShell'
 
 // Fully standalone from the main app's Shell/AuthScreen/user session — its own gate, its own
 // cookie, checked here rather than via Supabase's `/api/auth/me`. See lib/server/adminAuth.js.
@@ -30,6 +30,6 @@ export default function AdminPage() {
   }
 
   return authed
-    ? <AdminDashboardView onLogout={handleLogout} onAuthExpired={() => setAuthed(false)} />
+    ? <AdminShell onLogout={handleLogout} onAuthExpired={() => setAuthed(false)} />
     : <AdminLoginScreen onSuccess={() => setAuthed(true)} />
 }

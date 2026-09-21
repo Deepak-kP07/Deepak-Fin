@@ -1,22 +1,9 @@
 import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/server/adminAuth'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { listAllUsers } from '@/lib/server/adminUsers'
 
 const DAY_MS = 24 * 60 * 60 * 1000
-
-// supabase.auth.admin.listUsers() defaults to 50/page — loop until a short page confirms we've
-// seen everyone, correct at any user count instead of silently capping at the default.
-async function listAllUsers(supabase) {
-  const perPage = 1000
-  const all = []
-  for (let page = 1; ; page += 1) {
-    const { data, error } = await supabase.auth.admin.listUsers({ page, perPage })
-    if (error) throw new Error(error.message)
-    all.push(...data.users)
-    if (data.users.length < perPage) break
-  }
-  return all
-}
 
 const dayKey = (date) => date.toISOString().slice(0, 10)
 
