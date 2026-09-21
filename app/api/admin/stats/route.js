@@ -24,6 +24,17 @@ export async function GET(request) {
   const { response } = requireAdmin(request)
   if (response) return response
 
+  try {
+    return await buildStats(request)
+  } catch (err) {
+    // Internal-only tool (never exposed to real users) — safe to return the real message
+    // instead of a blank 500, so a misconfigured env var or a Supabase error is diagnosable
+    // straight from the browser instead of needing Vercel function logs.
+    return NextResponse.json({ error: err.message || 'Unknown error building stats' }, { status: 500 })
+  }
+}
+
+async function buildStats(request) {
   const url = new URL(request.url)
   const days = Math.min(Math.max(Number(url.searchParams.get('days')) || 30, 1), 365)
 
