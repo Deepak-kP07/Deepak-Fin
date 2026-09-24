@@ -552,13 +552,44 @@ async function handleRoute(request, { params }) {
       if (!card) return cors(NextResponse.json({ error: 'Card not found' }, { status: 404 }))
       const now = new Date()
       const billCategoryId = await ensureCategory(supabase, user.id, 'Credit card bill', 'expense')
-      const txPayload = { user_id: user.id, account_id: body.account_id, amount, type: 'expense', description: `Credit card bill · ${card.name}`, category_id: billCategoryId, date: body.date || now.toISOString().slice(0, 10), time: now.toTimeString().slice(0, 5), notes: body.notes || null }
+      // linked_module/linked_module_id lets a later edit or delete of this exact transaction
+      // (from the plain Transactions ledger, or Repayment history's own delete icon) correctly
+      // reverse/reapply the -amount this payment applies below — before this, a bill-payment
+      // transaction carried no link back to the card at all, so deleting one silently left
+      // current_outstanding permanently understated by that payment's amount forever, with the
+      // transaction itself gone and nothing left pointing at what needed reversing.
+      const txPayload = { user_id: user.id, account_id: body.account_id, amount, type: 'expense', description: `Credit card bill · ${card.name}`, category_id: billCategoryId, date: body.date || now.toISOString().slice(0, 10), time: now.toTimeString().slice(0, 5), notes: body.notes || null, linked_module: 'credit_card_bill_payment', linked_module_id: cardId }
       const { data: tx } = await supabase.from('transactions').insert(txPayload).select().single()
       // Atomic UPDATE (drizzle/0043_credit_card_outstanding_atomic.sql) — new_outstanding below
       // is the DB's own post-update value, not a locally-recomputed guess.
       const { data: newOutstanding } = await supabase.rpc('adjust_credit_card_outstanding', { p_card_id: cardId, p_delta: -amount })
       await supabase.from('credit_card_transactions').update({ status: 'paid' }).eq('credit_card_id', cardId).eq('user_id', user.id).eq('status', 'pending')
       return cors(NextResponse.json({ new_outstanding: newOutstanding, transaction_id: tx?.id }))
+    }
+
+    // ---- CREDIT CARD sync outstanding ----
+    // current_outstanding isn't derived from a sum of transactions the way an account's
+    // current_balance is (see accounts.js's syncAccountBalance comment) — it's a directly-
+    // mutated column, adjusted piecemeal by every card-funded spend/payoff/repayment across the
+    // app via adjust_credit_card_outstanding. That makes it the one balance in this app with no
+    // self-healing "recompute from source rows" story if something ever nudges it out of sync
+    // with the real statement (a missed edge case, a manual DB fix, etc.) — logging a labeled
+    // "Balance adjustment" transaction the way syncAccountBalance/syncMoneyProfileBalance do
+    // wouldn't touch this column at all. Sets it directly instead, via the same atomic RPC every
+    // other adjustment here already goes through.
+    if (route.match(/^\/finance\/credit_cards\/([^/]+)\/sync_outstanding$/) && method === 'POST') {
+      const user = await currentUser(supabase)
+      if (!user) return cors(NextResponse.json({ error: 'Not authenticated' }, { status: 401 }))
+      const cardId = route.match(/^\/finance\/credit_cards\/([^/]+)\/sync_outstanding$/)[1]
+      const body = await request.json()
+      const target = Number(body.target_outstanding)
+      if (!Number.isFinite(target)) return cors(NextResponse.json({ error: 'target_outstanding is required' }, { status: 400 }))
+      const { data: card } = await supabase.from('credit_cards').select('current_outstanding').eq('id', cardId).eq('user_id', user.id).maybeSingle()
+      if (!card) return cors(NextResponse.json({ error: 'Card not found' }, { status: 404 }))
+      const diff = target - Number(card.current_outstanding || 0)
+      if (Math.abs(diff) < 0.01) return cors(NextResponse.json({ error: 'Outstanding already matches — nothing to adjust' }, { status: 400 }))
+      const { data: newOutstanding } = await supabase.rpc('adjust_credit_card_outstanding', { p_card_id: cardId, p_delta: diff })
+      return cors(NextResponse.json({ new_outstanding: Number(newOutstanding ?? target) }))
     }
 
     // ---- SCHOLARSHIP payment to college ----
@@ -874,6 +905,15 @@ async function handleRoute(request, { params }) {
             const delta = updated.type === 'income' ? -Number(updated.amount) : Number(updated.amount)
             await supabase.rpc('adjust_credit_card_outstanding', { p_card_id: updated.linked_module_id, p_delta: delta })
           }
+          // A bill payment always reduces outstanding by its amount, unlike a card-funded
+          // transaction above — there's no 'income' variant to branch on, it's always money
+          // paid TO the card from a real account, never the other direction.
+          if (oldRow?.linked_module === 'credit_card_bill_payment' && oldRow.linked_module_id) {
+            await supabase.rpc('adjust_credit_card_outstanding', { p_card_id: oldRow.linked_module_id, p_delta: Number(oldRow.amount) })
+          }
+          if (updated.linked_module === 'credit_card_bill_payment' && updated.linked_module_id) {
+            await supabase.rpc('adjust_credit_card_outstanding', { p_card_id: updated.linked_module_id, p_delta: -Number(updated.amount) })
+          }
         }
         return cors(NextResponse.json(updated))
       }
@@ -892,6 +932,11 @@ async function handleRoute(request, { params }) {
           if (row?.linked_module === 'credit_card' && row.linked_module_id) {
             const delta = row.type === 'income' ? Number(row.amount) : -Number(row.amount)
             await supabase.rpc('adjust_credit_card_outstanding', { p_card_id: row.linked_module_id, p_delta: delta })
+          }
+          // Reverse a bill payment's outstanding reduction — always +amount, no 'income' branch
+          // (see the matching PATCH-side comment above for why).
+          if (row?.linked_module === 'credit_card_bill_payment' && row.linked_module_id) {
+            await supabase.rpc('adjust_credit_card_outstanding', { p_card_id: row.linked_module_id, p_delta: Number(row.amount) })
           }
           // Reverse the lend/borrow repayment this transaction had recorded
           if (row?.linked_module === 'lend' && row.linked_module_id) {

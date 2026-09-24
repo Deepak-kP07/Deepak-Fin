@@ -11,6 +11,8 @@ const CHANGELOG = [
     date: '24 Sep 2026',
     points: [
       'Fixed a credit card\'s Outstanding/Utilisation staying stuck at the old amount right after deleting a card activity entry — the delete itself always worked, the card\'s own numbers just didn\'t refresh on screen until something else happened to reload the page.',
+      'Fixed a bigger version of the same issue: deleting or editing a logged bill payment (Repayment history) never adjusted Outstanding back — so paying a bill, then deleting that payment, permanently understated what you actually owed, with no way to notice from inside the app.',
+      'Credit cards: a new "Sync" option (next to Edit) to set Outstanding directly against your card\'s real statement, same as Accounts already has for balance — useful if it\'s ever drifted, including from the bug above.',
     ],
   },
   {

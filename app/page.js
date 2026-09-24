@@ -2864,6 +2864,11 @@ function Shell({ user, onLogout }) {
   const openCardPay = (c) => { setCardPayTarget(c); setCardPayOpen(true) }
   const closeCardPay = () => { setCardPayOpen(false); setCardPayTarget(null) }
   const onCardPaid = async () => { closeCardPay(); await refresh() }
+  const syncCardOutstanding = async (card, targetOutstanding) => {
+    const response = await fetch(`/api/finance/credit_cards/${card.id}/sync_outstanding`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ target_outstanding: targetOutstanding }) })
+    const data = await response.json()
+    if (response.ok) { toast.push('Outstanding synced'); await refresh() } else { toast.push(data.error || 'Sync failed', 'error') }
+  }
   const deleteCardSpend = async (t) => {
     if (!(await confirm.ask('Delete this spend?'))) return
     const response = await fetch(`/api/finance/credit_card_transactions/${t.id}`, { method: 'DELETE' })
@@ -3059,12 +3064,22 @@ function Shell({ user, onLogout }) {
     if (!cardId || !delta) return
     setData((d) => ({ ...d, credit_cards: (d.credit_cards || []).map((c) => (c.id === cardId ? { ...c, current_outstanding: Number(c.current_outstanding || 0) + delta } : c)) }))
   }
+  // Two distinct linked_module shapes touch a card's outstanding on delete, with opposite
+  // reasoning: a card-FUNDED transaction (linked_module: 'credit_card') added to outstanding when
+  // created (or subtracted, if it was an income/refund) — deleting it reverses whichever that was.
+  // A bill PAYMENT (linked_module: 'credit_card_bill_payment') always subtracted on creation (a
+  // real account paying the card down) — there's no income variant, deleting it always adds back.
+  const reverseLocalCardOutstandingOnDelete = (row) => {
+    if (row.linked_module === 'credit_card' && row.linked_module_id) {
+      applyLocalCardOutstandingDelta(row.linked_module_id, row.type === 'income' ? Number(row.amount) : -Number(row.amount))
+    } else if (row.linked_module === 'credit_card_bill_payment' && row.linked_module_id) {
+      applyLocalCardOutstandingDelta(row.linked_module_id, Number(row.amount))
+    }
+  }
   const deleteTx = async (t) => {
     if (!(await confirm.ask('Delete this transaction? Balances will be recomputed.'))) return
     const { queued } = await mutate({ table: 'transactions', method: 'DELETE', id: t.id })
-    if (t.linked_module === 'credit_card' && t.linked_module_id) {
-      applyLocalCardOutstandingDelta(t.linked_module_id, t.type === 'income' ? Number(t.amount) : -Number(t.amount))
-    }
+    reverseLocalCardOutstandingOnDelete(t)
     toast.push(queued ? 'Transaction deleted — will sync when back online' : 'Transaction deleted')
   }
   // Mobile's long-press-to-select flow (TransactionsView) deletes in bulk rather than one confirm
@@ -3079,11 +3094,7 @@ function Shell({ user, onLogout }) {
     // above applies, and they won't be there to look up once deleted.
     const rows = ids.map((id) => data.transactions.find((t) => t.id === id)).filter(Boolean)
     const results = await Promise.all(ids.map((id) => mutate({ table: 'transactions', method: 'DELETE', id })))
-    for (const row of rows) {
-      if (row.linked_module === 'credit_card' && row.linked_module_id) {
-        applyLocalCardOutstandingDelta(row.linked_module_id, row.type === 'income' ? Number(row.amount) : -Number(row.amount))
-      }
-    }
+    for (const row of rows) reverseLocalCardOutstandingOnDelete(row)
     const queuedCount = results.filter((r) => r.queued).length
     toast.push(queuedCount > 0 ? `${n} transaction${n === 1 ? '' : 's'} deleted — ${queuedCount} will sync when back online` : `${n} transaction${n === 1 ? '' : 's'} deleted`)
     return true
@@ -3354,7 +3365,7 @@ function Shell({ user, onLogout }) {
               {view === 'accounts' && <AccountsView data={data} onAdd={() => openAccForm()} onEdit={openAccForm} onDelete={deleteAccount} onDeleteTx={deleteTx} onDeleteTxBulk={deleteTxBulk} onAddTransaction={(accountId) => openTxForm(null, accountId)} onSyncBalance={syncAccountBalance} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onDetailChange={onDetailChange} initialSelectedId={initialNavState.current.detailId} />}
               {view === 'budgets' && <BudgetsView data={data} onSetMonth={openBudgetMonthForm} onCloseMonth={closeBudgetMonth} onReopenMonth={reopenBudgetMonth} onDeleteMonth={deleteBudgetMonth} onAddYearly={() => openBudgetForm()} onEditYearly={openBudgetForm} onDeleteYearly={deleteBudget} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'investments' && <InvestmentsView data={data} onAddPortfolio={() => openPortfolioForm()} onEditPortfolio={openPortfolioForm} onDeletePortfolio={deletePortfolio} onAddHolding={openHoldingForm} onBulkImport={openBulkImport} onEditHolding={openHoldingEdit} onDeleteHolding={deleteHolding} onRefreshRowPrice={onRefreshRowPrice} onManualPriceEntry={onManualPriceEntry} onRefreshAll={refreshAllPrices} pricesLoading={pricesLoading} onAddFunds={openFundsForm} onWithdrawFunds={openWithdrawForm} onConnectKite={connectKite} onLinkKite={linkPortfolioKite} onUnlinkKite={unlinkPortfolioKite} onSyncKite={syncPortfolioKite} kiteSyncBusy={kiteSyncBusy} onAddSip={openSipForm} onEditSip={openSipForm} onDeleteSip={deleteSip} onSyncSipsKite={syncSipsKite} onAddOtherInvestment={openOtherInvestmentForm} onEditOtherInvestment={openOtherInvestmentEdit} onDeleteOtherInvestment={deleteOtherInvestment} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onDetailChange={onDetailChange} initialSelectedId={initialNavState.current.detailId} />}
-              {view === 'cards' && <CreditCardsView data={data} onAdd={() => openCardForm()} onEdit={openCardForm} onDelete={deleteCard} onSpend={openCardSpend} onPay={openCardPay} onDeleteSpend={deleteCardSpend} onDeleteTx={deleteTx} onEditTx={openTxForm} onDeleteActivityBulk={deleteCardActivityBulk} onDeleteTxBulk={deleteTxBulk} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onDetailChange={onDetailChange} initialSelectedId={initialNavState.current.detailId} />}
+              {view === 'cards' && <CreditCardsView data={data} onAdd={() => openCardForm()} onEdit={openCardForm} onDelete={deleteCard} onSpend={openCardSpend} onPay={openCardPay} onDeleteSpend={deleteCardSpend} onDeleteTx={deleteTx} onEditTx={openTxForm} onDeleteActivityBulk={deleteCardActivityBulk} onDeleteTxBulk={deleteTxBulk} onSyncOutstanding={syncCardOutstanding} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onDetailChange={onDetailChange} initialSelectedId={initialNavState.current.detailId} />}
               {view === 'scholarships' && <ScholarshipsView data={data} onAdd={() => openScholarshipForm()} onEdit={openScholarshipForm} onDelete={deleteScholarship} onPay={openScholarshipPay} onRefresh={refresh} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} toast={toast} onDetailChange={onDetailChange} initialSelectedId={initialNavState.current.detailId} />}
               {view === 'loans' && <LoansView data={data} onAdd={() => openLoanForm()} onEdit={openLoanForm} onDelete={deleteLoan} onPay={openLoanPay} onDeletePayment={deleteLoanPayment} onDeletePaymentBulk={deleteLoanPaymentBulk} onSync={syncLoanOutstanding} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onDetailChange={onDetailChange} initialSelectedId={initialNavState.current.detailId} />}
               {view === 'lend' && <LendBorrowView data={data} onAdd={() => openLendForm()} onEdit={openLendForm} onDelete={deleteLend} onDeleteTx={deleteTx} onDeleteTxBulk={deleteTxBulk} onLogRepayment={(record) => openTxForm(null, '', { value: `lend:${record.id}`, type: record.type === 'lent' ? 'income' : 'expense' })} onAddMore={openLendAddForm} onEditAdditionNote={editAdditionNote} onManageAccess={openManageLendAccess} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} toast={toast} onDetailChange={onDetailChange} initialSelectedId={initialNavState.current.detailId} />}

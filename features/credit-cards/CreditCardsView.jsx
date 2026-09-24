@@ -10,7 +10,7 @@ import { money } from '@/lib/format'
 import { CreditCardFlip } from '@/features/credit-cards/CreditCardFlip'
 import { CreditCardDetailView } from '@/features/credit-cards/CreditCardDetailView'
 
-export function CreditCardsView({ data, onAdd, onEdit, onDelete, onSpend, onPay, onDeleteSpend, onDeleteTx, onEditTx, onDeleteActivityBulk, onDeleteTxBulk, showMoney, onToggleMoney, onDetailChange, initialSelectedId }) {
+export function CreditCardsView({ data, onAdd, onEdit, onDelete, onSpend, onPay, onDeleteSpend, onDeleteTx, onEditTx, onDeleteActivityBulk, onDeleteTxBulk, onSyncOutstanding, showMoney, onToggleMoney, onDetailChange, initialSelectedId }) {
   const { credit_cards, credit_card_transactions, categories, transactions } = data
   const [selectedCardId, setSelectedCardId] = useState(initialSelectedId ?? null)
   const selectedCard = credit_cards.find((c) => c.id === selectedCardId)
@@ -31,6 +31,7 @@ export function CreditCardsView({ data, onAdd, onEdit, onDelete, onSpend, onPay,
         onEditTx={onEditTx}
         onDeleteActivityBulk={onDeleteActivityBulk}
         onDeleteTxBulk={onDeleteTxBulk}
+        onSyncOutstanding={onSyncOutstanding}
         onEdit={onEdit}
         onDelete={(c) => { onDelete(c); setSelectedCardId(null) }}
         showMoney={showMoney}

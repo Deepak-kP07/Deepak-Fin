@@ -12,7 +12,7 @@
           "features/settings/SettingsAppearance.jsx"
         ],
         "createdAt": "2026-08-23T04:53:03.789Z",
-        "reason": "decorative conic-gradient ring on the custom accent picker swatch, representing 'any hue is available' \u2014 not a palette addition, confined to this one control"
+        "reason": "decorative conic-gradient ring on the custom accent picker swatch, representing 'any hue is available' — not a palette addition, confined to this one control"
       },
       {
         "rule": "design-system-color",
@@ -21,7 +21,7 @@
           "features/settings/SettingsAppearance.jsx"
         ],
         "createdAt": "2026-08-23T04:53:03.852Z",
-        "reason": "decorative conic-gradient ring on the custom accent picker swatch, representing 'any hue is available' \u2014 not a palette addition, confined to this one control"
+        "reason": "decorative conic-gradient ring on the custom accent picker swatch, representing 'any hue is available' — not a palette addition, confined to this one control"
       },
       {
         "rule": "design-system-color",
@@ -30,7 +30,7 @@
           "features/settings/SettingsAppearance.jsx"
         ],
         "createdAt": "2026-08-23T04:53:03.957Z",
-        "reason": "decorative conic-gradient ring on the custom accent picker swatch, representing 'any hue is available' \u2014 not a palette addition, confined to this one control"
+        "reason": "decorative conic-gradient ring on the custom accent picker swatch, representing 'any hue is available' — not a palette addition, confined to this one control"
       },
       {
         "rule": "design-system-color",
@@ -39,7 +39,7 @@
           "features/settings/SettingsAppearance.jsx"
         ],
         "createdAt": "2026-08-23T04:53:04.028Z",
-        "reason": "decorative conic-gradient ring on the custom accent picker swatch, representing 'any hue is available' \u2014 not a palette addition, confined to this one control"
+        "reason": "decorative conic-gradient ring on the custom accent picker swatch, representing 'any hue is available' — not a palette addition, confined to this one control"
       },
       {
         "rule": "design-system-color",
@@ -48,13 +48,13 @@
           "features/settings/SettingsAppearance.jsx"
         ],
         "createdAt": "2026-08-23T04:53:04.078Z",
-        "reason": "decorative conic-gradient ring on the custom accent picker swatch, representing 'any hue is available' \u2014 not a palette addition, confined to this one control"
+        "reason": "decorative conic-gradient ring on the custom accent picker swatch, representing 'any hue is available' — not a palette addition, confined to this one control"
       },
       {
         "rule": "design-system-font-size",
         "value": "11px",
         "createdAt": "2026-08-23T05:02:15.724Z",
-        "reason": "documented in DESIGN.md as the Micro-label type tier (0.6875rem/11px) \u2014 the app's real dominant helper-text size, used consistently app-wide, not drift"
+        "reason": "documented in DESIGN.md as the Micro-label type tier (0.6875rem/11px) — the app's real dominant helper-text size, used consistently app-wide, not drift"
       },
       {
         "rule": "design-system-color",
@@ -63,7 +63,7 @@
           "features/auth/AuthScreen.jsx"
         ],
         "createdAt": "2026-08-23T06:34:20.288Z",
-        "reason": "graphite-metal material color for the realistic HeroCard mockup, not app UI chrome \u2014 mirrors how a real card's material has its own color, not the brand accent"
+        "reason": "graphite-metal material color for the realistic HeroCard mockup, not app UI chrome — mirrors how a real card's material has its own color, not the brand accent"
       },
       {
         "rule": "design-system-font-size",
@@ -72,7 +72,7 @@
           "features/auth/AuthScreen.jsx"
         ],
         "createdAt": "2026-08-23T06:34:20.317Z",
-        "reason": "real-card-scale micro print on the HeroCard mockup (issuer label) \u2014 realism was the explicit ask, below DESIGN.md's documented Micro-label floor by design"
+        "reason": "real-card-scale micro print on the HeroCard mockup (issuer label) — realism was the explicit ask, below DESIGN.md's documented Micro-label floor by design"
       },
       {
         "rule": "design-system-font-size",
@@ -81,7 +81,7 @@
           "features/auth/AuthScreen.jsx"
         ],
         "createdAt": "2026-08-23T06:34:20.342Z",
-        "reason": "real-card-scale micro print on the HeroCard mockup (CARDHOLDER label) \u2014 same realism exception as the 10px issuer label"
+        "reason": "real-card-scale micro print on the HeroCard mockup (CARDHOLDER label) — same realism exception as the 10px issuer label"
       },
       {
         "rule": "design-system-color",
@@ -108,7 +108,7 @@
           "features/auth/AuthScreen.jsx"
         ],
         "createdAt": "2026-08-23T07:10:05.280Z",
-        "reason": "warm gold-metal material gradient for the hero card mockup, matching the new gold accent identity \u2014 not app UI chrome"
+        "reason": "warm gold-metal material gradient for the hero card mockup, matching the new gold accent identity — not app UI chrome"
       },
       {
         "rule": "design-system-color",
@@ -141,31 +141,31 @@
         "rule": "design-system-color",
         "value": "#22d3ee",
         "createdAt": "2026-08-23T10:27:14.702Z",
-        "reason": "pre-existing per-account fallback swatch (user-customizable via ColorPicker, same pattern as credit cards/categories/vault items) \u2014 not the app's single brand accent, not introduced by this edit"
+        "reason": "pre-existing per-account fallback swatch (user-customizable via ColorPicker, same pattern as credit cards/categories/vault items) — not the app's single brand accent, not introduced by this edit"
       },
       {
         "rule": "design-system-color",
         "value": "#fb7185",
         "createdAt": "2026-08-23T10:30:12.178Z",
-        "reason": "pre-existing default color for a new category (user-customizable via ColorPicker), same per-entity-color pattern as accounts/cards/vault items \u2014 not the brand accent, unchanged by this edit"
+        "reason": "pre-existing default color for a new category (user-customizable via ColorPicker), same per-entity-color pattern as accounts/cards/vault items — not the brand accent, unchanged by this edit"
       },
       {
         "rule": "design-system-color",
         "value": "#a78bfa",
         "createdAt": "2026-08-24T04:05:04.912Z",
-        "reason": "pre-existing default color for a new portfolio (user-customizable via ColorPicker), same per-entity-color pattern as accounts/categories/cards/vault items \u2014 not the brand accent, unchanged by this edit (just moved during the BottomSheet conversion)"
+        "reason": "pre-existing default color for a new portfolio (user-customizable via ColorPicker), same per-entity-color pattern as accounts/categories/cards/vault items — not the brand accent, unchanged by this edit (just moved during the BottomSheet conversion)"
       },
       {
         "rule": "design-system-font-size",
         "value": "10px",
         "createdAt": "2026-08-24T14:31:09.366Z",
-        "reason": "pre-existing app-wide micro-badge tier (Linked/Closed/entry-type pill labels), same as the already-documented 11px tier \u2014 flagged only because it's adjacent to lines this session edited, not introduced by this feature"
+        "reason": "pre-existing app-wide micro-badge tier (Linked/Closed/entry-type pill labels), same as the already-documented 11px tier — flagged only because it's adjacent to lines this session edited, not introduced by this feature"
       },
       {
         "rule": "design-system-font-size",
         "value": "9px",
         "createdAt": "2026-08-24T14:31:09.404Z",
-        "reason": "pre-existing app-wide micro-badge tier (Linked/entry-type pill labels), same as the already-documented 11px tier \u2014 flagged only because it's adjacent to lines this session edited, not introduced by this feature"
+        "reason": "pre-existing app-wide micro-badge tier (Linked/entry-type pill labels), same as the already-documented 11px tier — flagged only because it's adjacent to lines this session edited, not introduced by this feature"
       },
       {
         "rule": "design-system-color",
@@ -185,7 +185,7 @@
           "features/settings/SettingsMobileNav.jsx"
         ],
         "createdAt": "2026-08-26T14:12:38.207Z",
-        "reason": "miniature phone-mockup status-bar label in a settings preview illustration, not real reading content \u2014 intentionally below the type ramp"
+        "reason": "miniature phone-mockup status-bar label in a settings preview illustration, not real reading content — intentionally below the type ramp"
       },
       {
         "rule": "design-system-color",
@@ -278,7 +278,7 @@
           "features/lend-borrow/LendBorrowView.jsx"
         ],
         "createdAt": "2026-09-17T05:32:13.194Z",
-        "reason": "Badge className strings are ternaries across isClosed/isLent/isBorrowed (or isClosed/partial/other); only one branch ever renders per badge. text-slate-400 only ever pairs with bg-slate-500/15 (not a colored bg) \u2014 the other branches use emerald-200/rose-200/amber-200/accent-200 text, never gray. The regex scanner reads all ternary branches as one string and cross-matches slate text from one branch against a colored bg from another, a combo that never co-occurs in the DOM."
+        "reason": "Badge className strings are ternaries across isClosed/isLent/isBorrowed (or isClosed/partial/other); only one branch ever renders per badge. text-slate-400 only ever pairs with bg-slate-500/15 (not a colored bg) — the other branches use emerald-200/rose-200/amber-200/accent-200 text, never gray. The regex scanner reads all ternary branches as one string and cross-matches slate text from one branch against a colored bg from another, a combo that never co-occurs in the DOM."
       },
       {
         "rule": "gray-on-color",
@@ -287,7 +287,7 @@
           "features/loans/LoanPaymentForm.jsx"
         ],
         "createdAt": "2026-09-17T07:33:01.170Z",
-        "reason": "Toggle button className is a ternary between selected (emerald-200 text on emerald-400/15 bg) and unselected (slate-400 text, no colored bg \u2014 just a white/10 border) states. Only one branch ever renders per button; the regex scanner conflates both branches into one string and cross-matches slate text from the unselected branch against the emerald bg from the selected branch, a combo that never co-occurs in the DOM."
+        "reason": "Toggle button className is a ternary between selected (emerald-200 text on emerald-400/15 bg) and unselected (slate-400 text, no colored bg — just a white/10 border) states. Only one branch ever renders per button; the regex scanner conflates both branches into one string and cross-matches slate text from the unselected branch against the emerald bg from the selected branch, a combo that never co-occurs in the DOM."
       },
       {
         "rule": "gray-on-color",
@@ -296,6 +296,15 @@
           "features/admin/AdminDashboardView.jsx"
         ],
         "createdAt": "2026-09-21T07:14:55.712Z"
+      },
+      {
+        "rule": "gray-on-color",
+        "value": "*",
+        "files": [
+          "features/credit-cards/CreditCardDetailView.jsx"
+        ],
+        "createdAt": "2026-09-24T16:01:52.926Z",
+        "reason": "Bill-due banner className is a ternary between an amber-warning state (amber text on amber bg) and a default state (slate-300 text on a dark neutral bg, not colored). Only one branch ever renders; the regex scanner conflates both branches into one string and cross-matches slate text from the default branch against the amber bg from the warning branch, a combo that never co-occurs in the DOM. Same false-positive class already ignored for LendBorrowView.jsx and LoanPaymentForm.jsx."
       }
     ]
   }

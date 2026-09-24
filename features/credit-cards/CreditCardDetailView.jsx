@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { ArrowDownRight, ArrowUpRight, CheckCircle2, ChevronLeft, ChevronRight, Eye, EyeOff, MoreVertical, Pencil, Target, Trash2, X } from 'lucide-react'
+import { ArrowDownRight, ArrowUpRight, CheckCircle2, ChevronLeft, ChevronRight, Eye, EyeOff, MoreVertical, Pencil, RefreshCw, Target, Trash2, X } from 'lucide-react'
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { BankCardFace } from '@/components/shared/BankCardFace'
 import { StatCard } from '@/components/shared/StatCard'
@@ -36,7 +36,10 @@ function buildActivity(card, cardTransactions, allTransactions) {
   return [...fromLog, ...fromLinked].sort((a, b) => new Date(b.date) - new Date(a.date) || String(b.time || '').localeCompare(String(a.time || '')))
 }
 
-export function CreditCardDetailView({ card, cardTransactions, allTransactions, categories, onBack, onSpend, onPay, onDeleteSpend, onDeleteTx, onEditTx, onDeleteActivityBulk, onDeleteTxBulk, onEdit, onDelete, showMoney, onToggleMoney }) {
+export function CreditCardDetailView({ card, cardTransactions, allTransactions, categories, onBack, onSpend, onPay, onDeleteSpend, onDeleteTx, onEditTx, onDeleteActivityBulk, onDeleteTxBulk, onSyncOutstanding, onEdit, onDelete, showMoney, onToggleMoney }) {
+  const [syncOpen, setSyncOpen] = useState(false)
+  const [syncValue, setSyncValue] = useState('')
+  const [syncBusy, setSyncBusy] = useState(false)
   const util = Number(card.credit_limit) > 0 ? Math.min(100, Math.round((Number(card.current_outstanding) / Number(card.credit_limit)) * 100)) : 0
   const activity = buildActivity(card, cardTransactions, allTransactions)
   const nd = nextBillDue(card)
@@ -158,6 +161,7 @@ export function CreditCardDetailView({ card, cardTransactions, allTransactions, 
               </button>
               {moreOpen && (
                 <div className="absolute right-0 z-30 mt-2 w-48 rounded-xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-1 shadow-2xl">
+                  <button type="button" onClick={() => { setMoreOpen(false); setSyncOpen((o) => !o) }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-slate-300 light:text-slate-700 hover:bg-white/5"><RefreshCw size={14} />Sync outstanding</button>
                   <button type="button" onClick={() => { setMoreOpen(false); onEdit(card) }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-slate-300 light:text-slate-700 hover:bg-white/5"><Pencil size={14} />Edit card</button>
                   <button type="button" onClick={() => { setMoreOpen(false); onDelete(card) }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-rose-300/70 light:text-rose-700 hover:bg-rose-300/10"><Trash2 size={14} />Delete card</button>
                 </div>
@@ -166,6 +170,7 @@ export function CreditCardDetailView({ card, cardTransactions, allTransactions, 
           </div>
           {/* Desktop: unchanged, everything stays inline */}
           <div className="hidden sm:contents">
+            <button onClick={() => setSyncOpen((o) => !o)} className={`flex items-center gap-1.5 rounded-xl border px-3 py-2.5 text-sm font-medium transition ${syncOpen ? 'border-accent-300/40 bg-accent-400/10 text-accent-200 light:text-accent-700' : 'border-white/10 light:border-black/10 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900'}`}><RefreshCw size={15} /><span className="hidden sm:inline">Sync</span></button>
             <button onClick={() => onEdit(card)} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900"><Pencil size={15} /></button>
             <button onClick={() => onDelete(card)} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-rose-300/70 light:text-rose-700 hover:bg-rose-300/10"><Trash2 size={15} /></button>
             <button onClick={onToggleMoney} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
@@ -174,6 +179,33 @@ export function CreditCardDetailView({ card, cardTransactions, allTransactions, 
           </div>
         </div>
       </div>
+
+      {syncOpen && (
+        <div className="rounded-xl border border-accent-300/20 bg-accent-400/[.03] p-4">
+          <div className="text-sm text-slate-300 light:text-slate-700">Sync with your card's real statement</div>
+          <div className="mt-1 text-[11px] text-slate-500">
+            Outstanding isn't summed from transactions the way an account balance is — it's adjusted piecemeal by every spend, payment, and repayment. If it's ever drifted from what your card actually shows, enter the real number here to set it directly (no adjustment transaction, since there's nothing to log — just correcting a number).
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <input type="number" step="0.01" value={syncValue} onChange={(e) => setSyncValue(e.target.value)} placeholder={String(Math.round(card.current_outstanding))} className="w-40 rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-2 text-sm text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
+            <button
+              type="button"
+              disabled={syncBusy || !syncValue}
+              onClick={async () => {
+                setSyncBusy(true)
+                await onSyncOutstanding(card, Number(syncValue))
+                setSyncBusy(false); setSyncOpen(false); setSyncValue('')
+              }}
+              className="rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-4 py-2 text-sm font-semibold text-[#07101c] disabled:opacity-50"
+            >{syncBusy ? 'Syncing…' : 'Sync'}</button>
+            {syncValue && (
+              <span className="text-[11px] text-slate-500">
+                {Number(syncValue) < Number(card.current_outstanding) ? `${money(Number(card.current_outstanding) - Number(syncValue))} lower than tracked` : Number(syncValue) > Number(card.current_outstanding) ? `${money(Number(syncValue) - Number(card.current_outstanding))} higher than tracked` : 'Matches already'}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className={`rounded-xl border px-4 py-3 text-sm ${nd.days <= 4 ? 'border-amber-300/30 bg-amber-300/5 text-amber-200 light:text-amber-700' : 'border-white/10 light:border-black/10 bg-[#141a28] light:bg-black/[.025] glassy:glass-card text-slate-300 light:text-slate-700'}`}>
         Bill on the {ordinal(card.billing_date)} · Due {nd.days > 0 ? `in ${nd.days} day${nd.days === 1 ? '' : 's'}` : nd.days === 0 ? 'today' : 'overdue'} ({formatDate(dateToLocalISO(nd.due))})
