@@ -3048,9 +3048,23 @@ function Shell({ user, onLogout }) {
     } finally { setKiteSyncBusy(false) }
   }
 
+  // mutate() only patches data.transactions (the table it was actually called for) — a deleted
+  // transaction funded by a credit card also reverses that card's current_outstanding server-side
+  // (app/api/[[...path]]/route.js's transactions DELETE handler), but nothing here ever told
+  // data.credit_cards about it, so the card kept showing its pre-delete outstanding/utilisation
+  // until some unrelated action happened to trigger a full refresh() — read as "delete doesn't
+  // work" even though the transaction itself, and the server's own numbers, were already correct.
+  // Same delta math as the server's own reversal (income added it, so removing it subtracts back).
+  const applyLocalCardOutstandingDelta = (cardId, delta) => {
+    if (!cardId || !delta) return
+    setData((d) => ({ ...d, credit_cards: (d.credit_cards || []).map((c) => (c.id === cardId ? { ...c, current_outstanding: Number(c.current_outstanding || 0) + delta } : c)) }))
+  }
   const deleteTx = async (t) => {
     if (!(await confirm.ask('Delete this transaction? Balances will be recomputed.'))) return
     const { queued } = await mutate({ table: 'transactions', method: 'DELETE', id: t.id })
+    if (t.linked_module === 'credit_card' && t.linked_module_id) {
+      applyLocalCardOutstandingDelta(t.linked_module_id, t.type === 'income' ? Number(t.amount) : -Number(t.amount))
+    }
     toast.push(queued ? 'Transaction deleted — will sync when back online' : 'Transaction deleted')
   }
   // Mobile's long-press-to-select flow (TransactionsView) deletes in bulk rather than one confirm
@@ -3060,7 +3074,16 @@ function Shell({ user, onLogout }) {
     if (ids.length === 0) return false
     const n = ids.length
     if (!(await confirm.ask(`Delete ${n} transaction${n === 1 ? '' : 's'}? Balances will be recomputed.`))) return false
+    // Snapshot the rows before mutate() removes them from data.transactions — need their
+    // linked_module/amount/type afterward for the same local outstanding-balance patch deleteTx
+    // above applies, and they won't be there to look up once deleted.
+    const rows = ids.map((id) => data.transactions.find((t) => t.id === id)).filter(Boolean)
     const results = await Promise.all(ids.map((id) => mutate({ table: 'transactions', method: 'DELETE', id })))
+    for (const row of rows) {
+      if (row.linked_module === 'credit_card' && row.linked_module_id) {
+        applyLocalCardOutstandingDelta(row.linked_module_id, row.type === 'income' ? Number(row.amount) : -Number(row.amount))
+      }
+    }
     const queuedCount = results.filter((r) => r.queued).length
     toast.push(queuedCount > 0 ? `${n} transaction${n === 1 ? '' : 's'} deleted — ${queuedCount} will sync when back online` : `${n} transaction${n === 1 ? '' : 's'} deleted`)
     return true
