@@ -3076,10 +3076,47 @@ function Shell({ user, onLogout }) {
       applyLocalCardOutstandingDelta(row.linked_module_id, Number(row.amount))
     }
   }
+  // Same staleness class as credit cards above, for Lend/Borrow's own derived numbers. Deleting a
+  // transaction linked to a lend/borrow record reverses amount_repaid ('lend') or amount
+  // ('lend_addition') server-side (lib/server/services/lendRepayment.js / lendAddition.js, via
+  // the transactions DELETE handler) — but nothing here ever told data.lend_borrow, so the record
+  // kept showing its pre-delete pending amount/status until an unrelated refresh happened. Mirrors
+  // each service function's own math (including the floor-at-0.01 for amount, and the guard
+  // against a record's own origination transaction) so the two can never quietly drift apart.
+  const reverseLocalLendOnDelete = (row) => {
+    if (!row.linked_module_id || (row.linked_module !== 'lend' && row.linked_module !== 'lend_addition')) return
+    setData((d) => {
+      const lb = (d.lend_borrow || []).find((l) => l.id === row.linked_module_id)
+      if (!lb || lb.linked_transaction_id === row.id) return d
+      let patch
+      if (row.linked_module === 'lend') {
+        const amount_repaid = Math.max(0, Number(lb.amount_repaid || 0) - Number(row.amount))
+        patch = { amount_repaid, status: amount_repaid >= Number(lb.amount) ? 'returned' : amount_repaid > 0 ? 'partial' : 'pending' }
+      } else {
+        const amount = Math.max(0.01, Number(lb.amount) - Number(row.amount))
+        const repaid = Number(lb.amount_repaid || 0)
+        patch = { amount, status: repaid >= amount ? 'returned' : repaid > 0 ? 'partial' : 'pending' }
+      }
+      return { ...d, lend_borrow: d.lend_borrow.map((l) => (l.id === lb.id ? { ...l, ...patch } : l)) }
+    })
+  }
+  // Chit funds have no derived field to patch at all — every total (months paid, receivable/
+  // liability) is summed live from data.chit_fund_payments itself (deliberately, see the chit
+  // funds plan's "no denormalized running total" decision), so the fix here is removing the
+  // now-stale payment row from local state, not recomputing a number.
+  const reverseLocalChitFundPaymentOnDelete = (row) => {
+    if (row.linked_module !== 'chit_fund_payment') return
+    setData((d) => ({ ...d, chit_fund_payments: (d.chit_fund_payments || []).filter((p) => p.linked_transaction_id !== row.id) }))
+  }
+  const reverseLocalLinkedStateOnDelete = (row) => {
+    reverseLocalCardOutstandingOnDelete(row)
+    reverseLocalLendOnDelete(row)
+    reverseLocalChitFundPaymentOnDelete(row)
+  }
   const deleteTx = async (t) => {
     if (!(await confirm.ask('Delete this transaction? Balances will be recomputed.'))) return
     const { queued } = await mutate({ table: 'transactions', method: 'DELETE', id: t.id })
-    reverseLocalCardOutstandingOnDelete(t)
+    reverseLocalLinkedStateOnDelete(t)
     toast.push(queued ? 'Transaction deleted — will sync when back online' : 'Transaction deleted')
   }
   // Mobile's long-press-to-select flow (TransactionsView) deletes in bulk rather than one confirm
@@ -3094,7 +3131,7 @@ function Shell({ user, onLogout }) {
     // above applies, and they won't be there to look up once deleted.
     const rows = ids.map((id) => data.transactions.find((t) => t.id === id)).filter(Boolean)
     const results = await Promise.all(ids.map((id) => mutate({ table: 'transactions', method: 'DELETE', id })))
-    for (const row of rows) reverseLocalCardOutstandingOnDelete(row)
+    for (const row of rows) reverseLocalLinkedStateOnDelete(row)
     const queuedCount = results.filter((r) => r.queued).length
     toast.push(queuedCount > 0 ? `${n} transaction${n === 1 ? '' : 's'} deleted — ${queuedCount} will sync when back online` : `${n} transaction${n === 1 ? '' : 's'} deleted`)
     return true

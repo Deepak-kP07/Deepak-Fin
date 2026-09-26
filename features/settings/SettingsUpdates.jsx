@@ -8,6 +8,12 @@ import { triggerAppUpdate } from '@/lib/pwaUpdate'
 // whenever something user-visible ships; no need to log every internal fix.
 const CHANGELOG = [
   {
+    date: '26 Sep 2026',
+    points: [
+      'Fixed Lend/Borrow\'s pending amount staying stuck at the old number right after deleting a repayment or top-up transaction — same underlying fix as the credit card one from a couple of days ago, just for this module\'s own numbers.',
+    ],
+  },
+  {
     date: '24 Sep 2026',
     points: [
       'Fixed a credit card\'s Outstanding/Utilisation staying stuck at the old amount right after deleting a card activity entry — the delete itself always worked, the card\'s own numbers just didn\'t refresh on screen until something else happened to reload the page.',
