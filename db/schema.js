@@ -32,6 +32,9 @@ export const accounts = pgTable('accounts', {
   color: text('color'),
   icon: text('icon'),
   isActive: boolean('is_active').notNull().default(true),
+  // Opt this account out of the Net Worth total without touching its balance/history elsewhere —
+  // toggled from the "Customize Net Worth" panel (gear icon on the Net Worth detail page).
+  includeInNetWorth: boolean('include_in_net_worth').notNull().default(true),
   // Only set when type = 'debit_card': the bank account this card draws from.
   // A debit card has no balance of its own — transactions against it resolve
   // to this linked account instead, so it's purely a named alias.
@@ -181,6 +184,8 @@ export const portfolios = pgTable('portfolios', {
   color: text('color'),
   kiteLinked: boolean('kite_linked').notNull().default(false),
   lastKiteSyncAt: timestamp('last_kite_sync_at', { withTimezone: true }),
+  // Opt this portfolio (and everything in it) out of the Net Worth total — see accounts.includeInNetWorth.
+  includeInNetWorth: boolean('include_in_net_worth').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [check('portfolios_cash_balance_check', sql`${t.cashBalance} >= 0`), index('portfolios_user_id_idx').on(t.userId)])
 
@@ -308,6 +313,8 @@ export const loans = pgTable('loans', {
   outstanding: numeric('outstanding', { precision: 14, scale: 2 }).notNull().default('0'),
   interestSaved: numeric('interest_saved', { precision: 14, scale: 2 }).notNull().default('0'),
   emiDueDay: integer('emi_due_day'),
+  // Opt this loan out of the Net Worth total — see accounts.includeInNetWorth.
+  includeInNetWorth: boolean('include_in_net_worth').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   check('loans_principal_check', sql`${t.principal} >= 0`),
@@ -438,6 +445,8 @@ export const lendBorrow = pgTable('lend_borrow', {
   amountRepaid: numeric('amount_repaid', { precision: 14, scale: 2 }).notNull().default('0'),
   notes: text('notes'),
   linkedTransactionId: uuid('linked_transaction_id').references(() => transactions.id, { onDelete: 'set null' }),
+  // Opt this record out of the Net Worth total — see accounts.includeInNetWorth.
+  includeInNetWorth: boolean('include_in_net_worth').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [check('lend_borrow_amount_check', sql`${t.amount} > 0`), index('lend_borrow_user_idx').on(t.userId)])
 
@@ -508,6 +517,8 @@ export const creditCards = pgTable('credit_cards', {
   dueDateOffset: integer('due_date_offset').notNull().default(15),
   currentOutstanding: numeric('current_outstanding', { precision: 14, scale: 2 }).notNull().default('0'),
   color: text('color'),
+  // Opt this card out of the Net Worth total — see accounts.includeInNetWorth.
+  includeInNetWorth: boolean('include_in_net_worth').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   check('credit_cards_credit_limit_check', sql`${t.creditLimit} >= 0`),
@@ -546,6 +557,8 @@ export const scholarships = pgTable('scholarships', {
   linkedTransactionId: uuid('linked_transaction_id').references(() => transactions.id, { onDelete: 'set null' }),
   attachmentPath: text('attachment_path'),
   attachmentName: text('attachment_name'),
+  // Opt this scholarship out of the Net Worth total — see accounts.includeInNetWorth.
+  includeInNetWorth: boolean('include_in_net_worth').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index('scholarships_user_idx').on(t.userId)])
 
@@ -599,6 +612,8 @@ export const chitFunds = pgTable('chit_funds', {
   status: text('status').notNull().default('active'),
   completedAt: timestamp('completed_at', { withTimezone: true }),
   notes: text('notes'),
+  // Opt this fund out of the Net Worth total — see accounts.includeInNetWorth.
+  includeInNetWorth: boolean('include_in_net_worth').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   check('chit_funds_duration_months_check', sql`${t.durationMonths} > 0`),
@@ -650,6 +665,10 @@ export const moneyProfiles = pgTable('money_profiles', {
   // existing entries stay fully visible/editable either way, only creation is gated.
   status: text('status').notNull().default('active'),
   notes: text('notes'),
+  // Opt this profile out of the Net Worth total — see accounts.includeInNetWorth. Only meaningful
+  // for an unlinked profile (no linked_account_id); a linked one already contributes zero on its
+  // own since its balance flows through its linked account instead (app/page.js's DashboardView).
+  includeInNetWorth: boolean('include_in_net_worth').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   check('money_profiles_type_check', sql`${t.profileType} in ('family','company','other')`),

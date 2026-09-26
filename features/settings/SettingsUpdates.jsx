@@ -10,6 +10,8 @@ const CHANGELOG = [
   {
     date: '26 Sep 2026',
     points: [
+      'Net worth: a new gear icon lets you exclude individual accounts, cards, loans, portfolios, lend/borrow records and chit funds from the net worth total — useful for a joint account that isn\'t really yours, or an old record you don\'t want factored in. Everything stays included by default.',
+      'Net worth now also counts an unlinked Family/Company profile\'s balance and a scholarship\'s still-pending amount — previously invisible to net worth entirely. Anything already mirrored to a real account (a linked profile, or a scholarship received into one) is left out to avoid double-counting.',
       'Fixed Lend/Borrow\'s pending amount staying stuck at the old number right after deleting a repayment or top-up transaction — same underlying fix as the credit card one from a couple of days ago, just for this module\'s own numbers.',
     ],
   },

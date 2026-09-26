@@ -1,6 +1,6 @@
 'use client'
 
-import { ChevronRight, Coins, CreditCard, Heart, Landmark, TrendingUp, Wallet } from 'lucide-react'
+import { ChevronRight, Coins, CreditCard, GraduationCap, Heart, Landmark, Settings, TrendingUp, Users, Wallet } from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { money } from '@/lib/format'
 
@@ -43,8 +43,11 @@ export function NetWorthDetailView({
   onBack, showMoney, setView,
   netWorth, totalAssets, totalLiabilities,
   totalBalance, currentInv, totalOutstanding, creditCardDebt, lendOutstanding, borrowOutstanding, chitFundReceivable, chitFundLiability,
+  moneyProfileAssetTotal, moneyProfileLiabilityTotal, scholarshipNet,
   cashBankItems, investmentItems, loanItems, creditCardItems, lendItems, borrowItems, chitFundAssetItems, chitFundLiabilityItems,
+  moneyProfileItems, scholarshipItems,
   investmentsModuleEnabled, creditCardsModuleEnabled,
+  onOpenCustomize,
 }) {
   const nothingTracked = totalAssets === 0 && totalLiabilities === 0
   const nwScale = Math.max(totalAssets, totalLiabilities, 1)
@@ -54,17 +57,28 @@ export function NetWorthDetailView({
     <div className="space-y-5 pb-8">
       <button onClick={onBack} className="flex items-center gap-1.5 text-sm text-slate-400 light:text-slate-500 hover:text-white hover:light:text-slate-900"><ChevronRight size={14} className="rotate-180" /> Back to dashboard</button>
 
-      <div>
-        <div className="mb-2 text-xs uppercase tracking-widest text-accent-200/70 light:text-accent-700">How it's calculated</div>
-        <h1 className="text-3xl font-semibold tracking-tight text-white light:text-slate-900">Net worth</h1>
-        <div className="mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <div className={`text-[clamp(2rem,6vw,3rem)] font-semibold leading-[1.1] tracking-[-0.01em] ${netWorth < 0 ? 'text-rose-200 light:text-rose-700' : 'text-white light:text-slate-900'}`}>
-            {showMoney ? `${netWorth < 0 ? '−' : ''}${money(netWorth).replace('-', '')}` : '••••••••'}
+      <div className="flex items-end justify-between gap-3">
+        <div>
+          <div className="mb-2 text-xs uppercase tracking-widest text-accent-200/70 light:text-accent-700">How it's calculated</div>
+          <h1 className="text-3xl font-semibold tracking-tight text-white light:text-slate-900">Net worth</h1>
+          <div className="mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <div className={`text-[clamp(2rem,6vw,3rem)] font-semibold leading-[1.1] tracking-[-0.01em] ${netWorth < 0 ? 'text-rose-200 light:text-rose-700' : 'text-white light:text-slate-900'}`}>
+              {showMoney ? `${netWorth < 0 ? '−' : ''}${money(netWorth).replace('-', '')}` : '••••••••'}
+            </div>
+            {netWorth < 0 && (
+              <span className="rounded-full border border-rose-300/30 bg-rose-300/5 px-2 py-0.5 text-[11px] font-semibold text-rose-200 light:text-rose-700">Net negative</span>
+            )}
           </div>
-          {netWorth < 0 && (
-            <span className="rounded-full border border-rose-300/30 bg-rose-300/5 px-2 py-0.5 text-[11px] font-semibold text-rose-200 light:text-rose-700">Net negative</span>
-          )}
         </div>
+        <button
+          type="button"
+          onClick={onOpenCustomize}
+          title="Customize what counts toward net worth"
+          aria-label="Customize what counts toward net worth"
+          className="shrink-0 rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5"
+        >
+          <Settings size={16} />
+        </button>
       </div>
 
       {nothingTracked ? (
@@ -101,6 +115,8 @@ export function NetWorthDetailView({
               <div className="bg-emerald-400/50" style={{ width: nwPct(currentInv) }} />
               {lendOutstanding > 0 && <div className="bg-emerald-200" style={{ width: nwPct(lendOutstanding) }} />}
               {chitFundReceivable > 0 && <div className="bg-sky-300" style={{ width: nwPct(chitFundReceivable) }} />}
+              {moneyProfileAssetTotal > 0 && <div className="bg-violet-300" style={{ width: nwPct(moneyProfileAssetTotal) }} />}
+              {scholarshipNet > 0 && <div className="bg-yellow-300" style={{ width: nwPct(scholarshipNet) }} />}
             </div>
             <div
               role="img"
@@ -111,11 +127,12 @@ export function NetWorthDetailView({
               <div className="bg-rose-400/50" style={{ width: nwPct(creditCardDebt) }} />
               {borrowOutstanding > 0 && <div className="bg-rose-200" style={{ width: nwPct(borrowOutstanding) }} />}
               {chitFundLiability > 0 && <div className="bg-orange-300" style={{ width: nwPct(chitFundLiability) }} />}
+              {moneyProfileLiabilityTotal > 0 && <div className="bg-fuchsia-300" style={{ width: nwPct(moneyProfileLiabilityTotal) }} />}
             </div>
 
             <div className="mt-4 space-y-1 text-[11px] text-slate-500">
-              <div>Assets = Cash &amp; bank ({showMoney ? money(totalBalance) : '••••'}) + Investments ({showMoney ? money(currentInv) : '••••'}){lendOutstanding > 0 ? ` + Lent out (${showMoney ? money(lendOutstanding) : '••••'})` : ''}{chitFundReceivable > 0 ? ` + Chit funds (${showMoney ? money(chitFundReceivable) : '••••'})` : ''}</div>
-              <div>Liabilities = Loans ({showMoney ? money(totalOutstanding) : '••••'}) + Credit cards ({showMoney ? money(creditCardDebt) : '••••'}){borrowOutstanding > 0 ? ` + Borrowed (${showMoney ? money(borrowOutstanding) : '••••'})` : ''}{chitFundLiability > 0 ? ` + Chit fund dues (${showMoney ? money(chitFundLiability) : '••••'})` : ''}</div>
+              <div>Assets = Cash &amp; bank ({showMoney ? money(totalBalance) : '••••'}) + Investments ({showMoney ? money(currentInv) : '••••'}){lendOutstanding > 0 ? ` + Lent out (${showMoney ? money(lendOutstanding) : '••••'})` : ''}{chitFundReceivable > 0 ? ` + Chit funds (${showMoney ? money(chitFundReceivable) : '••••'})` : ''}{moneyProfileAssetTotal > 0 ? ` + Family & Company (${showMoney ? money(moneyProfileAssetTotal) : '••••'})` : ''}{scholarshipNet > 0 ? ` + Scholarships (${showMoney ? money(scholarshipNet) : '••••'})` : ''}</div>
+              <div>Liabilities = Loans ({showMoney ? money(totalOutstanding) : '••••'}) + Credit cards ({showMoney ? money(creditCardDebt) : '••••'}){borrowOutstanding > 0 ? ` + Borrowed (${showMoney ? money(borrowOutstanding) : '••••'})` : ''}{chitFundLiability > 0 ? ` + Chit fund dues (${showMoney ? money(chitFundLiability) : '••••'})` : ''}{moneyProfileLiabilityTotal > 0 ? ` + Family & Company (${showMoney ? money(moneyProfileLiabilityTotal) : '••••'})` : ''}</div>
             </div>
           </div>
 
@@ -157,6 +174,16 @@ export function NetWorthDetailView({
             title="Chit fund dues" subtotal={chitFundLiability} items={chitFundLiabilityItems} showMoney={showMoney}
             caption={chitFundLiabilityItems.length > 0 ? 'Months still owed after taking the payout.' : null}
             emptyIcon={Coins} emptyTitle="Nothing owed" emptyMessage="A chit fund whose payout you've already taken will show up here." emptyCta="Add chit fund" onEmptyCta={() => setView('chitfunds')}
+          />
+          <ItemSection
+            title="Family & Company" subtotal={moneyProfileAssetTotal - moneyProfileLiabilityTotal} items={moneyProfileItems} showMoney={showMoney}
+            caption={moneyProfileItems.length > 0 ? "Only unlinked profiles — a linked profile's balance counts via its linked account instead." : null}
+            emptyIcon={Users} emptyTitle="Nothing unlinked" emptyMessage="An unlinked Family/Company profile's balance will show up here." emptyCta="Add a profile" onEmptyCta={() => setView('family_company')}
+          />
+          <ItemSection
+            title="Scholarships" subtotal={scholarshipNet} items={scholarshipItems} showMoney={showMoney}
+            caption={scholarshipItems.length > 0 ? 'Only the still-pending amount, and only when nothing has been mirrored to an account.' : null}
+            emptyIcon={GraduationCap} emptyTitle="Nothing pending" emptyMessage="A scholarship still owed, with no linked account, will show up here." emptyCta="Add scholarship" onEmptyCta={() => setView('scholarships')}
           />
         </>
       )}

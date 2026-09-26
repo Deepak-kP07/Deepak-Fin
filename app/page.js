@@ -91,7 +91,9 @@ import { FamilyCompanyView } from '@/features/familyCompany/FamilyCompanyView'
 import { ManageAccessSheet } from '@/features/familyCompany/ManageAccessSheet'
 import { RecurringEntryManager } from '@/features/familyCompany/RecurringEntryManager'
 import { RecurringEntryForm } from '@/features/familyCompany/RecurringEntryForm'
-import { categoriesFor } from '@/lib/moneyProfiles'
+import { categoriesFor, profileTotals } from '@/lib/moneyProfiles'
+import { scholarshipDisplayStatus } from '@/lib/scholarships'
+import { NetWorthCustomizeSheet } from '@/features/dashboard/NetWorthCustomizeSheet'
 import { VaultItemForm } from '@/features/vault/VaultItemForm'
 import { InsightsView } from '@/features/insights/InsightsView'
 import { NetWorthDetailView } from '@/features/dashboard/NetWorthDetailView'
@@ -102,7 +104,7 @@ import {
 } from 'recharts'
 import {
   ArrowDownRight, ArrowLeftRight, ArrowUpDown, ArrowUpRight, BarChart3, Briefcase, Calculator, Calendar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock, Coins, CreditCard,
-  Download, Eye, EyeOff, FileText, Heart, History, Info, Landmark, LayoutDashboard, LineChart, ListChecks, LogOut, Menu, MoreHorizontal, MoreVertical, Mountain, Paperclip, PieChart as PieChartIcon, Plus,
+  Download, Eye, EyeOff, FileText, GraduationCap, Heart, History, Info, Landmark, LayoutDashboard, LineChart, ListChecks, LogOut, Menu, MoreHorizontal, MoreVertical, Mountain, Paperclip, PieChart as PieChartIcon, Plus,
   RefreshCw, Repeat, Search, Settings, ShieldCheck, Star, Tag, Target, TrendingDown, TrendingUp, Trash2, Pencil, Users,
   Wallet, X, Zap,
 } from 'lucide-react'
@@ -725,14 +727,19 @@ function GlassyCashflowTooltip({ active, payload, showMoney }) {
 }
 
 /* ---------------- Views ---------------- */
-function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, onManageMoneyRules, onPayCardBill }) {
-  const { profile, accounts, transactions, categories, holdings = [], loans = [], loan_payments = [], bucket_list = [], money_rules = [], credit_cards = [], portfolios = [], budget_months = [], sips = [], other_investments: otherInvestments = [], lend_borrow = [], chit_funds = [], chit_fund_payments = [] } = data
+function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, onManageMoneyRules, onPayCardBill, onToggleIncludeInNetWorth }) {
+  const { profile, accounts, transactions, categories, holdings = [], loans = [], loan_payments = [], bucket_list = [], money_rules = [], credit_cards = [], portfolios = [], budget_months = [], sips = [], other_investments: otherInvestments = [], lend_borrow = [], chit_funds = [], chit_fund_payments = [], money_profiles = [], money_profile_entries = [], scholarships = [] } = data
   // Only the glassy theme gets the glowing area-chart treatment below — dark/light keep the plain
   // bar chart, so this doesn't touch either of their look.
   const { theme } = useTheme()
   const moduleSettings = resolveModuleSettings(profile)
   const widgets = resolveDashboardWidgets(profile)
   const totalBalance = accounts.reduce((s, a) => s + Number(a.current_balance || 0), 0)
+  // Net-worth-only variant — an account opted out via the Net Worth customize panel (gear icon on
+  // the Net Worth detail page) drops out here, but NOT out of totalBalance itself (Cash runway and
+  // every other place totalBalance feeds still uses the real, full figure — this toggle only ever
+  // hides money from the net-worth headline, never from its own module's real numbers).
+  const totalBalanceNw = accounts.filter((a) => a.include_in_net_worth !== false).reduce((s, a) => s + Number(a.current_balance || 0), 0)
   // Mirrors the Investments page's own totalInvested/totalCurrent exactly (holdings + SIPs/mutual
   // funds + other investments) — computing just holdings here used to silently undercount net
   // worth by every rupee sitting in a fund or in gold/land/bonds, the same "must reconcile with
@@ -748,20 +755,34 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
     + otherInvestments.reduce((s, o) => s + currentValueOf(o), 0)
   const pnl = investmentsCurrent - invested
   const currentInv = investmentsCurrent + portfolios.reduce((s, p) => s + Number(p.cash_balance || 0), 0)
+  // Net-worth-only variant, gated per-PORTFOLIO (not per holding/SIP/other-investment — matches
+  // the customize panel, which only offers a toggle at the portfolio level). A holding/SIP whose
+  // portfolio_id doesn't match any live portfolio has no toggle to honor, so it stays included,
+  // same "unlinked" fallback investmentItems already handles below.
+  const linkedPortfolioIds = new Set(portfolios.map((p) => p.id))
+  const includedPortfolioIds = new Set(portfolios.filter((p) => p.include_in_net_worth !== false).map((p) => p.id))
+  const currentInvNw = holdings.filter((h) => includedPortfolioIds.has(h.portfolio_id) || !linkedPortfolioIds.has(h.portfolio_id)).reduce((s, h) => s + Number(h.qty) * Number(h.current_price || h.avg_buy_price), 0)
+    + sips.filter((x) => includedPortfolioIds.has(x.portfolio_id) || !linkedPortfolioIds.has(x.portfolio_id)).reduce((s, x) => s + Number(x.units_held) * Number(x.nav), 0)
+    + otherInvestments.filter((o) => includedPortfolioIds.has(o.portfolio_id)).reduce((s, o) => s + currentValueOf(o), 0)
+    + portfolios.filter((p) => p.include_in_net_worth !== false).reduce((s, p) => s + Number(p.cash_balance || 0), 0)
   // Same live figure (today's not-yet-billed interest included) the Loans module itself shows —
   // using the stale, as-of-last-payment `outstanding` here would make this number silently drift
   // from what the Loans page displays for the same loan.
   const totalOutstanding = loans.filter((l) => l.status !== 'closed').reduce((s, l) => s + liveOutstanding(l, loan_payments.filter((p) => p.loan_id === l.id)), 0)
+  const totalOutstandingNw = loans.filter((l) => l.status !== 'closed' && l.include_in_net_worth !== false).reduce((s, l) => s + liveOutstanding(l, loan_payments.filter((p) => p.loan_id === l.id)), 0)
   // Credit card outstanding is a real liability nothing else nets out — a card spend raises
   // current_outstanding without touching any account balance, so omitting it overstated net
   // worth by exactly the unpaid card balance. Ungated by the credit_cards module toggle, matching
   // how loans/investments are treated elsewhere on this screen (a module switch is UI-hide only).
   const creditCardDebt = credit_cards.reduce((s, c) => s + Number(c.current_outstanding || 0), 0)
+  const creditCardDebtNw = credit_cards.filter((c) => c.include_in_net_worth !== false).reduce((s, c) => s + Number(c.current_outstanding || 0), 0)
   // Money lent out is just as real an asset as cash sitting in an account (it's owed back to
   // you), and money borrowed is just as real a liability as a loan — only the still-outstanding
   // portion counts (amount minus whatever's already been repaid), never the original full amount.
-  const lendOutstanding = lend_borrow.filter((l) => perspectiveType(l) === 'lent').reduce((s, l) => s + Math.max(0, Number(l.amount) - Number(l.amount_repaid || 0)), 0)
-  const borrowOutstanding = lend_borrow.filter((l) => perspectiveType(l) === 'borrowed').reduce((s, l) => s + Math.max(0, Number(l.amount) - Number(l.amount_repaid || 0)), 0)
+  // lendOutstanding/borrowOutstanding have no other consumer besides net worth, so — unlike the
+  // four variables above — they're filtered in place rather than needing a separate Nw variant.
+  const lendOutstanding = lend_borrow.filter((l) => perspectiveType(l) === 'lent' && l.include_in_net_worth !== false).reduce((s, l) => s + Math.max(0, Number(l.amount) - Number(l.amount_repaid || 0)), 0)
+  const borrowOutstanding = lend_borrow.filter((l) => perspectiveType(l) === 'borrowed' && l.include_in_net_worth !== false).reduce((s, l) => s + Math.max(0, Number(l.amount) - Number(l.amount_repaid || 0)), 0)
   // A chit fund contribution paid so far is just as real an asset as cash in an account (it's
   // owed back via the eventual payout) — counts only before this user's own payout is taken, and
   // only while the fund itself hasn't fully run its course. Once taken, the months still left to
@@ -770,13 +791,31 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
   // gets a correct figure. Once status flips to 'completed' the fund contributes nothing further
   // either way — just a realized gain/loss, shown only in its own detail view.
   const chitNetPaid = (fundId) => chit_fund_payments.filter((p) => p.chit_fund_id === fundId).reduce((s, p) => s + Number(p.amount) - Number(p.dividend_received || 0), 0)
-  const chitFundReceivable = chit_funds.filter((c) => c.status !== 'completed' && c.payout_status === 'not_taken').reduce((s, c) => s + chitNetPaid(c.id), 0)
-  const chitFundLiability = chit_funds.filter((c) => c.status !== 'completed' && c.payout_status === 'taken').reduce((s, c) => {
+  const chitFundReceivable = chit_funds.filter((c) => c.status !== 'completed' && c.payout_status === 'not_taken' && c.include_in_net_worth !== false).reduce((s, c) => s + chitNetPaid(c.id), 0)
+  const chitFundLiability = chit_funds.filter((c) => c.status !== 'completed' && c.payout_status === 'taken' && c.include_in_net_worth !== false).reduce((s, c) => {
     const monthsPaid = chit_fund_payments.filter((p) => p.chit_fund_id === c.id).length
     return s + Math.max(0, Number(c.duration_months) - monthsPaid) * Number(c.monthly_contribution)
   }, 0)
-  const totalAssets = totalBalance + currentInv + lendOutstanding + chitFundReceivable
-  const totalLiabilities = totalOutstanding + creditCardDebt + borrowOutstanding + chitFundLiability
+  // Family/Company — only an UNLINKED profile (no linked_account_id) is its own net-worth item; a
+  // linked profile's balance already flows through its linked account's own current_balance
+  // (syncOpeningBalanceMirror + per-entry mirroring), so counting it again here would double it.
+  // Even for an unlinked profile, an individual entry with its own account_id/credit_card_id
+  // override still mirrors into a real account/card of its own — excluded here for the same
+  // double-counting reason, via the ownEntries filter below.
+  const unlinkedMoneyProfiles = money_profiles.filter((p) => !p.linked_account_id && p.include_in_net_worth !== false)
+  const moneyProfileBalance = (p) => {
+    const ownEntries = money_profile_entries.filter((e) => e.profile_id === p.id && !e.account_id && !e.credit_card_id)
+    return profileTotals(p, ownEntries).balance
+  }
+  const moneyProfileAssetTotal = unlinkedMoneyProfiles.reduce((s, p) => s + Math.max(0, moneyProfileBalance(p)), 0)
+  const moneyProfileLiabilityTotal = unlinkedMoneyProfiles.reduce((s, p) => s + Math.max(0, -moneyProfileBalance(p)), 0)
+  // Scholarships — only one with nothing already mirrored to a real account (received_to_account_id
+  // null) and not still pending contributes its still-owed amount, same "still-outstanding portion
+  // only" framing as lendItems/borrowItems above.
+  const scholarshipReceivable = (s) => Math.max(0, Number(s.total_amount || 0) - Number(s.amount_paid_to_college || 0))
+  const scholarshipNet = scholarships.filter((s) => !s.received_to_account_id && scholarshipDisplayStatus(s) !== 'pending' && s.include_in_net_worth !== false).reduce((s, sc) => s + scholarshipReceivable(sc), 0)
+  const totalAssets = totalBalanceNw + currentInvNw + lendOutstanding + chitFundReceivable + moneyProfileAssetTotal + scholarshipNet
+  const totalLiabilities = totalOutstandingNw + creditCardDebtNw + borrowOutstanding + chitFundLiability + moneyProfileLiabilityTotal
   const netWorth = totalAssets - totalLiabilities
 
   // Net worth detail page — same filters/formulas as the totals just above, so each section's
@@ -787,16 +826,16 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
   // module is switched off would make this "how is this number really calculated" page lie about
   // money that's still silently counted in the headline figure.
   const [showNetWorthDetail, setShowNetWorthDetail] = useState(false)
-  const cashBankItems = accounts.filter((a) => a.type !== 'debit_card').map((a) => ({
+  const [showNetWorthCustomize, setShowNetWorthCustomize] = useState(false)
+  const cashBankItems = accounts.filter((a) => a.type !== 'debit_card' && a.include_in_net_worth !== false).map((a) => ({
     id: `acc-${a.id}`, name: a.name, sub: a.type.replace('_', ' '), amount: Number(a.current_balance || 0),
     icon: a.type === 'cash' ? Wallet : Landmark, color: a.color || '#64748b', debt: false,
   }))
-  const linkedPortfolioIds = new Set(portfolios.map((p) => p.id))
   // Same per-portfolio composition (holdings + SIPs + other investments + cash) as Investments'
   // own portfolioMix, so each row here reconciles with what that page shows for the same
   // portfolio — not holdings alone, which is all this used to add up before.
   const investmentItems = [
-    ...portfolios.map((p) => {
+    ...portfolios.filter((p) => p.include_in_net_worth !== false).map((p) => {
       const value = holdings.filter((h) => h.portfolio_id === p.id).reduce((s, h) => s + Number(h.qty) * Number(h.current_price || h.avg_buy_price), 0)
         + sips.filter((x) => x.portfolio_id === p.id).reduce((s, x) => s + Number(x.units_held) * Number(x.nav), 0)
         + otherInvestments.filter((o) => o.portfolio_id === p.id).reduce((s, o) => s + currentValueOf(o), 0)
@@ -813,34 +852,43 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
       return unlinkedValue > 0 ? [{ id: 'port-unlinked', name: 'Unlinked holdings', sub: 'Investment', amount: unlinkedValue, icon: TrendingUp, color: '#64748b', debt: false }] : []
     })(),
   ]
-  const loanItems = loans.filter((l) => l.status !== 'closed').map((l) => ({
+  const loanItems = loans.filter((l) => l.status !== 'closed' && l.include_in_net_worth !== false).map((l) => ({
     id: `loan-${l.id}`, name: l.name, sub: l.lender ? `Loan · ${l.lender}` : 'Loan',
     amount: liveOutstanding(l, loan_payments.filter((p) => p.loan_id === l.id)),
     icon: Landmark, color: '#fb7185', debt: true,
   }))
-  const creditCardItems = credit_cards.map((c) => ({
+  const creditCardItems = credit_cards.filter((c) => c.include_in_net_worth !== false).map((c) => ({
     id: `cc-${c.id}`, name: c.name, sub: 'Credit card', amount: Number(c.current_outstanding || 0),
     icon: CreditCard, color: c.color || '#64748b', debt: true,
   }))
   // Only the still-outstanding portion of each record — same "already settled drops off" rule
   // loanItems above applies to closed loans, just expressed as amount_repaid instead of a status.
-  const lendItems = lend_borrow.filter((l) => perspectiveType(l) === 'lent' && Number(l.amount) - Number(l.amount_repaid || 0) > 0).map((l) => ({
+  const lendItems = lend_borrow.filter((l) => perspectiveType(l) === 'lent' && l.include_in_net_worth !== false && Number(l.amount) - Number(l.amount_repaid || 0) > 0).map((l) => ({
     id: `lend-${l.id}`, name: l.person_name, sub: 'Lent out',
     amount: Number(l.amount) - Number(l.amount_repaid || 0), icon: Heart, color: '#6ee7b7', debt: false,
   }))
-  const borrowItems = lend_borrow.filter((l) => perspectiveType(l) === 'borrowed' && Number(l.amount) - Number(l.amount_repaid || 0) > 0).map((l) => ({
+  const borrowItems = lend_borrow.filter((l) => perspectiveType(l) === 'borrowed' && l.include_in_net_worth !== false && Number(l.amount) - Number(l.amount_repaid || 0) > 0).map((l) => ({
     id: `borrow-${l.id}`, name: l.person_name, sub: 'Borrowed',
     amount: Number(l.amount) - Number(l.amount_repaid || 0), icon: Heart, color: '#fda4af', debt: true,
   }))
-  const chitFundAssetItems = chit_funds.filter((c) => c.status !== 'completed' && c.payout_status === 'not_taken')
+  const chitFundAssetItems = chit_funds.filter((c) => c.status !== 'completed' && c.payout_status === 'not_taken' && c.include_in_net_worth !== false)
     .map((c) => ({ id: `chit-${c.id}`, name: c.name, sub: 'Chit fund (contributions)', amount: chitNetPaid(c.id), icon: Coins, color: '#38bdf8', debt: false }))
     .filter((it) => it.amount > 0)
-  const chitFundLiabilityItems = chit_funds.filter((c) => c.status !== 'completed' && c.payout_status === 'taken')
+  const chitFundLiabilityItems = chit_funds.filter((c) => c.status !== 'completed' && c.payout_status === 'taken' && c.include_in_net_worth !== false)
     .map((c) => {
       const monthsPaid = chit_fund_payments.filter((p) => p.chit_fund_id === c.id).length
       const monthsLeft = Math.max(0, Number(c.duration_months) - monthsPaid)
       return { id: `chit-${c.id}`, name: c.name, sub: 'Chit fund (remaining dues)', amount: monthsLeft * Number(c.monthly_contribution), icon: Coins, color: '#fb923c', debt: true }
     })
+    .filter((it) => it.amount > 0)
+  // One row per unlinked Family/Company profile — debt: true when its balance is negative
+  // (overspent), matching the same asset/liability split chit funds use above.
+  const moneyProfileItems = unlinkedMoneyProfiles.map((p) => {
+    const bal = moneyProfileBalance(p)
+    return { id: `mp-${p.id}`, name: p.name, sub: p.profile_type === 'company' ? 'Company' : p.profile_type === 'family' ? 'Family' : 'Other', amount: Math.abs(bal), icon: Users, color: '#a78bfa', debt: bal < 0 }
+  }).filter((it) => it.amount > 0)
+  const scholarshipItems = scholarships.filter((s) => !s.received_to_account_id && scholarshipDisplayStatus(s) !== 'pending' && s.include_in_net_worth !== false)
+    .map((s) => ({ id: `sch-${s.id}`, name: s.name, sub: 'Scholarship (pending)', amount: scholarshipReceivable(s), icon: GraduationCap, color: '#facc15', debt: false }))
     .filter((it) => it.amount > 0)
 
   // Drilldown state for the Income/Expense/Savings stat cards (StatDrilldown) — declared here,
@@ -930,20 +978,31 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
 
   if (showNetWorthDetail) {
     return (
+      <>
       <NetWorthDetailView
         onBack={() => setShowNetWorthDetail(false)}
         showMoney={showMoney}
         setView={setView}
         netWorth={netWorth} totalAssets={totalAssets} totalLiabilities={totalLiabilities}
-        totalBalance={totalBalance} currentInv={currentInv} totalOutstanding={totalOutstanding} creditCardDebt={creditCardDebt}
+        totalBalance={totalBalanceNw} currentInv={currentInvNw} totalOutstanding={totalOutstandingNw} creditCardDebt={creditCardDebtNw}
         lendOutstanding={lendOutstanding} borrowOutstanding={borrowOutstanding}
         chitFundReceivable={chitFundReceivable} chitFundLiability={chitFundLiability}
+        moneyProfileAssetTotal={moneyProfileAssetTotal} moneyProfileLiabilityTotal={moneyProfileLiabilityTotal} scholarshipNet={scholarshipNet}
         cashBankItems={cashBankItems} investmentItems={investmentItems} loanItems={loanItems} creditCardItems={creditCardItems}
         lendItems={lendItems} borrowItems={borrowItems}
         chitFundAssetItems={chitFundAssetItems} chitFundLiabilityItems={chitFundLiabilityItems}
+        moneyProfileItems={moneyProfileItems} scholarshipItems={scholarshipItems}
         investmentsModuleEnabled={moduleSettings.investments.enabled}
         creditCardsModuleEnabled={moduleSettings.credit_cards.enabled}
+        onOpenCustomize={() => setShowNetWorthCustomize(true)}
       />
+      <NetWorthCustomizeSheet
+        open={showNetWorthCustomize}
+        onClose={() => setShowNetWorthCustomize(false)}
+        data={data}
+        onToggleIncludeInNetWorth={onToggleIncludeInNetWorth}
+      />
+      </>
     )
   }
 
@@ -1189,16 +1248,16 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
                   </div>
                   <div
                     role="img"
-                    aria-label={showMoney ? `Assets ${money(totalAssets)}: cash and bank ${money(totalBalance)}, investments ${money(currentInv)}, lent out ${money(lendOutstanding)}` : 'Assets breakdown, amounts hidden'}
+                    aria-label={showMoney ? `Assets ${money(totalAssets)}: cash and bank ${money(totalBalanceNw)}, investments ${money(currentInvNw)}, lent out ${money(lendOutstanding)}` : 'Assets breakdown, amounts hidden'}
                     className="mt-1.5 flex h-2 gap-px overflow-hidden rounded-full bg-white/[.07] light:bg-black/[.07]"
                   >
-                    <div className="bg-emerald-400" style={{ width: nwPct(totalBalance) }} />
-                    <div className="bg-emerald-400/50" style={{ width: nwPct(currentInv) }} />
+                    <div className="bg-emerald-400" style={{ width: nwPct(totalBalanceNw) }} />
+                    <div className="bg-emerald-400/50" style={{ width: nwPct(currentInvNw) }} />
                     {lendOutstanding > 0 && <div className="bg-emerald-200" style={{ width: nwPct(lendOutstanding) }} />}
                   </div>
                   <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-[11px] text-slate-400 light:text-slate-500">
-                    <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />Cash &amp; bank {showMoney ? money(totalBalance) : '••••'}</span>
-                    <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400/50" />Investments {showMoney ? money(currentInv) : '••••'}</span>
+                    <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />Cash &amp; bank {showMoney ? money(totalBalanceNw) : '••••'}</span>
+                    <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400/50" />Investments {showMoney ? money(currentInvNw) : '••••'}</span>
                     {lendOutstanding > 0 && <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-200" />Lent out {showMoney ? money(lendOutstanding) : '••••'}</span>}
                   </div>
                 </div>
@@ -1209,16 +1268,16 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
                   </div>
                   <div
                     role="img"
-                    aria-label={showMoney ? `Liabilities ${money(totalLiabilities)}: loans ${money(totalOutstanding)}, credit cards ${money(creditCardDebt)}, borrowed ${money(borrowOutstanding)}` : 'Liabilities breakdown, amounts hidden'}
+                    aria-label={showMoney ? `Liabilities ${money(totalLiabilities)}: loans ${money(totalOutstandingNw)}, credit cards ${money(creditCardDebtNw)}, borrowed ${money(borrowOutstanding)}` : 'Liabilities breakdown, amounts hidden'}
                     className="mt-1.5 flex h-2 gap-px overflow-hidden rounded-full bg-white/[.07] light:bg-black/[.07]"
                   >
-                    <div className="bg-rose-400" style={{ width: nwPct(totalOutstanding) }} />
-                    <div className="bg-rose-400/50" style={{ width: nwPct(creditCardDebt) }} />
+                    <div className="bg-rose-400" style={{ width: nwPct(totalOutstandingNw) }} />
+                    <div className="bg-rose-400/50" style={{ width: nwPct(creditCardDebtNw) }} />
                     {borrowOutstanding > 0 && <div className="bg-rose-200" style={{ width: nwPct(borrowOutstanding) }} />}
                   </div>
                   <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-[11px] text-slate-400 light:text-slate-500">
-                    <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 shrink-0 rounded-full bg-rose-400" />Loans {showMoney ? money(totalOutstanding) : '••••'}</span>
-                    <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 shrink-0 rounded-full bg-rose-400/50" />Cards {showMoney ? money(creditCardDebt) : '••••'}</span>
+                    <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 shrink-0 rounded-full bg-rose-400" />Loans {showMoney ? money(totalOutstandingNw) : '••••'}</span>
+                    <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 shrink-0 rounded-full bg-rose-400/50" />Cards {showMoney ? money(creditCardDebtNw) : '••••'}</span>
                     {borrowOutstanding > 0 && <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 shrink-0 rounded-full bg-rose-200" />Borrowed {showMoney ? money(borrowOutstanding) : '••••'}</span>}
                   </div>
                 </div>
@@ -3200,6 +3259,17 @@ function Shell({ user, onLogout }) {
     const updated = await response.json()
     setData((d) => ({ ...d, accounts: d.accounts.map((acc) => (acc.id === updated.id ? updated : acc)) }))
   }
+  // Generic — works for every table with an include_in_net_worth column (accounts, credit_cards,
+  // loans, lend_borrow, chit_funds, portfolios, scholarships, money_profiles), since all 8 PATCH
+  // routes bottleneck through the same pickFields/safeFields allowlist (lib/server/safeFields.js).
+  // Immediate PATCH per toggle, no batch "Save" step — same UX as toggleAccountVisible above.
+  const toggleIncludeInNetWorth = async (table, row) => {
+    const nextIncluded = row.include_in_net_worth === false
+    const response = await fetch(`/api/finance/${table}/${row.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ include_in_net_worth: nextIncluded }) })
+    if (!response.ok) { toast.push('Update failed', 'error'); return }
+    const updated = await response.json()
+    setData((d) => ({ ...d, [table]: d[table].map((r) => (r.id === updated.id ? updated : r)) }))
+  }
   const openSettings = (section) => { setSettingsSection(section); setView('profile') }
 
   // Mobile-only: which "add" action the floating + button performs depends on the active module
@@ -3397,7 +3467,7 @@ function Shell({ user, onLogout }) {
             </div>
           ) : (
             <div className={fitScreen ? 'min-h-0 flex-1 lg:overflow-y-auto' : ''}>
-              {view === 'dashboard' && <DashboardView data={data} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onOpenTxForm={() => openTxForm()} setView={setView} onManageMoneyRules={() => openSettings('money_rules')} onPayCardBill={openCardPay} />}
+              {view === 'dashboard' && <DashboardView data={data} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onOpenTxForm={() => openTxForm()} setView={setView} onManageMoneyRules={() => openSettings('money_rules')} onPayCardBill={openCardPay} onToggleIncludeInNetWorth={toggleIncludeInNetWorth} />}
               {view === 'transactions' && <TransactionsView data={data} onOpenTxForm={() => openTxForm()} onEditTx={openTxForm} onDeleteTx={deleteTx} onDeleteTxBulk={deleteTxBulk} onImport={() => setCsvOpen(true)} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onOpenRecurring={openRecurringManager} onPayCardBill={openCardPay} onApprovePending={approvePending} onRejectPending={rejectPending} />}
               {view === 'accounts' && <AccountsView data={data} onAdd={() => openAccForm()} onEdit={openAccForm} onDelete={deleteAccount} onDeleteTx={deleteTx} onDeleteTxBulk={deleteTxBulk} onAddTransaction={(accountId) => openTxForm(null, accountId)} onSyncBalance={syncAccountBalance} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onDetailChange={onDetailChange} initialSelectedId={initialNavState.current.detailId} />}
               {view === 'budgets' && <BudgetsView data={data} onSetMonth={openBudgetMonthForm} onCloseMonth={closeBudgetMonth} onReopenMonth={reopenBudgetMonth} onDeleteMonth={deleteBudgetMonth} onAddYearly={() => openBudgetForm()} onEditYearly={openBudgetForm} onDeleteYearly={deleteBudget} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
