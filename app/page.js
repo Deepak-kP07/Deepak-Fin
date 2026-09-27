@@ -727,7 +727,7 @@ function GlassyCashflowTooltip({ active, payload, showMoney }) {
 }
 
 /* ---------------- Views ---------------- */
-function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, onManageMoneyRules, onPayCardBill, onToggleIncludeInNetWorth }) {
+function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, onManageMoneyRules, onPayCardBill, onToggleIncludeInNetWorth, onToggleIncludeInNetWorthGroup }) {
   const { profile, accounts, transactions, categories, holdings = [], loans = [], loan_payments = [], bucket_list = [], money_rules = [], credit_cards = [], portfolios = [], budget_months = [], sips = [], other_investments: otherInvestments = [], lend_borrow = [], chit_funds = [], chit_fund_payments = [], money_profiles = [], money_profile_entries = [], scholarships = [] } = data
   // Only the glassy theme gets the glowing area-chart treatment below — dark/light keep the plain
   // bar chart, so this doesn't touch either of their look.
@@ -1001,6 +1001,7 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
         onClose={() => setShowNetWorthCustomize(false)}
         data={data}
         onToggleIncludeInNetWorth={onToggleIncludeInNetWorth}
+        onToggleIncludeInNetWorthGroup={onToggleIncludeInNetWorthGroup}
       />
       </>
     )
@@ -3270,6 +3271,15 @@ function Shell({ user, onLogout }) {
     const updated = await response.json()
     setData((d) => ({ ...d, [table]: d[table].map((r) => (r.id === updated.id ? updated : r)) }))
   }
+  // Same idea as toggleIncludeInNetWorth, but for a whole section's "Turn all on/off" button
+  // (NetWorthCustomizeSheet) — fires every row's PATCH in parallel, same Promise.all shape as
+  // reorderAccounts above, rather than a dedicated bulk-update route.
+  const toggleIncludeInNetWorthGroup = async (table, rows, nextIncluded) => {
+    const results = await Promise.all(rows.map((row) => fetch(`/api/finance/${table}/${row.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ include_in_net_worth: nextIncluded }) })))
+    if (results.some((r) => !r.ok)) { toast.push('Update failed', 'error'); return }
+    const updated = await Promise.all(results.map((r) => r.json()))
+    setData((d) => ({ ...d, [table]: d[table].map((r) => updated.find((u) => u.id === r.id) || r) }))
+  }
   const openSettings = (section) => { setSettingsSection(section); setView('profile') }
 
   // Mobile-only: which "add" action the floating + button performs depends on the active module
@@ -3467,7 +3477,7 @@ function Shell({ user, onLogout }) {
             </div>
           ) : (
             <div className={fitScreen ? 'min-h-0 flex-1 lg:overflow-y-auto' : ''}>
-              {view === 'dashboard' && <DashboardView data={data} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onOpenTxForm={() => openTxForm()} setView={setView} onManageMoneyRules={() => openSettings('money_rules')} onPayCardBill={openCardPay} onToggleIncludeInNetWorth={toggleIncludeInNetWorth} />}
+              {view === 'dashboard' && <DashboardView data={data} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onOpenTxForm={() => openTxForm()} setView={setView} onManageMoneyRules={() => openSettings('money_rules')} onPayCardBill={openCardPay} onToggleIncludeInNetWorth={toggleIncludeInNetWorth} onToggleIncludeInNetWorthGroup={toggleIncludeInNetWorthGroup} />}
               {view === 'transactions' && <TransactionsView data={data} onOpenTxForm={() => openTxForm()} onEditTx={openTxForm} onDeleteTx={deleteTx} onDeleteTxBulk={deleteTxBulk} onImport={() => setCsvOpen(true)} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onOpenRecurring={openRecurringManager} onPayCardBill={openCardPay} onApprovePending={approvePending} onRejectPending={rejectPending} />}
               {view === 'accounts' && <AccountsView data={data} onAdd={() => openAccForm()} onEdit={openAccForm} onDelete={deleteAccount} onDeleteTx={deleteTx} onDeleteTxBulk={deleteTxBulk} onAddTransaction={(accountId) => openTxForm(null, accountId)} onSyncBalance={syncAccountBalance} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onDetailChange={onDetailChange} initialSelectedId={initialNavState.current.detailId} />}
               {view === 'budgets' && <BudgetsView data={data} onSetMonth={openBudgetMonthForm} onCloseMonth={closeBudgetMonth} onReopenMonth={reopenBudgetMonth} onDeleteMonth={deleteBudgetMonth} onAddYearly={() => openBudgetForm()} onEditYearly={openBudgetForm} onDeleteYearly={deleteBudget} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}

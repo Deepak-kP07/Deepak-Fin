@@ -8,6 +8,12 @@ import { triggerAppUpdate } from '@/lib/pwaUpdate'
 // whenever something user-visible ships; no need to log every internal fix.
 const CHANGELOG = [
   {
+    date: '27 Sep 2026',
+    points: [
+      'Net worth\'s customize panel: each section now has a "Turn all on/off" button next to its title, for switching every item in that section at once instead of one at a time.',
+    ],
+  },
+  {
     date: '26 Sep 2026',
     points: [
       'Net worth: a new gear icon lets you exclude individual accounts, cards, loans, portfolios, lend/borrow records and chit funds from the net worth total — useful for a joint account that isn\'t really yours, or an old record you don\'t want factored in. Everything stays included by default.',

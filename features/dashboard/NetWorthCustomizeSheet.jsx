@@ -27,10 +27,25 @@ function Row({ icon: Icon, name, sub, amount, checked, disabled, caption, onTogg
   )
 }
 
-function Section({ title, rows, emptyMessage }) {
+// toggleableRows/table/onToggleGroup are optional — a section whose rows are all individually
+// disabled (nothing left to batch-toggle) just omits them and renders without the "Turn all"
+// button, same as passing none at all.
+function Section({ title, rows, emptyMessage, toggleableRows, table, onToggleGroup }) {
+  const allOn = !!toggleableRows?.length && toggleableRows.every((r) => r.include_in_net_worth !== false)
   return (
     <div>
-      <div className="mb-2 text-xs uppercase tracking-widest text-slate-500">{title}</div>
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <div className="text-xs uppercase tracking-widest text-slate-500">{title}</div>
+        {toggleableRows?.length > 1 && (
+          <button
+            type="button"
+            onClick={() => onToggleGroup(table, toggleableRows, !allOn)}
+            className="text-[11px] font-medium text-accent-300 light:text-accent-700 hover:underline"
+          >
+            {allOn ? 'Turn all off' : 'Turn all on'}
+          </button>
+        )}
+      </div>
       {rows.length === 0 ? (
         <div className="rounded-xl bg-black/10 light:bg-black/[.03] px-3 py-4 text-center text-xs text-slate-500">{emptyMessage}</div>
       ) : (
@@ -40,7 +55,7 @@ function Section({ title, rows, emptyMessage }) {
   )
 }
 
-function NetWorthCustomizeBody({ data, onToggleIncludeInNetWorth }) {
+function NetWorthCustomizeBody({ data, onToggleIncludeInNetWorth, onToggleIncludeInNetWorthGroup }) {
   const {
     accounts = [], portfolios = [], holdings = [], sips = [], other_investments: otherInvestments = [],
     loans = [], loan_payments = [], credit_cards = [], lend_borrow = [], chit_funds = [], chit_fund_payments = [],
@@ -48,17 +63,24 @@ function NetWorthCustomizeBody({ data, onToggleIncludeInNetWorth }) {
   } = data
 
   const outstandingOf = (loan) => liveOutstanding(loan, loan_payments.filter((p) => p.loan_id === loan.id))
+  const activeAccounts = accounts.filter((a) => a.type !== 'debit_card')
+  const activeLoans = loans.filter((l) => l.status !== 'closed')
+  const activeChitFunds = chit_funds.filter((c) => c.status !== 'completed')
+  // Only the profiles/scholarships with a live per-row toggle can be batch-toggled — a linked
+  // profile or an already-mirrored/still-pending scholarship has nothing for "turn all" to touch.
+  const toggleableProfiles = money_profiles.filter((p) => !p.linked_account_id)
+  const toggleableScholarships = scholarships.filter((s) => !s.received_to_account_id && scholarshipDisplayStatus(s) !== 'pending')
 
   return (
     <div className="space-y-5">
-      <Section title="Accounts" emptyMessage="No accounts yet" rows={
-        accounts.filter((a) => a.type !== 'debit_card').map((a) => (
+      <Section title="Accounts" emptyMessage="No accounts yet" table="accounts" toggleableRows={activeAccounts} onToggleGroup={onToggleIncludeInNetWorthGroup} rows={
+        activeAccounts.map((a) => (
           <Row key={a.id} icon={a.type === 'cash' ? Wallet : Landmark} name={a.name} sub={a.type.replace('_', ' ')} amount={Number(a.current_balance || 0)}
             checked={a.include_in_net_worth !== false} onToggle={() => onToggleIncludeInNetWorth('accounts', a)} />
         ))
       } />
 
-      <Section title="Investments" emptyMessage="No portfolios yet" rows={
+      <Section title="Investments" emptyMessage="No portfolios yet" table="portfolios" toggleableRows={portfolios} onToggleGroup={onToggleIncludeInNetWorthGroup} rows={
         portfolios.map((p) => {
           const value = holdings.filter((h) => h.portfolio_id === p.id).reduce((s, h) => s + Number(h.qty) * Number(h.current_price || h.avg_buy_price), 0)
             + sips.filter((x) => x.portfolio_id === p.id).reduce((s, x) => s + Number(x.units_held) * Number(x.nav), 0)
@@ -71,21 +93,21 @@ function NetWorthCustomizeBody({ data, onToggleIncludeInNetWorth }) {
         })
       } />
 
-      <Section title="Loans" emptyMessage="No loans" rows={
-        loans.filter((l) => l.status !== 'closed').map((l) => (
+      <Section title="Loans" emptyMessage="No loans" table="loans" toggleableRows={activeLoans} onToggleGroup={onToggleIncludeInNetWorthGroup} rows={
+        activeLoans.map((l) => (
           <Row key={l.id} icon={Landmark} name={l.name} sub={l.lender || 'Loan'} amount={outstandingOf(l)}
             checked={l.include_in_net_worth !== false} onToggle={() => onToggleIncludeInNetWorth('loans', l)} />
         ))
       } />
 
-      <Section title="Credit cards" emptyMessage="No credit cards" rows={
+      <Section title="Credit cards" emptyMessage="No credit cards" table="credit_cards" toggleableRows={credit_cards} onToggleGroup={onToggleIncludeInNetWorthGroup} rows={
         credit_cards.map((c) => (
           <Row key={c.id} icon={CreditCard} name={c.name} sub="Credit card" amount={Number(c.current_outstanding || 0)}
             checked={c.include_in_net_worth !== false} onToggle={() => onToggleIncludeInNetWorth('credit_cards', c)} />
         ))
       } />
 
-      <Section title="Lend / Borrow" emptyMessage="Nothing lent or borrowed" rows={
+      <Section title="Lend / Borrow" emptyMessage="Nothing lent or borrowed" table="lend_borrow" toggleableRows={lend_borrow} onToggleGroup={onToggleIncludeInNetWorthGroup} rows={
         lend_borrow.map((l) => {
           const outstanding = Math.max(0, Number(l.amount) - Number(l.amount_repaid || 0))
           const type = perspectiveType(l)
@@ -96,8 +118,8 @@ function NetWorthCustomizeBody({ data, onToggleIncludeInNetWorth }) {
         })
       } />
 
-      <Section title="Chit funds" emptyMessage="No active chit funds" rows={
-        chit_funds.filter((c) => c.status !== 'completed').map((c) => {
+      <Section title="Chit funds" emptyMessage="No active chit funds" table="chit_funds" toggleableRows={activeChitFunds} onToggleGroup={onToggleIncludeInNetWorthGroup} rows={
+        activeChitFunds.map((c) => {
           const payments = chit_fund_payments.filter((p) => p.chit_fund_id === c.id)
           const netPaid = payments.reduce((s, p) => s + Number(p.amount) - Number(p.dividend_received || 0), 0)
           const amount = c.payout_status === 'taken'
@@ -110,7 +132,7 @@ function NetWorthCustomizeBody({ data, onToggleIncludeInNetWorth }) {
         })
       } />
 
-      <Section title="Family & Company" emptyMessage="No profiles yet" rows={
+      <Section title="Family & Company" emptyMessage="No profiles yet" table="money_profiles" toggleableRows={toggleableProfiles} onToggleGroup={onToggleIncludeInNetWorthGroup} rows={
         money_profiles.map((p) => {
           const linked = !!p.linked_account_id
           const ownEntries = money_profile_entries.filter((e) => e.profile_id === p.id && !e.account_id && !e.credit_card_id)
@@ -124,7 +146,7 @@ function NetWorthCustomizeBody({ data, onToggleIncludeInNetWorth }) {
         })
       } />
 
-      <Section title="Scholarships" emptyMessage="No scholarships yet" rows={
+      <Section title="Scholarships" emptyMessage="No scholarships yet" table="scholarships" toggleableRows={toggleableScholarships} onToggleGroup={onToggleIncludeInNetWorthGroup} rows={
         scholarships.map((s) => {
           const mirrored = !!s.received_to_account_id
           const pending = scholarshipDisplayStatus(s) === 'pending'
@@ -144,12 +166,13 @@ function NetWorthCustomizeBody({ data, onToggleIncludeInNetWorth }) {
 
 // Follows ManageAccessSheet.jsx's exact BottomSheet-on-mobile / centered-modal-on-desktop pattern.
 // One immediate PATCH per toggle (onToggleIncludeInNetWorth, defined in app/page.js) — no batch
-// "Save" step, same UX as Settings > Accounts' visibility toggle.
-export function NetWorthCustomizeSheet({ open, onClose, data, onToggleIncludeInNetWorth }) {
+// "Save" step, same UX as Settings > Accounts' visibility toggle. onToggleIncludeInNetWorthGroup
+// is the same idea but for a whole section's "Turn all on/off" button.
+export function NetWorthCustomizeSheet({ open, onClose, data, onToggleIncludeInNetWorth, onToggleIncludeInNetWorthGroup }) {
   const isMobile = useIsMobile()
   if (!open) return null
 
-  const body = <NetWorthCustomizeBody data={data} onToggleIncludeInNetWorth={onToggleIncludeInNetWorth} />
+  const body = <NetWorthCustomizeBody data={data} onToggleIncludeInNetWorth={onToggleIncludeInNetWorth} onToggleIncludeInNetWorthGroup={onToggleIncludeInNetWorthGroup} />
 
   if (isMobile) {
     return (
