@@ -67,9 +67,9 @@ function NetWorthCustomizeBody({ data, onToggleIncludeInNetWorth, onToggleInclud
   const activeLoans = loans.filter((l) => l.status !== 'closed')
   const activeChitFunds = chit_funds.filter((c) => c.status !== 'completed')
   // Only the profiles/scholarships with a live per-row toggle can be batch-toggled — a linked
-  // profile or an already-mirrored/still-pending scholarship has nothing for "turn all" to touch.
+  // profile or a still-pending scholarship has nothing for "turn all" to touch.
   const toggleableProfiles = money_profiles.filter((p) => !p.linked_account_id)
-  const toggleableScholarships = scholarships.filter((s) => !s.received_to_account_id && scholarshipDisplayStatus(s) !== 'pending')
+  const toggleableScholarships = scholarships.filter((s) => scholarshipDisplayStatus(s) !== 'pending')
 
   return (
     <div className="space-y-5">
@@ -148,14 +148,12 @@ function NetWorthCustomizeBody({ data, onToggleIncludeInNetWorth, onToggleInclud
 
       <Section title="Scholarships" emptyMessage="No scholarships yet" table="scholarships" toggleableRows={toggleableScholarships} onToggleGroup={onToggleIncludeInNetWorthGroup} rows={
         scholarships.map((s) => {
-          const mirrored = !!s.received_to_account_id
           const pending = scholarshipDisplayStatus(s) === 'pending'
-          const disabled = mirrored || pending
-          const amount = Math.max(0, Number(s.total_amount || 0) - Number(s.amount_paid_to_college || 0))
+          const amount = pending ? 0 : Math.max(0, Number(s.total_amount || 0) - Number(s.amount_paid_to_college || 0))
           return (
-            <Row key={s.id} icon={GraduationCap} name={s.name} sub="Scholarship" amount={amount}
-              checked={disabled ? true : s.include_in_net_worth !== false} disabled={disabled}
-              caption={mirrored ? 'Already reflected via its linked account.' : pending ? 'Still pending — nothing to include yet.' : null}
+            <Row key={s.id} icon={GraduationCap} name={s.name} sub="Owed to college" amount={amount}
+              checked={pending ? true : s.include_in_net_worth !== false} disabled={pending}
+              caption={pending ? 'Still pending — nothing received yet, so nothing owed.' : null}
               onToggle={() => onToggleIncludeInNetWorth('scholarships', s)} />
           )
         })

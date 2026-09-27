@@ -11,6 +11,7 @@ const CHANGELOG = [
     date: '27 Sep 2026',
     points: [
       'Net worth\'s customize panel: each section now has a "Turn all on/off" button next to its title, for switching every item in that section at once instead of one at a time.',
+      'Net worth: scholarship money you\'ve received but not yet paid to the college now counts as a debt (like a loan), not an asset — it\'s owed to the college. This now applies to every received scholarship, including ones received into a bank account, so that balance is no longer counted as fully yours.',
     ],
   },
   {

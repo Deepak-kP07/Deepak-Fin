@@ -809,13 +809,15 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
   }
   const moneyProfileAssetTotal = unlinkedMoneyProfiles.reduce((s, p) => s + Math.max(0, moneyProfileBalance(p)), 0)
   const moneyProfileLiabilityTotal = unlinkedMoneyProfiles.reduce((s, p) => s + Math.max(0, -moneyProfileBalance(p)), 0)
-  // Scholarships — only one with nothing already mirrored to a real account (received_to_account_id
-  // null) and not still pending contributes its still-owed amount, same "still-outstanding portion
-  // only" framing as lendItems/borrowItems above.
-  const scholarshipReceivable = (s) => Math.max(0, Number(s.total_amount || 0) - Number(s.amount_paid_to_college || 0))
-  const scholarshipNet = scholarships.filter((s) => !s.received_to_account_id && scholarshipDisplayStatus(s) !== 'pending' && s.include_in_net_worth !== false).reduce((s, sc) => s + scholarshipReceivable(sc), 0)
-  const totalAssets = totalBalanceNw + currentInvNw + lendOutstanding + chitFundReceivable + moneyProfileAssetTotal + scholarshipNet
-  const totalLiabilities = totalOutstandingNw + creditCardDebtNw + borrowOutstanding + chitFundLiability + moneyProfileLiabilityTotal
+  // Scholarships — money already received but not yet paid on to the college is owed to the
+  // college, so it's a LIABILITY, not an asset. Applies whether or not it was received into a
+  // tracked account: if it was, that account's balance already holds the money and this offsets
+  // it; if it wasn't (or it's been spent), this is the debt on its own. Still-pending scholarships
+  // (not received yet) owe nothing.
+  const scholarshipOwed = (s) => Math.max(0, Number(s.total_amount || 0) - Number(s.amount_paid_to_college || 0))
+  const scholarshipLiability = scholarships.filter((s) => scholarshipDisplayStatus(s) !== 'pending' && s.include_in_net_worth !== false).reduce((s, sc) => s + scholarshipOwed(sc), 0)
+  const totalAssets = totalBalanceNw + currentInvNw + lendOutstanding + chitFundReceivable + moneyProfileAssetTotal
+  const totalLiabilities = totalOutstandingNw + creditCardDebtNw + borrowOutstanding + chitFundLiability + moneyProfileLiabilityTotal + scholarshipLiability
   const netWorth = totalAssets - totalLiabilities
 
   // Net worth detail page — same filters/formulas as the totals just above, so each section's
@@ -887,8 +889,8 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
     const bal = moneyProfileBalance(p)
     return { id: `mp-${p.id}`, name: p.name, sub: p.profile_type === 'company' ? 'Company' : p.profile_type === 'family' ? 'Family' : 'Other', amount: Math.abs(bal), icon: Users, color: '#a78bfa', debt: bal < 0 }
   }).filter((it) => it.amount > 0)
-  const scholarshipItems = scholarships.filter((s) => !s.received_to_account_id && scholarshipDisplayStatus(s) !== 'pending' && s.include_in_net_worth !== false)
-    .map((s) => ({ id: `sch-${s.id}`, name: s.name, sub: 'Scholarship (pending)', amount: scholarshipReceivable(s), icon: GraduationCap, color: '#facc15', debt: false }))
+  const scholarshipItems = scholarships.filter((s) => scholarshipDisplayStatus(s) !== 'pending' && s.include_in_net_worth !== false)
+    .map((s) => ({ id: `sch-${s.id}`, name: s.name, sub: 'Owed to college', amount: scholarshipOwed(s), icon: GraduationCap, color: '#facc15', debt: true }))
     .filter((it) => it.amount > 0)
 
   // Drilldown state for the Income/Expense/Savings stat cards (StatDrilldown) — declared here,
@@ -987,7 +989,7 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
         totalBalance={totalBalanceNw} currentInv={currentInvNw} totalOutstanding={totalOutstandingNw} creditCardDebt={creditCardDebtNw}
         lendOutstanding={lendOutstanding} borrowOutstanding={borrowOutstanding}
         chitFundReceivable={chitFundReceivable} chitFundLiability={chitFundLiability}
-        moneyProfileAssetTotal={moneyProfileAssetTotal} moneyProfileLiabilityTotal={moneyProfileLiabilityTotal} scholarshipNet={scholarshipNet}
+        moneyProfileAssetTotal={moneyProfileAssetTotal} moneyProfileLiabilityTotal={moneyProfileLiabilityTotal} scholarshipLiability={scholarshipLiability}
         cashBankItems={cashBankItems} investmentItems={investmentItems} loanItems={loanItems} creditCardItems={creditCardItems}
         lendItems={lendItems} borrowItems={borrowItems}
         chitFundAssetItems={chitFundAssetItems} chitFundLiabilityItems={chitFundLiabilityItems}

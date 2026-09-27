@@ -43,7 +43,7 @@ export function NetWorthDetailView({
   onBack, showMoney, setView,
   netWorth, totalAssets, totalLiabilities,
   totalBalance, currentInv, totalOutstanding, creditCardDebt, lendOutstanding, borrowOutstanding, chitFundReceivable, chitFundLiability,
-  moneyProfileAssetTotal, moneyProfileLiabilityTotal, scholarshipNet,
+  moneyProfileAssetTotal, moneyProfileLiabilityTotal, scholarshipLiability,
   cashBankItems, investmentItems, loanItems, creditCardItems, lendItems, borrowItems, chitFundAssetItems, chitFundLiabilityItems,
   moneyProfileItems, scholarshipItems,
   investmentsModuleEnabled, creditCardsModuleEnabled,
@@ -116,11 +116,10 @@ export function NetWorthDetailView({
               {lendOutstanding > 0 && <div className="bg-emerald-200" style={{ width: nwPct(lendOutstanding) }} />}
               {chitFundReceivable > 0 && <div className="bg-sky-300" style={{ width: nwPct(chitFundReceivable) }} />}
               {moneyProfileAssetTotal > 0 && <div className="bg-violet-300" style={{ width: nwPct(moneyProfileAssetTotal) }} />}
-              {scholarshipNet > 0 && <div className="bg-yellow-300" style={{ width: nwPct(scholarshipNet) }} />}
             </div>
             <div
               role="img"
-              aria-label={showMoney ? `Liabilities: loans ${money(totalOutstanding)}, credit cards ${money(creditCardDebt)}, borrowed ${money(borrowOutstanding)}, chit fund dues ${money(chitFundLiability)}` : 'Liabilities breakdown, amounts hidden'}
+              aria-label={showMoney ? `Liabilities: loans ${money(totalOutstanding)}, credit cards ${money(creditCardDebt)}, borrowed ${money(borrowOutstanding)}, chit fund dues ${money(chitFundLiability)}, family and company ${money(moneyProfileLiabilityTotal)}, scholarships owed to college ${money(scholarshipLiability)}` : 'Liabilities breakdown, amounts hidden'}
               className="mt-1.5 flex h-2 gap-px overflow-hidden rounded-full bg-white/[.07] light:bg-black/[.07]"
             >
               <div className="bg-rose-400" style={{ width: nwPct(totalOutstanding) }} />
@@ -128,11 +127,12 @@ export function NetWorthDetailView({
               {borrowOutstanding > 0 && <div className="bg-rose-200" style={{ width: nwPct(borrowOutstanding) }} />}
               {chitFundLiability > 0 && <div className="bg-orange-300" style={{ width: nwPct(chitFundLiability) }} />}
               {moneyProfileLiabilityTotal > 0 && <div className="bg-fuchsia-300" style={{ width: nwPct(moneyProfileLiabilityTotal) }} />}
+              {scholarshipLiability > 0 && <div className="bg-yellow-300" style={{ width: nwPct(scholarshipLiability) }} />}
             </div>
 
             <div className="mt-4 space-y-1 text-[11px] text-slate-500">
-              <div>Assets = Cash &amp; bank ({showMoney ? money(totalBalance) : '••••'}) + Investments ({showMoney ? money(currentInv) : '••••'}){lendOutstanding > 0 ? ` + Lent out (${showMoney ? money(lendOutstanding) : '••••'})` : ''}{chitFundReceivable > 0 ? ` + Chit funds (${showMoney ? money(chitFundReceivable) : '••••'})` : ''}{moneyProfileAssetTotal > 0 ? ` + Family & Company (${showMoney ? money(moneyProfileAssetTotal) : '••••'})` : ''}{scholarshipNet > 0 ? ` + Scholarships (${showMoney ? money(scholarshipNet) : '••••'})` : ''}</div>
-              <div>Liabilities = Loans ({showMoney ? money(totalOutstanding) : '••••'}) + Credit cards ({showMoney ? money(creditCardDebt) : '••••'}){borrowOutstanding > 0 ? ` + Borrowed (${showMoney ? money(borrowOutstanding) : '••••'})` : ''}{chitFundLiability > 0 ? ` + Chit fund dues (${showMoney ? money(chitFundLiability) : '••••'})` : ''}{moneyProfileLiabilityTotal > 0 ? ` + Family & Company (${showMoney ? money(moneyProfileLiabilityTotal) : '••••'})` : ''}</div>
+              <div>Assets = Cash &amp; bank ({showMoney ? money(totalBalance) : '••••'}) + Investments ({showMoney ? money(currentInv) : '••••'}){lendOutstanding > 0 ? ` + Lent out (${showMoney ? money(lendOutstanding) : '••••'})` : ''}{chitFundReceivable > 0 ? ` + Chit funds (${showMoney ? money(chitFundReceivable) : '••••'})` : ''}{moneyProfileAssetTotal > 0 ? ` + Family & Company (${showMoney ? money(moneyProfileAssetTotal) : '••••'})` : ''}</div>
+              <div>Liabilities = Loans ({showMoney ? money(totalOutstanding) : '••••'}) + Credit cards ({showMoney ? money(creditCardDebt) : '••••'}){borrowOutstanding > 0 ? ` + Borrowed (${showMoney ? money(borrowOutstanding) : '••••'})` : ''}{chitFundLiability > 0 ? ` + Chit fund dues (${showMoney ? money(chitFundLiability) : '••••'})` : ''}{moneyProfileLiabilityTotal > 0 ? ` + Family & Company (${showMoney ? money(moneyProfileLiabilityTotal) : '••••'})` : ''}{scholarshipLiability > 0 ? ` + Scholarships owed to college (${showMoney ? money(scholarshipLiability) : '••••'})` : ''}</div>
             </div>
           </div>
 
@@ -181,9 +181,9 @@ export function NetWorthDetailView({
             emptyIcon={Users} emptyTitle="Nothing unlinked" emptyMessage="An unlinked Family/Company profile's balance will show up here." emptyCta="Add a profile" onEmptyCta={() => setView('family_company')}
           />
           <ItemSection
-            title="Scholarships" subtotal={scholarshipNet} items={scholarshipItems} showMoney={showMoney}
-            caption={scholarshipItems.length > 0 ? 'Only the still-pending amount, and only when nothing has been mirrored to an account.' : null}
-            emptyIcon={GraduationCap} emptyTitle="Nothing pending" emptyMessage="A scholarship still owed, with no linked account, will show up here." emptyCta="Add scholarship" onEmptyCta={() => setView('scholarships')}
+            title="Scholarships owed to college" subtotal={scholarshipLiability} items={scholarshipItems} showMoney={showMoney}
+            caption={scholarshipItems.length > 0 ? 'Received but not yet paid to the college — counted as a debt until you pay it.' : null}
+            emptyIcon={GraduationCap} emptyTitle="Nothing owed" emptyMessage="A scholarship you've received but not yet paid to the college will show up here." emptyCta="Add scholarship" onEmptyCta={() => setView('scholarships')}
           />
         </>
       )}
