@@ -11,6 +11,7 @@ const CHANGELOG = [
     date: '27 Sep 2026',
     points: [
       'Net worth\'s customize panel: each section now has a "Turn all on/off" button next to its title, for switching every item in that section at once instead of one at a time.',
+      'Fixed warning pop-ups (like "doesn\'t have that much balance") ignoring taps on their Okay/Cancel button on mobile when opened from a form — tapping Okay now closes it and keeps your form as you left it.',
       'Dashboard: the net worth card\'s Assets/Liabilities bars now show scholarships, chit funds and Family/Company too — they were already in the totals, just missing their own colour and label.',
       'Net worth: a Family/Company profile now counts its current balance exactly as shown on the Family/Company screen — previously it left out entries paid by card or from an account, so the figure could look much higher than the real balance.',
       'Net worth: scholarship money you\'ve received but not yet paid to the college now counts as a debt (like a loan), not an asset — it\'s owed to the college. This now applies to every received scholarship, including ones received into a bank account, so that balance is no longer counted as fully yours.',

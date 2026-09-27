@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Pencil } from 'lucide-react'
 
 // Themed replacement for window.prompt — call as `await prompt.ask('label', { defaultValue })`,
@@ -14,8 +15,10 @@ export function usePrompt() {
     setState({ message, resolve, confirmLabel: opts.confirmLabel || 'Save', inputType: opts.inputType || 'text', placeholder: opts.placeholder || '' })
   })
   const close = (result) => { state?.resolve(result); setState(null) }
-  const view = state && (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={() => close(null)}>
+  // Portaled + tagged data-app-dialog for the same reason as ConfirmDialog's: stays clickable when
+  // opened from inside a BottomSheet (vaul sets body pointer-events:none while open).
+  const view = state && createPortal(
+    <div data-app-dialog="" style={{ pointerEvents: 'auto' }} className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={() => close(null)}>
       <form onSubmit={(e) => { e.preventDefault(); close(value) }} onClick={(e) => e.stopPropagation()} className="w-full max-w-sm rounded-3xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-6 shadow-2xl glassy:glass-card">
         <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-accent-400/15 text-accent-200 light:text-accent-700"><Pencil size={18} /></div>
         <p className="mt-4 text-sm text-slate-200 light:text-slate-700">{state.message}</p>
@@ -34,7 +37,8 @@ export function usePrompt() {
           <button type="submit" className="rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-4 py-2.5 text-sm font-semibold text-[#07101c] hover:opacity-90">{state.confirmLabel}</button>
         </div>
       </form>
-    </div>
+    </div>,
+    document.body,
   )
   return { ask, view }
 }

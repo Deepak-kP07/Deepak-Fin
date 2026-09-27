@@ -13,6 +13,9 @@ export function BottomSheet({ open, onOpenChange, title, children }) {
       <Drawer.Portal>
         <Drawer.Overlay className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm" />
         <Drawer.Content
+          // A tap on a dialog opened from inside this sheet (useConfirm etc., tagged
+          // data-app-dialog) isn't a tap "outside" — without this the sheet would close under it.
+          onInteractOutside={(e) => { if (e.target?.closest?.('[data-app-dialog]')) e.preventDefault() }}
           className="fixed inset-x-0 bottom-0 z-40 flex flex-col rounded-t-3xl border-t border-white/10 light:border-black/10 bg-[#141a28] light:bg-white shadow-2xl outline-none glassy:glass-card"
           style={{ maxHeight: 'calc(100dvh - max(env(safe-area-inset-top), 12px))' }}
         >
