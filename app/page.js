@@ -221,17 +221,27 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
   // it off there swaps the block for the same "confirm anyway" prompt.
   const warnIfRisky = async () => {
     if (form.type === 'income') return true
+    // The receiving leg of a transfer adds money to form.account_id, so nothing to check.
+    if (editing?.transfer_direction === 'in') return true
     const amount = Number(form.amount)
     if (!(amount > 0)) return true
+    // When editing, the original transaction's amount is already reflected in the account balance
+    // (or card outstanding). Only the extra money this edit takes out is checked; otherwise re-saving
+    // an existing expense, even just to fix its description, gets blocked by its own amount.
+    const originalOut = editing && editing.type !== 'income' ? Number(editing.amount || 0) : 0
+    const resolveAccountId = (id) => debitCards.find((c) => c.id === id)?.linked_account_id || id
     const sourceId = form.account_id
     if (typeof sourceId === 'string' && sourceId.startsWith('cc:')) {
       const card = creditCards.find((c) => c.id === sourceId.slice(3))
       if (card) {
+        const alreadyOnCard = editing?.linked_module === 'credit_card' && editing.linked_module_id === card.id ? originalOut : 0
+        if (amount <= alreadyOnCard) return true
+        const outstanding = Math.max(0, Number(card.current_outstanding || 0) - alreadyOnCard)
         const limit = Number(card.credit_limit || 0)
         if (limit > 0) {
-          const pct = ((Number(card.current_outstanding || 0) + amount) / limit) * 100
+          const pct = ((outstanding + amount) / limit) * 100
           if (pct >= 100) {
-            await confirm.ask(`"${card.name}" only has ${money(Math.max(0, limit - Number(card.current_outstanding || 0)))} of headroom left — this would go over its credit limit.`, { okOnly: true })
+            await confirm.ask(`"${card.name}" only has ${money(Math.max(0, limit - outstanding))} of headroom left — this would go over its credit limit.`, { okOnly: true })
             return false
           }
           if (pct > 30) {
@@ -241,9 +251,9 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
       }
       return true
     }
-    const debitCard = debitCards.find((c) => c.id === sourceId)
-    const account = accounts.find((a) => a.id === (debitCard ? debitCard.linked_account_id : sourceId))
-    if (account && amount > Number(account.current_balance || 0)) {
+    const account = accounts.find((a) => a.id === resolveAccountId(sourceId))
+    const alreadyFromAccount = account && editing?.linked_module !== 'credit_card' && resolveAccountId(editing?.account_id) === account.id ? originalOut : 0
+    if (account && amount > alreadyFromAccount && amount > Number(account.current_balance || 0) + alreadyFromAccount) {
       if (profile?.block_insufficient_funds === false) {
         return confirm.ask(`You don't have that much money in "${account.name}" — do you want to confirm this payment anyway?`, { confirmLabel: 'Confirm' })
       }

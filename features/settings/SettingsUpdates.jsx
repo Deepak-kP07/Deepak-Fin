@@ -11,6 +11,7 @@ const CHANGELOG = [
     date: '27 Sep 2026',
     points: [
       'Net worth\'s customize panel: each section now has a "Turn all on/off" button next to its title, for switching every item in that section at once instead of one at a time.',
+      'Fixed editing a transaction getting blocked with "doesn\'t have that much balance" even when nothing about the money changed — the check now counts the amount that transaction already took out, and only blocks if the edit takes out more than the account has left.',
       'Fixed warning pop-ups (like "doesn\'t have that much balance") ignoring taps on their Okay/Cancel button on mobile when opened from a form — tapping Okay now closes it and keeps your form as you left it.',
       'Dashboard: the net worth card\'s Assets/Liabilities bars now show scholarships, chit funds and Family/Company too — they were already in the totals, just missing their own colour and label.',
       'Net worth: a Family/Company profile now counts its current balance exactly as shown on the Family/Company screen — previously it left out entries paid by card or from an account, so the figure could look much higher than the real balance.',
