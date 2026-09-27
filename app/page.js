@@ -1249,17 +1249,21 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
                   </div>
                   <div
                     role="img"
-                    aria-label={showMoney ? `Assets ${money(totalAssets)}: cash and bank ${money(totalBalanceNw)}, investments ${money(currentInvNw)}, lent out ${money(lendOutstanding)}` : 'Assets breakdown, amounts hidden'}
+                    aria-label={showMoney ? `Assets ${money(totalAssets)}: cash and bank ${money(totalBalanceNw)}, investments ${money(currentInvNw)}, lent out ${money(lendOutstanding)}, chit funds ${money(chitFundReceivable)}, family and company ${money(moneyProfileAssetTotal)}` : 'Assets breakdown, amounts hidden'}
                     className="mt-1.5 flex h-2 gap-px overflow-hidden rounded-full bg-white/[.07] light:bg-black/[.07]"
                   >
                     <div className="bg-emerald-400" style={{ width: nwPct(totalBalanceNw) }} />
                     <div className="bg-emerald-400/50" style={{ width: nwPct(currentInvNw) }} />
                     {lendOutstanding > 0 && <div className="bg-emerald-200" style={{ width: nwPct(lendOutstanding) }} />}
+                    {chitFundReceivable > 0 && <div className="bg-sky-300" style={{ width: nwPct(chitFundReceivable) }} />}
+                    {moneyProfileAssetTotal > 0 && <div className="bg-violet-300" style={{ width: nwPct(moneyProfileAssetTotal) }} />}
                   </div>
                   <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-[11px] text-slate-400 light:text-slate-500">
                     <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />Cash &amp; bank {showMoney ? money(totalBalanceNw) : '••••'}</span>
                     <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400/50" />Investments {showMoney ? money(currentInvNw) : '••••'}</span>
                     {lendOutstanding > 0 && <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-200" />Lent out {showMoney ? money(lendOutstanding) : '••••'}</span>}
+                    {chitFundReceivable > 0 && <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 shrink-0 rounded-full bg-sky-300" />Chit funds {showMoney ? money(chitFundReceivable) : '••••'}</span>}
+                    {moneyProfileAssetTotal > 0 && <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 shrink-0 rounded-full bg-violet-300" />Family &amp; Company {showMoney ? money(moneyProfileAssetTotal) : '••••'}</span>}
                   </div>
                 </div>
                 <div>
@@ -1269,17 +1273,23 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
                   </div>
                   <div
                     role="img"
-                    aria-label={showMoney ? `Liabilities ${money(totalLiabilities)}: loans ${money(totalOutstandingNw)}, credit cards ${money(creditCardDebtNw)}, borrowed ${money(borrowOutstanding)}` : 'Liabilities breakdown, amounts hidden'}
+                    aria-label={showMoney ? `Liabilities ${money(totalLiabilities)}: loans ${money(totalOutstandingNw)}, credit cards ${money(creditCardDebtNw)}, borrowed ${money(borrowOutstanding)}, chit fund dues ${money(chitFundLiability)}, family and company ${money(moneyProfileLiabilityTotal)}, scholarships ${money(scholarshipLiability)}` : 'Liabilities breakdown, amounts hidden'}
                     className="mt-1.5 flex h-2 gap-px overflow-hidden rounded-full bg-white/[.07] light:bg-black/[.07]"
                   >
                     <div className="bg-rose-400" style={{ width: nwPct(totalOutstandingNw) }} />
                     <div className="bg-rose-400/50" style={{ width: nwPct(creditCardDebtNw) }} />
                     {borrowOutstanding > 0 && <div className="bg-rose-200" style={{ width: nwPct(borrowOutstanding) }} />}
+                    {chitFundLiability > 0 && <div className="bg-orange-300" style={{ width: nwPct(chitFundLiability) }} />}
+                    {moneyProfileLiabilityTotal > 0 && <div className="bg-fuchsia-300" style={{ width: nwPct(moneyProfileLiabilityTotal) }} />}
+                    {scholarshipLiability > 0 && <div className="bg-yellow-300" style={{ width: nwPct(scholarshipLiability) }} />}
                   </div>
                   <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-[11px] text-slate-400 light:text-slate-500">
                     <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 shrink-0 rounded-full bg-rose-400" />Loans {showMoney ? money(totalOutstandingNw) : '••••'}</span>
                     <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 shrink-0 rounded-full bg-rose-400/50" />Cards {showMoney ? money(creditCardDebtNw) : '••••'}</span>
                     {borrowOutstanding > 0 && <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 shrink-0 rounded-full bg-rose-200" />Borrowed {showMoney ? money(borrowOutstanding) : '••••'}</span>}
+                    {chitFundLiability > 0 && <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 shrink-0 rounded-full bg-orange-300" />Chit fund dues {showMoney ? money(chitFundLiability) : '••••'}</span>}
+                    {moneyProfileLiabilityTotal > 0 && <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 shrink-0 rounded-full bg-fuchsia-300" />Family &amp; Company {showMoney ? money(moneyProfileLiabilityTotal) : '••••'}</span>}
+                    {scholarshipLiability > 0 && <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 shrink-0 rounded-full bg-yellow-300" />Scholarships {showMoney ? money(scholarshipLiability) : '••••'}</span>}
                   </div>
                 </div>
               </>
