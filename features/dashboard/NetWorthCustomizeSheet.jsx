@@ -135,8 +135,7 @@ function NetWorthCustomizeBody({ data, onToggleIncludeInNetWorth, onToggleInclud
       <Section title="Family & Company" emptyMessage="No profiles yet" table="money_profiles" toggleableRows={toggleableProfiles} onToggleGroup={onToggleIncludeInNetWorthGroup} rows={
         money_profiles.map((p) => {
           const linked = !!p.linked_account_id
-          const ownEntries = money_profile_entries.filter((e) => e.profile_id === p.id && !e.account_id && !e.credit_card_id)
-          const bal = profileTotals(p, ownEntries).balance
+          const bal = profileTotals(p, money_profile_entries.filter((e) => e.profile_id === p.id)).balance
           return (
             <Row key={p.id} icon={Users} name={p.name} sub={p.profile_type === 'company' ? 'Company' : p.profile_type === 'family' ? 'Family' : 'Other'} amount={Math.abs(bal)}
               checked={linked ? true : p.include_in_net_worth !== false} disabled={linked}

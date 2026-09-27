@@ -799,14 +799,12 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
   // Family/Company — only an UNLINKED profile (no linked_account_id) is its own net-worth item; a
   // linked profile's balance already flows through its linked account's own current_balance
   // (syncOpeningBalanceMirror + per-entry mirroring), so counting it again here would double it.
-  // Even for an unlinked profile, an individual entry with its own account_id/credit_card_id
-  // override still mirrors into a real account/card of its own — excluded here for the same
-  // double-counting reason, via the ownEntries filter below.
+  // An unlinked profile counts its full balance, exactly as the Family/Company screen shows it —
+  // including entries paid via an account/card override. That's a deliberate product choice (the
+  // user wants the balance they see), even though such an entry's amount also moves that
+  // account/card's own balance.
   const unlinkedMoneyProfiles = money_profiles.filter((p) => !p.linked_account_id && p.include_in_net_worth !== false)
-  const moneyProfileBalance = (p) => {
-    const ownEntries = money_profile_entries.filter((e) => e.profile_id === p.id && !e.account_id && !e.credit_card_id)
-    return profileTotals(p, ownEntries).balance
-  }
+  const moneyProfileBalance = (p) => profileTotals(p, money_profile_entries.filter((e) => e.profile_id === p.id)).balance
   const moneyProfileAssetTotal = unlinkedMoneyProfiles.reduce((s, p) => s + Math.max(0, moneyProfileBalance(p)), 0)
   const moneyProfileLiabilityTotal = unlinkedMoneyProfiles.reduce((s, p) => s + Math.max(0, -moneyProfileBalance(p)), 0)
   // Scholarships — money already received but not yet paid on to the college is owed to the
