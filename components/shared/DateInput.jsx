@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react'
 import { MONTH_NAMES, formatDate, todayISO } from '@/lib/format'
 
@@ -16,6 +16,22 @@ export function DateInput({ value, onChange, className, placeholder }) {
     return () => document.removeEventListener('mousedown', onDocClick)
   }, [])
   useEffect(() => { if (open) setViewDate(value ? new Date(`${value}T00:00:00`) : new Date()) }, [open])
+  // The popup is left-aligned to the field by default. For a field on the right half of a phone
+  // screen that runs past the viewport edge and makes the whole sheet scroll sideways, so it's
+  // measured on open and shifted back inside the screen (8px margin) before paint.
+  const popRef = useRef(null)
+  const [shift, setShift] = useState(0)
+  useLayoutEffect(() => {
+    if (!open) { setShift(0); return }
+    const el = popRef.current
+    if (!el) return
+    const r = el.getBoundingClientRect()
+    const vw = document.documentElement.clientWidth
+    let dx = 0
+    if (r.right > vw - 8) dx = vw - 8 - r.right
+    if (r.left + dx < 8) dx = 8 - r.left
+    setShift(dx)
+  }, [open])
 
   const year = viewDate.getFullYear(), month = viewDate.getMonth()
   const firstDow = new Date(year, month, 1).getDay()
@@ -36,7 +52,7 @@ export function DateInput({ value, onChange, className, placeholder }) {
         <Calendar size={15} className="shrink-0 text-slate-500" />
       </button>
       {open && (
-        <div className="absolute left-0 z-30 mt-1 w-72 rounded-2xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-3 shadow-2xl">
+        <div ref={popRef} style={{ left: shift }} className="absolute z-30 mt-1 w-72 max-w-[calc(100vw-16px)] rounded-2xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-3 shadow-2xl">
           <div className="flex items-center justify-between">
             <button type="button" onClick={() => setViewDate(new Date(year, month - 1, 1))} className="rounded-lg p-1.5 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900"><ChevronLeft size={16} /></button>
             <div className="text-sm font-semibold text-white light:text-slate-900">{MONTH_NAMES[month]} {year}</div>

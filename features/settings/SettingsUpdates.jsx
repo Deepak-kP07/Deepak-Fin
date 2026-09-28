@@ -12,6 +12,7 @@ const CHANGELOG = [
     points: [
       'Family/Company: an expense paid by credit card now has the same "Not my spending" toggle as the Transactions form — it shows up in that card\'s "To be repaid" total.',
       'Family/Company: Amount now comes before Date in the entry form, matching every other form.',
+      'Fixed the date picker running off the right edge of the screen on phones, which pushed the whole form sideways — it now stays inside the screen.',
     ],
   },
   {
