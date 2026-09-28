@@ -9,6 +9,7 @@ import { ENTRY_TYPE_STYLE, ENTRY_TYPES } from '@/lib/moneyProfiles'
 import { todayISO } from '@/lib/format'
 import { BottomSheet } from '@/components/shared/BottomSheet'
 import { useIsMobile } from '@/hooks/use-mobile'
+import { ToggleSwitch } from '@/components/shared/ToggleSwitch'
 
 function MoneyProfileEntryFormFields({ form, setForm, profile, accounts, creditCards, categoryOptions, onAddCategory }) {
   return (
@@ -20,11 +21,11 @@ function MoneyProfileEntryFormFields({ form, setForm, profile, accounts, creditC
       </div>
 
       <div className="mt-5 grid grid-cols-2 gap-3 sm:gap-4">
-        <label className="text-sm text-slate-300 light:text-slate-700">Date
-          <DateInput value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
-        </label>
         <label className="text-sm text-slate-300 light:text-slate-700">Amount
           <input required type="number" step="0.01" min="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
+        </label>
+        <label className="text-sm text-slate-300 light:text-slate-700">Date
+          <DateInput value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
         </label>
         <label className="text-sm text-slate-300 light:text-slate-700 col-span-2">Description
           <input required value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" placeholder="Rent, groceries, salary…" />
@@ -49,6 +50,18 @@ function MoneyProfileEntryFormFields({ form, setForm, profile, accounts, creditC
         </Select>
         <p className="mt-1.5 text-[11px] text-slate-500">{form.account_id ? 'This entry will also post as a transaction on this account or card.' : "This entry won't show up anywhere outside this module."}</p>
       </label>
+
+      {form.entry_type === 'expense' && typeof form.account_id === 'string' && form.account_id.startsWith('cc:') && (
+        /* Same row as the Transaction form's — the div owns the click, ToggleSwitch is display-only
+           so a tap on the switch itself doesn't toggle twice. */
+        <div onClick={() => setForm({ ...form, is_reimbursable: !form.is_reimbursable })} className="mt-4 flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-white/10 light:border-black/10 bg-white/[.02] light:bg-black/[.02] px-4 py-3">
+          <div>
+            <div className="text-sm text-slate-300 light:text-slate-700">Not my spending</div>
+            <div className="text-[11px] text-slate-500">Someone else will pay this back to you</div>
+          </div>
+          <ToggleSwitch checked={!!form.is_reimbursable} onChange={() => {}} />
+        </div>
+      )}
     </>
   )
 }
@@ -64,7 +77,7 @@ export function MoneyProfileEntryForm({ open, onClose, onSaved, editing, profile
   // main Transaction form/LoanPaymentForm/LendForm already use for "pay via card".
   const initial = editing
     ? { ...editing, amount: String(editing.amount), account_id: editing.credit_card_id ? `cc:${editing.credit_card_id}` : editing.account_id || profile?.linked_account_id || '' }
-    : { profile_id: profile?.id, entry_type: 'expense', category_id: '', description: '', amount: '', date: todayISO(), paid_party: '', notes: '', account_id: profile?.linked_account_id || '' }
+    : { profile_id: profile?.id, entry_type: 'expense', category_id: '', description: '', amount: '', date: todayISO(), paid_party: '', notes: '', account_id: profile?.linked_account_id || '', is_reimbursable: false }
   const [form, setForm] = useState(initial)
   const [busy, setBusy] = useState(false)
   const isMobile = useIsMobile()
@@ -89,6 +102,7 @@ export function MoneyProfileEntryForm({ open, onClose, onSaved, editing, profile
       const payload = {
         profile_id: profile.id, entry_type: form.entry_type, category_id: form.category_id || null, description: form.description, amount: Number(form.amount), date: form.date, paid_party: form.paid_party || null, notes: form.notes || null,
         account_id: isCard ? null : form.account_id || null, credit_card_id: isCard ? form.account_id.slice(3) : null,
+        is_reimbursable: isCard && form.entry_type === 'expense' ? !!form.is_reimbursable : false,
       }
       const response = await fetch(endpoint, { method: editing ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       const data = await response.json()

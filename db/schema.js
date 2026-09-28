@@ -698,6 +698,9 @@ export const moneyProfileEntries = pgTable('money_profile_entries', {
   // shows up in that card's own activity feed, exactly like a regular expense funded by a card.
   creditCardId: uuid('credit_card_id').references(() => creditCards.id, { onDelete: 'set null' }),
   linkedTransactionId: uuid('linked_transaction_id').references(() => transactions.id, { onDelete: 'set null' }),
+  // "Not my spending" for a card-funded expense — copied onto the mirrored transaction's own
+  // is_reimbursable (lib/server/moneyProfileCrud.js), which is what the card's "To be repaid" split reads.
+  isReimbursable: boolean('is_reimbursable').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   check('money_profile_entries_type_check', sql`${t.entryType} in ('income','expense','capital')`),

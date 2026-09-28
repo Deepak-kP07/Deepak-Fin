@@ -8,6 +8,13 @@ import { triggerAppUpdate } from '@/lib/pwaUpdate'
 // whenever something user-visible ships; no need to log every internal fix.
 const CHANGELOG = [
   {
+    date: '28 Sep 2026',
+    points: [
+      'Family/Company: an expense paid by credit card now has the same "Not my spending" toggle as the Transactions form — it shows up in that card\'s "To be repaid" total.',
+      'Family/Company: Amount now comes before Date in the entry form, matching every other form.',
+    ],
+  },
+  {
     date: '27 Sep 2026',
     points: [
       'Net worth\'s customize panel: each section now has a "Turn all on/off" button next to its title, for switching every item in that section at once instead of one at a time.',
