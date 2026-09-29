@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { BookOpen, Bell, Inbox, KeyRound, LayoutDashboard, LayoutGrid, Link2, LogOut, Menu, Palette, RefreshCw, ShieldAlert, Smartphone, Star, Tag, Landmark as LandmarkIcon, User } from 'lucide-react'
+import { BookOpen, Bell, Inbox, KeyRound, LayoutDashboard, LayoutGrid, Link2, Lock, LogOut, Menu, Palette, RefreshCw, ShieldAlert, Smartphone, Star, Tag, Landmark as LandmarkIcon, User } from 'lucide-react'
 import { BottomSheet } from '@/components/shared/BottomSheet'
 import { SettingsProfile } from './SettingsProfile'
 import { SettingsAppearance } from './SettingsAppearance'
@@ -18,6 +18,7 @@ import { SettingsKite } from './SettingsKite'
 import { SettingsSmsAutoDetect } from './SettingsSmsAutoDetect'
 import { SettingsUserGuide } from './SettingsUserGuide'
 import { SettingsUpdates } from './SettingsUpdates'
+import { SettingsHiddenTransactions } from './SettingsHiddenTransactions'
 
 const SECTIONS = [
   { key: 'profile', label: 'Profile', icon: User, Component: SettingsProfile },
@@ -30,6 +31,7 @@ const SECTIONS = [
   { key: 'categories', label: 'Categories', icon: Tag, Component: SettingsCategories },
   { key: 'accounts', label: 'Accounts', icon: LandmarkIcon, Component: SettingsAccounts },
   { key: 'vault', label: 'Vault', icon: KeyRound, Component: SettingsVault },
+  { key: 'hidden_transactions', label: 'Hidden transactions', icon: Lock, Component: SettingsHiddenTransactions },
   { key: 'money_rules', label: 'Money rules', icon: Star, Component: SettingsMoneyRules },
   { key: 'kite', label: 'Kite Connect', icon: Link2, Component: SettingsKite },
   { key: 'sms_autodetect', label: 'SMS auto-detect', icon: Inbox, Component: SettingsSmsAutoDetect },

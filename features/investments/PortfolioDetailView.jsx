@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { ArrowDownRight, ArrowUpRight, ChevronRight, Download, Eye, EyeOff, Link2, MoreVertical, Pencil, PiggyBank, RefreshCw, Target, Trash2, TrendingUp, Unlink, Wallet } from 'lucide-react'
+import { ArrowDownRight, ArrowUpRight, ChevronRight, Download, Eye, EyeOff, Link2, Lock, MoreVertical, Pencil, PiggyBank, RefreshCw, Target, Trash2, TrendingUp, Unlink, Wallet } from 'lucide-react'
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { StatCard } from '@/components/shared/StatCard'
 import { EmptyState } from '@/components/shared/EmptyState'
@@ -10,6 +10,7 @@ import { MonthCursor } from '@/components/shared/MonthCursor'
 import { DismissibleBanner } from '@/components/shared/DismissibleBanner'
 import { currentValueOf, CATEGORY_BADGE_STYLE } from '@/lib/otherInvestments'
 import { capitalizeFirst, formatDate, formatDateTime, money, money2, monthName, relativeTime } from '@/lib/format'
+import { hiddenTransferGroups, isHiddenTx, useHiddenTx } from '@/lib/hiddenTransactions'
 
 export function PortfolioDetailView({
   portfolio, holdings, sips = [], otherInvestments = [], transactions, onBack, onEdit, onDelete, onAddFunds, onWithdrawFunds,
@@ -56,10 +57,13 @@ export function PortfolioDetailView({
   const [monthCursor, setMonthCursor] = useState(() => { const d = new Date(); return { year: d.getFullYear(), month: d.getMonth() } })
   const [showAllMonths, setShowAllMonths] = useState(false)
   const shiftMonth = (delta) => { setShowAllMonths(false); setMonthCursor((c) => { const d = new Date(c.year, c.month + delta, 1); return { year: d.getFullYear(), month: d.getMonth() } }) }
-  const monthActivity = showAllMonths ? cashActivity : cashActivity.filter((a) => {
+  // Listed rows leave out hidden transactions unless unlocked; the chart keeps cashActivity.
+  const { revealed: hiddenRevealed } = useHiddenTx()
+  const hiddenGroups = hiddenTransferGroups(transactions)
+  const monthActivity = (showAllMonths ? cashActivity : cashActivity.filter((a) => {
     const d = new Date(a.date)
     return d.getFullYear() === monthCursor.year && d.getMonth() === monthCursor.month
-  })
+  })).filter((t) => hiddenRevealed || !isHiddenTx(t, hiddenGroups))
 
   const now = new Date()
   const months = []
@@ -372,7 +376,7 @@ export function PortfolioDetailView({
                         {isIn ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}
                       </div>
                       <div className="min-w-0">
-                        <div className="truncate text-sm font-medium text-white light:text-slate-900">{capitalizeFirst(t.description)}</div>
+                        <div className="flex items-center gap-1.5 truncate text-sm font-medium text-white light:text-slate-900"><span className="truncate">{capitalizeFirst(t.description)}</span>{isHiddenTx(t, hiddenGroups) && <Lock size={11} className="shrink-0 text-slate-500" aria-label="Hidden" />}</div>
                         {t.notes && <div className="truncate text-[11px] text-slate-500">{capitalizeFirst(t.notes)}</div>}
                       </div>
                     </div>

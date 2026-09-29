@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { ArrowDownRight, ArrowLeftRight, ArrowUpRight, CheckCircle2, ChevronRight, Eye, EyeOff, Landmark, MoreVertical, Pencil, Plus, RefreshCw, Trash2, Wallet, X } from 'lucide-react'
+import { ArrowDownRight, ArrowLeftRight, ArrowUpRight, CheckCircle2, ChevronRight, Eye, EyeOff, Landmark, Lock, MoreVertical, Pencil, Plus, RefreshCw, Trash2, Wallet, X } from 'lucide-react'
 import { getTransactionIcon } from '@/lib/categoryIcons'
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { BankCardFace } from '@/components/shared/BankCardFace'
@@ -11,6 +11,7 @@ import { EmptyState } from '@/components/shared/EmptyState'
 import { NetBar } from '@/components/shared/NetBar'
 import { MonthCursor } from '@/components/shared/MonthCursor'
 import { capitalizeFirst, formatDateTime, money, monthName } from '@/lib/format'
+import { hiddenTransferGroups, isHiddenTx, useHiddenTx } from '@/lib/hiddenTransactions'
 
 export function AccountDetailView({ account, debitCard, transactions, categories, onBack, onEdit, onDelete, onEditCard, onDeleteTx, onDeleteTxBulk, onAddTransaction, onSyncBalance, showMoney, onToggleMoney }) {
   const [syncOpen, setSyncOpen] = useState(false)
@@ -48,10 +49,14 @@ export function AccountDetailView({ account, debitCard, transactions, categories
   const [monthCursor, setMonthCursor] = useState(() => { const d = new Date(); return { year: d.getFullYear(), month: d.getMonth() } })
   const [showAllMonths, setShowAllMonths] = useState(false)
   const shiftMonth = (delta) => { setShowAllMonths(false); setMonthCursor((c) => { const d = new Date(c.year, c.month + delta, 1); return { year: d.getFullYear(), month: d.getMonth() } }) }
-  const monthActivity = showAllMonths ? activity : activity.filter((a) => {
+  // The listed rows (and their count) leave out hidden transactions unless unlocked; the totals
+  // and chart below keep using the full `activity`.
+  const { revealed: hiddenRevealed } = useHiddenTx()
+  const hiddenGroups = hiddenTransferGroups(transactions)
+  const monthActivity = (showAllMonths ? activity : activity.filter((a) => {
     const d = new Date(a.date)
     return d.getFullYear() === monthCursor.year && d.getMonth() === monthCursor.month
-  })
+  })).filter((t) => hiddenRevealed || !isHiddenTx(t, hiddenGroups))
 
   const now = new Date()
   const months = []
@@ -272,7 +277,7 @@ export function AccountDetailView({ account, debitCard, transactions, categories
                         </div>
                       )}
                       <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm font-medium text-white light:text-slate-900">{capitalizeFirst(t.description)}</div>
+                        <div className="flex items-center gap-1.5 truncate text-sm font-medium text-white light:text-slate-900"><span className="truncate">{capitalizeFirst(t.description)}</span>{isHiddenTx(t, hiddenGroups) && <Lock size={11} className="shrink-0 text-slate-500" aria-label="Hidden" />}</div>
                         <div className="truncate text-[11px] text-slate-500">{cat?.name || (isTransfer ? (t.transfer_direction === 'in' ? 'Transfer in' : 'Transfer out') : 'Uncategorised')} · {formatDateTime(t.date, t.time)}</div>
                       </div>
                       <div className={`shrink-0 text-sm font-semibold ${color}`}>{isIn ? '+' : '-'}{showMoney ? money(t.amount) : '••••'}</div>
@@ -285,7 +290,7 @@ export function AccountDetailView({ account, debitCard, transactions, categories
                           {isTransfer ? <ArrowLeftRight size={16} /> : CatIcon ? <CatIcon size={16} /> : isIn ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}
                         </div>
                         <div className="min-w-0">
-                          <div className="truncate text-sm font-medium text-white light:text-slate-900">{capitalizeFirst(t.description)}</div>
+                          <div className="flex items-center gap-1.5 truncate text-sm font-medium text-white light:text-slate-900"><span className="truncate">{capitalizeFirst(t.description)}</span>{isHiddenTx(t, hiddenGroups) && <Lock size={11} className="shrink-0 text-slate-500" aria-label="Hidden" />}</div>
                           {t.notes && <div className="truncate text-[11px] text-slate-500">{capitalizeFirst(t.notes)}</div>}
                         </div>
                       </div>

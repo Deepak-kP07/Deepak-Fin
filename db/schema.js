@@ -77,6 +77,9 @@ export const transactions = pgTable('transactions', {
   // Money spent on someone else's behalf (common with credit cards — you put their purchase on
   // your card and they pay you back later). Plain display flag, never touches balance math.
   isReimbursable: boolean('is_reimbursable').notNull().default(false),
+  // Hidden from every list that shows a transaction by name until the owner unlocks with their
+  // hidden-transactions PIN (lib/hiddenTransactions.js). Still counts in every balance and total.
+  isHidden: boolean('is_hidden').notNull().default(false),
   linkedModule: text('linked_module'),
   linkedModuleId: uuid('linked_module_id'),
   transferGroupId: uuid('transfer_group_id'),
@@ -428,6 +431,11 @@ export const profiles = pgTable('profiles', {
   // separate power-user opt-in to skip the approval card entirely for senders already matched
   // by an active sms_parse_patterns row. Off by default, per the PRD.
   smsAutoApproveTrusted: boolean('sms_auto_approve_trusted').notNull().default(false),
+  // PIN that unlocks hidden transactions. Excluded from safeFields.js and stripped from every
+  // response (stripProfileSecrets) — only lib/server/services/hiddenPin.js reads or writes these.
+  hiddenPinHash: text('hidden_pin_hash'),
+  hiddenPinFailedAttempts: integer('hidden_pin_failed_attempts').notNull().default(0),
+  hiddenPinLockedUntil: timestamp('hidden_pin_locked_until', { withTimezone: true }),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 

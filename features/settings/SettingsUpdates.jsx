@@ -8,6 +8,13 @@ import { triggerAppUpdate } from '@/lib/pwaUpdate'
 // whenever something user-visible ships; no need to log every internal fix.
 const CHANGELOG = [
   {
+    date: '29 Sep 2026',
+    points: [
+      'New: "Hide this transaction" when adding or editing one. A hidden transaction still counts in your balances, totals and charts, but disappears from every list that shows transactions by name — Transactions and its search, the Dashboard, account and card activity, exports and report emails.',
+      'To see hidden transactions, tap the lock on the Transactions page and enter your PIN (set it in Settings > Hidden transactions). They lock again as soon as you leave the app. This keeps them from anyone looking at the app — it isn\'t encryption.',
+    ],
+  },
+  {
     date: '28 Sep 2026',
     points: [
       'Family/Company: an expense paid by credit card now has the same "Not my spending" toggle as the Transactions form — it shows up in that card\'s "To be repaid" total.',

@@ -19,6 +19,7 @@ import { closeStaleBudgetMonths } from '@/lib/server/services/budgets'
 import { listMoneyProfiles, listMoneyProfileEntries } from '@/lib/server/moneyProfileCrud'
 import { listLendBorrow, listLendRepayments, listLendAdditions } from '@/lib/server/lendBorrowCrud'
 import { createTransaction } from '@/lib/server/services/transactions'
+import { stripProfileSecrets } from '@/lib/server/profileSecrets'
 import { sendWelcomeEmail } from '@/lib/email'
 
 // Shared by /kite/login and /kite/callback — both are full-page browser navigations (Zerodha's
@@ -26,14 +27,6 @@ import { sendWelcomeEmail } from '@/lib/email'
 // JSON.
 function kitePageHtml(title, bodyHtml) {
   return `<!doctype html><html><head><meta charset="utf-8"><title>Kite login</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{background:#080b12;color:#e2e8f0;font-family:system-ui;padding:40px;text-align:center;max-width:640px;margin:0 auto}code{background:#1e293b;padding:6px 10px;border-radius:6px;color:#67e8f9;word-break:break-all}h1{margin-bottom:4px}p{color:#94a3b8;font-size:14px;line-height:1.6}a{display:inline-block;margin-top:24px;background:linear-gradient(90deg,#67e8f9,#3b82f6);color:#07101c;padding:12px 24px;border-radius:12px;font-weight:600;text-decoration:none}</style></head><body><h1>${title}</h1><p>${bodyHtml}</p><a href="/">Back to Personal Fin</a></body></html>`
-}
-
-// A bearer-like live token and an encrypted secret respectively — neither has any reason to ever
-// reach the browser, unlike kite_api_key (Zerodha puts that one straight in login redirect URLs).
-function stripKiteSecrets(row) {
-  if (!row) return row
-  const { kite_access_token, kite_api_secret_encrypted, ...rest } = row
-  return rest
 }
 
 export async function OPTIONS() {
@@ -294,10 +287,9 @@ async function handleRoute(request, { params }) {
       // checks whether it's present and still fresh, which is exactly what kite_connected is.
       let profileSafe = profile
       if (profile) {
-        const { kite_access_token, kite_api_secret_encrypted, ...rest } = profile
         // kite_connected only proves a token exists and is recent; kite_broken is the real
         // "did the last actual API call work" signal, set by the sync services themselves.
-        profileSafe = { ...rest, kite_connected: !!kiteTokenFresh, kite_broken: !!profile.kite_last_error }
+        profileSafe = { ...stripProfileSecrets(profile), kite_connected: !!kiteTokenFresh, kite_broken: !!profile.kite_last_error }
       }
       // Ciphertext never needs to reach the browser on a bulk load — only the dedicated reveal
       // route decrypts a single item, on demand, when its card is actually flipped.
@@ -624,19 +616,19 @@ async function handleRoute(request, { params }) {
         const { data: row } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle()
         if (!row) {
           const { data: created } = await supabase.from('profiles').insert({ id: user.id, full_name: user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')?.[0] || '', avatar_url: user.user_metadata?.avatar_url || user.user_metadata?.picture || null }).select().single()
-          return cors(NextResponse.json(stripKiteSecrets(created)))
+          return cors(NextResponse.json(stripProfileSecrets(created)))
         }
-        return cors(NextResponse.json(stripKiteSecrets(row)))
+        return cors(NextResponse.json(stripProfileSecrets(row)))
       }
       const body = await request.json()
       const payload = pickFields('profiles', body)
       const { data: existing } = await supabase.from('profiles').select('id').eq('id', user.id).maybeSingle()
       if (!existing) {
         const { data: created } = await supabase.from('profiles').insert({ id: user.id, ...payload }).select().single()
-        return cors(NextResponse.json(stripKiteSecrets(created)))
+        return cors(NextResponse.json(stripProfileSecrets(created)))
       }
       const { data: updated } = await supabase.from('profiles').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', user.id).select().maybeSingle()
-      return cors(NextResponse.json(stripKiteSecrets(updated)))
+      return cors(NextResponse.json(stripProfileSecrets(updated)))
     }
 
     // ---- PORTFOLIO: add_funds / withdraw_funds now live at
@@ -874,6 +866,12 @@ async function handleRoute(request, { params }) {
           if (Object.keys(changed).length > 0) {
             await supabase.from('transaction_edit_history').insert({ transaction_id: id, user_id: user.id, previous_values: changed })
           }
+        }
+
+        // A transfer is two rows sharing transfer_group_id — hiding/unhiding one side has to
+        // apply to the other too, or the other leg would still show up by name.
+        if (table === 'transactions' && updated?.transfer_group_id && oldRow && patch.is_hidden !== undefined && !!oldRow.is_hidden !== !!patch.is_hidden) {
+          await supabase.from('transactions').update({ is_hidden: !!patch.is_hidden }).eq('transfer_group_id', updated.transfer_group_id).eq('user_id', user.id).neq('id', id)
         }
 
         if (table === 'transactions' && updated?.id) {

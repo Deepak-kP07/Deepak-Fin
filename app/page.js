@@ -94,6 +94,8 @@ import { RecurringEntryForm } from '@/features/familyCompany/RecurringEntryForm'
 import { categoriesFor, profileTotals } from '@/lib/moneyProfiles'
 import { scholarshipDisplayStatus } from '@/lib/scholarships'
 import { NetWorthCustomizeSheet } from '@/features/dashboard/NetWorthCustomizeSheet'
+import { HiddenTxProvider, isHiddenTx, hiddenTransferGroups, listableTransactions, runPinSetup, useHiddenTx } from '@/lib/hiddenTransactions'
+import { usePinDialog } from '@/components/shared/PinDialog'
 import { VaultItemForm } from '@/features/vault/VaultItemForm'
 import { InsightsView } from '@/features/insights/InsightsView'
 import { NetWorthDetailView } from '@/features/dashboard/NetWorthDetailView'
@@ -104,13 +106,13 @@ import {
 } from 'recharts'
 import {
   ArrowDownRight, ArrowLeftRight, ArrowUpDown, ArrowUpRight, BarChart3, Briefcase, Calculator, Calendar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock, Coins, CreditCard,
-  Download, Eye, EyeOff, FileText, GraduationCap, Heart, History, Info, Landmark, LayoutDashboard, LineChart, ListChecks, LogOut, Menu, MoreHorizontal, MoreVertical, Mountain, Paperclip, PieChart as PieChartIcon, Plus,
+  Download, Eye, EyeOff, FileText, GraduationCap, Heart, History, Info, Landmark, LayoutDashboard, LineChart, ListChecks, Lock, LockOpen, LogOut, Menu, MoreHorizontal, MoreVertical, Mountain, Paperclip, PieChart as PieChartIcon, Plus,
   RefreshCw, Repeat, Search, Settings, ShieldCheck, Star, Tag, Target, TrendingDown, TrendingUp, Trash2, Pencil, Users,
   Wallet, X, Zap,
 } from 'lucide-react'
 
 /* ---------------- Transaction Form ---------------- */
-function TransactionForm({ open, onClose, onSaved, editing, accounts, categories, creditCards = [], lendBorrow = [], loans = [], transactions = [], onAddAccount, onAddCategory, toast, profile, defaultAccountId = '', defaultRepayment = null, mutate }) {
+function TransactionForm({ open, onClose, onSaved, editing, accounts, categories, creditCards = [], lendBorrow = [], loans = [], transactions = [], onAddAccount, onAddCategory, toast, profile, defaultAccountId = '', defaultRepayment = null, mutate, onHiddenPinChanged }) {
   const now = todayISO()
   const nowTime = new Date().toTimeString().slice(0, 5)
   const initial = useMemo(() => {
@@ -124,7 +126,7 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
     // and it's still just a starting value, freely changeable before submitting. defaultRepayment
     // is the same idea for Lend/Borrow's own "+ Log repayment" button — pre-selects that exact
     // person in Repayment mode instead of leaving the user to find them in a dropdown themselves.
-    return { type: defaultRepayment?.type || 'expense', amount: '', description: '', date: now, time: nowTime, account_id: defaultAccountId || '', to_account_id: '', category_id: '', notes: '', is_reimbursable: false, linked_module: '', linked_module_id: '', repay_value: defaultRepayment?.value || '' }
+    return { type: defaultRepayment?.type || 'expense', amount: '', description: '', date: now, time: nowTime, account_id: defaultAccountId || '', to_account_id: '', category_id: '', notes: '', is_reimbursable: false, is_hidden: false, linked_module: '', linked_module_id: '', repay_value: defaultRepayment?.value || '' }
   }, [editing, open, defaultAccountId, defaultRepayment])
   const [form, setForm] = useState(initial)
   // 'category' = normal spending/income category selected; 'repayment' = this transaction is
@@ -139,7 +141,22 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
   const [descOpen, setDescOpen] = useState(false)
   const descRef = useRef(null)
   const confirm = useConfirm()
+  const pinDialog = usePinDialog()
+  const { revealed: hiddenRevealed } = useHiddenTx()
   const isMobile = useIsMobile()
+  // Card bill payments and loan payments go through their own endpoints, which don't carry the
+  // hidden flag — so the toggle isn't offered for those.
+  const canHide = purposeMode !== 'repayment' && !(form.type === 'transfer' && typeof form.to_account_id === 'string' && form.to_account_id.startsWith('cc:'))
+  // No PIN yet → set one first; otherwise a hidden transaction could never be unlocked.
+  const toggleHidden = async () => {
+    if (form.is_hidden) { setForm((f) => ({ ...f, is_hidden: false })); return }
+    if (!profile?.has_hidden_pin) {
+      if (!(await runPinSetup(pinDialog.ask, false))) return
+      onHiddenPinChanged?.(true)
+      toast.push('PIN set')
+    }
+    setForm((f) => ({ ...f, is_hidden: true }))
+  }
   useEffect(() => { setForm(initial); setPurposeMode(initial.repay_value ? 'repayment' : 'category'); setAttachmentFile(null); setAttachmentRemoved(false); setHistoryOpen(false); setHistory(null); setDescOpen(false) }, [initial])
   useEffect(() => {
     const onDocClick = (e) => { if (descRef.current && !descRef.current.contains(e.target)) setDescOpen(false) }
@@ -149,9 +166,11 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
   // Recurring descriptions ("Groceries at BigBazaar", "Salary") repeat often enough that
   // resurfacing them beats retyping — scoped to the current type so an expense doesn't
   // surface old income descriptions like "Salary".
+  // Hidden transactions never feed suggestions, even while unlocked — they pop up while typing,
+  // often with someone else looking at the screen.
   const descriptionSuggestions = useMemo(() => {
     const byKey = new Map()
-    for (const t of transactions) {
+    for (const t of listableTransactions(transactions, false)) {
       if (t.type !== form.type) continue
       const raw = (t.description || '').trim()
       if (!raw) continue
@@ -321,6 +340,7 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
       // Only meaningful for a credit-card-funded expense (the one place the toggle shows) — a
       // stale `true` from switching away from a card mid-edit shouldn't silently persist.
       payload.is_reimbursable = payload.type === 'expense' && typeof payload.account_id === 'string' && payload.account_id.startsWith('cc:') ? !!payload.is_reimbursable : false
+      payload.is_hidden = canHide && !!payload.is_hidden
       if (payload.type !== 'transfer') delete payload.to_account_id
       if (repayKind === 'lend' && repayId) {
         payload.linked_module = 'lend'
@@ -356,7 +376,8 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
         toast.push('Saved — the attachment change will need to be redone once you’re back online', 'warning')
       }
 
-      toast.push(queued ? `Transaction ${editing ? 'updated' : 'added'} — will sync when back online` : `Transaction ${editing ? 'updated' : 'added'}`)
+      const hiddenNote = payload.is_hidden && !hiddenRevealed ? ' — hidden from lists' : ''
+      toast.push(queued ? `Transaction ${editing ? 'updated' : 'added'}${hiddenNote} — will sync when back online` : `Transaction ${editing ? 'updated' : 'added'}${hiddenNote}`)
       onSaved()
     } catch (e) { toast.push(e.message, 'error') } finally { setBusy(false) }
   }
@@ -368,6 +389,17 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
           <button key={t.v} type="button" onClick={() => { setPurposeMode('category'); setForm({ ...form, type: t.v, category_id: t.v === 'transfer' ? '' : (categories.find((c) => c.type === (t.v === 'income' ? 'income' : 'expense'))?.id || ''), linked_module: '', linked_module_id: '', repay_value: '' }) }} className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${form.type === t.v ? t.c : 'border-white/10 light:border-black/10 text-slate-400 light:text-slate-500 hover:bg-white/5'}`}>{t.l}</button>
         ))}
       </div>
+
+      {canHide && (
+        // Same row pattern as "Not my spending" — the div owns the click, ToggleSwitch is display-only.
+        <div onClick={toggleHidden} className="mt-3 flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-white/10 light:border-black/10 bg-white/[.02] light:bg-black/[.02] px-4 py-3">
+          <div>
+            <div className="text-sm text-slate-300 light:text-slate-700">Hide this transaction</div>
+            <div className="text-[11px] text-slate-500">{profile?.has_hidden_pin ? 'Keeps it out of every list; still counts in balances and totals' : 'Keeps it out of every list — you\'ll set a PIN first'}</div>
+          </div>
+          <ToggleSwitch checked={!!form.is_hidden} onChange={() => {}} />
+        </div>
+      )}
 
       {!hasAnySource && (
         <div className="mt-5 rounded-xl border border-amber-300/25 bg-amber-300/5 px-4 py-3 text-sm text-amber-200 light:text-amber-700">
@@ -525,6 +557,7 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
       </div>
     )}
     {confirm.view}
+    {pinDialog.view}
     <AttachmentViewer open={!!viewingAttachment} onClose={() => setViewingAttachment(null)} transaction={viewingAttachment} />
     </>
   )
@@ -742,6 +775,7 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
   // Only the glassy theme gets the glowing area-chart treatment below — dark/light keep the plain
   // bar chart, so this doesn't touch either of their look.
   const { theme } = useTheme()
+  const { revealed: hiddenRevealed } = useHiddenTx()
   const moduleSettings = resolveModuleSettings(profile)
   const widgets = resolveDashboardWidgets(profile)
   const totalBalance = accounts.reduce((s, a) => s + Number(a.current_balance || 0), 0)
@@ -1061,7 +1095,10 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
     const d = new Date(t.date)
     return `${d.getFullYear()}-${d.getMonth()}` === nowMonthKey
   })
-  const recent = allThisMonth.slice(0, 15)
+  // Rows shown by name (and the count beside them) leave out hidden transactions; the month's
+  // money totals below keep using allThisMonth.
+  const listableThisMonth = listableTransactions(allThisMonth, hiddenRevealed)
+  const recent = listableThisMonth.slice(0, 15)
 
   // Extra stat-card figures — each gated behind its own Settings > Dashboard toggle, off by
   // default except the original four, so turning them on is opt-in rather than new clutter.
@@ -1106,7 +1143,7 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
     { key: 'total_debt', available: moduleSettings.loans.enabled || moduleSettings.credit_cards.enabled, node: <StatCard label="Total debt" value={showMoney ? money(totalDebt) : '••••'} sub="Loans + credit cards" icon={CreditCard} accent="bg-rose-400/15 text-rose-200 light:text-rose-700" /> },
     { key: 'total_invested', available: moduleSettings.investments.enabled, node: <StatCard label="Total invested" value={showMoney ? money(currentInv) : '••••'} sub={<span className={pnl >= 0 ? 'text-emerald-300 light:text-emerald-700' : 'text-rose-300 light:text-rose-700'}><span className="sr-only">{pnl >= 0 ? 'Profit ' : 'Loss '}</span>{pnl >= 0 ? '+' : '−'}{showMoney ? money(pnl).replace('-', '') : '••••'} P&amp;L</span>} icon={TrendingUp} accent="bg-accent-400/15 text-accent-200 light:text-accent-700" /> },
     { key: 'avg_monthly_spend', available: true, node: <StatCard label="Avg. monthly spend" value={showMoney ? money(avgMonthlySpend) : '••••'} sub="Last 6 months" icon={BarChart3} accent="bg-amber-400/15 text-amber-200 light:text-amber-700" /> },
-    { key: 'transactions_count', available: true, node: <StatCard label="Transactions" value={String(allThisMonth.length)} sub="This month" icon={ListChecks} accent="bg-accent-400/15 text-accent-200 light:text-accent-700" /> },
+    { key: 'transactions_count', available: true, node: <StatCard label="Transactions" value={String(listableThisMonth.length)} sub="This month" icon={ListChecks} accent="bg-accent-400/15 text-accent-200 light:text-accent-700" /> },
     { key: 'top_category', available: !!topCategory, node: topCategory && <StatCard label="Top category" value={topCategory.name} sub={showMoney ? money(topCategory.amount) : '••••'} icon={Tag} accent="bg-accent-400/15 text-accent-200 light:text-accent-700" /> },
     { key: 'credit_utilization', available: moduleSettings.credit_cards.enabled && credit_cards.length > 0, node: <StatCard label="Credit utilization" value={`${creditUtilizationPct}%`} sub={creditUtilizationPct >= 70 ? 'Getting high' : 'Under control'} icon={PieChartIcon} accent="bg-rose-400/15 text-rose-200 light:text-rose-700" tone={creditUtilizationPct >= 70 ? 'text-rose-300 light:text-rose-700' : 'text-emerald-300 light:text-emerald-700'} /> },
     { key: 'budget_used_pct', available: moduleSettings.budgets.enabled && budgetTotal > 0, node: <StatCard label="Budget used" value={`${budgetUsedPct}%`} sub={budgetUsedPct > 100 ? 'Over budget' : 'On track'} icon={Zap} accent="bg-accent-400/15 text-accent-200 light:text-accent-700" tone={budgetUsedPct > 100 ? 'text-rose-300 light:text-rose-700' : 'text-emerald-300 light:text-emerald-700'} /> },
@@ -1768,7 +1805,13 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTx
   }
   const resolveSource = (t) => accounts.find((a) => a.id === t.account_id) || (t.linked_module === 'credit_card' ? creditCards.find((c) => c.id === t.linked_module_id) : null)
 
-  const visible = useMemo(() => transactions.filter((t) => {
+  // Every row matching the filters, hidden ones included — the category chart uses this so its
+  // totals still include hidden amounts. `visible` (the rows actually listed) drops hidden rows
+  // unless unlocked, then applies the search.
+  const { revealed: hiddenRevealed, unlock: unlockHidden, lock: lockHidden } = useHiddenTx()
+  const pinDialog = usePinDialog()
+  const hiddenGroups = useMemo(() => hiddenTransferGroups(transactions), [transactions])
+  const inPeriod = useMemo(() => transactions.filter((t) => {
     if (type !== 'all' && t.type !== type) return false
     if (accountId !== 'all') {
       if (accountId.startsWith('cc:')) {
@@ -1782,13 +1825,22 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTx
       const d = new Date(`${t.date}T00:00:00`)
       if (d.getFullYear() !== monthCursor.year || d.getMonth() !== monthCursor.month) return false
     }
+    return true
+  }), [transactions, type, accountId, categoryId, customRange, monthCursor])
+  const visible = useMemo(() => {
     const q = query.toLowerCase()
-    if (!q) return true
-    const acc = resolveSource(t)
-    const cat = categories.find((c) => c.id === t.category_id)
-    const searchable = `${t.description || ''} ${t.notes || ''} ${t.type || ''} ${acc?.name || ''} ${cat?.name || ''}`.toLowerCase()
-    return searchable.includes(q)
-  }), [transactions, type, accountId, categoryId, customRange, monthCursor, query, accounts, creditCards, categories])
+    return inPeriod.filter((t) => {
+      if (!hiddenRevealed && isHiddenTx(t, hiddenGroups)) return false
+      if (!q) return true
+      const acc = resolveSource(t)
+      const cat = categories.find((c) => c.id === t.category_id)
+      const searchable = `${t.description || ''} ${t.notes || ''} ${t.type || ''} ${acc?.name || ''} ${cat?.name || ''}`.toLowerCase()
+      return searchable.includes(q)
+    })
+  }, [inPeriod, hiddenRevealed, hiddenGroups, query, accounts, creditCards, categories])
+  // While searching, the chart only describes the listed rows — a search-filtered chart that still
+  // counted a hidden match would give it away.
+  const chartSource = query ? visible : inPeriod
 
   // amount is always stored positive (income vs. expense is the `type`, not the sign) — sorting
   // by the raw column would rank a ₹50,000 expense above a ₹10,000 income, which reads backwards
@@ -1870,7 +1922,7 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTx
 
   const categoryBreakdown = useMemo(() => {
     const byCat = {}
-    visible.filter((t) => t.type !== 'transfer' && (catView === 'all' || t.type === catView)).forEach((t) => {
+    chartSource.filter((t) => t.type !== 'transfer' && (catView === 'all' || t.type === catView)).forEach((t) => {
       const cat = categories.find((c) => c.id === t.category_id)
       const key = cat?.id || 'uncat'
       if (!byCat[key]) byCat[key] = { name: cat?.name || 'Uncategorised', value: 0, color: cat?.color || '#64748b', type: cat?.type || t.type }
@@ -1887,7 +1939,7 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTx
       rows = rows.map((r) => (nameCounts[r.name] > 1 ? { ...r, name: `${r.name} (${r.type})` } : r))
     }
     return withDistinctColors(rows)
-  }, [visible, categories, catView])
+  }, [chartSource, categories, catView])
 
   // jsPDF's built-in fonts (Helvetica/Times/Courier) only support the WinAnsi charset, which
   // doesn't include ₹ — it silently falls back to a stray glyph instead of erroring. Since the
@@ -1998,11 +2050,25 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTx
             <div className="h-5 w-px shrink-0 bg-white/10" />
             <button type="button" onClick={() => { setSwipeDirection(1); setChartView(true) }} title="Chart view" className={`flex items-center px-3 py-2.5 transition ${chartView ? 'bg-accent-400/15 text-accent-200 light:text-accent-700' : 'text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white hover:light:text-slate-900'}`}><PieChartIcon size={16} /></button>
           </div>
+          {/* Only shown once a PIN exists, and never with a count — a count would itself reveal
+              that hidden transactions exist. */}
+          {data.profile?.has_hidden_pin && (
+            <button
+              type="button"
+              onClick={() => (hiddenRevealed ? lockHidden() : pinDialog.ask({ title: 'Show hidden transactions', message: 'Enter your PIN. They lock again when you leave the app.', submit: unlockHidden }))}
+              className={`rounded-xl border p-2.5 transition ${hiddenRevealed ? 'border-accent-300/40 bg-accent-400/15 text-accent-200 light:text-accent-700' : 'border-white/10 light:border-black/10 text-slate-400 light:text-slate-500 hover:bg-white/5'}`}
+              title={hiddenRevealed ? 'Hide hidden transactions again' : 'Show hidden transactions'}
+              aria-label={hiddenRevealed ? 'Hide hidden transactions again' : 'Show hidden transactions'}
+            >
+              {hiddenRevealed ? <LockOpen size={16} /> : <Lock size={16} />}
+            </button>
+          )}
           <button onClick={onToggleMoney} className="rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>
             {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
           </button>
         </div>
       </div>
+      {pinDialog.view}
 
       {/* Mobile: search plus one "Filters" trigger — the type/account/category selects and the
           import/export/recurring menu all move into a sheet instead of four controls competing
@@ -2254,6 +2320,7 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTx
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5 truncate text-sm font-medium text-white light:text-slate-900">
                           <span className="truncate">{capitalizeFirst(t.description)}</span>
+                          {isHiddenTx(t, hiddenGroups) && <Lock size={11} className="shrink-0 text-slate-500" aria-label="Hidden" />}
                           {t.attachment_path && (
                             <button type="button" onClick={(e) => { e.stopPropagation(); setViewingAttachment(t) }} className="shrink-0 pl-0.5 text-slate-500 hover:text-accent-300 hover:light:text-accent-700" title="View attachment"><Paperclip size={12} /></button>
                           )}
@@ -2274,6 +2341,7 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTx
                       <div>
                         <div className="flex items-center gap-1.5 text-sm font-medium text-white light:text-slate-900">
                           {capitalizeFirst(t.description)}
+                          {isHiddenTx(t, hiddenGroups) && <Lock size={11} className="shrink-0 text-slate-500" aria-label="Hidden" />}
                           {t.attachment_path && (
                             <button type="button" onClick={(e) => { e.stopPropagation(); setViewingAttachment(t) }} className="shrink-0 text-slate-500 hover:text-accent-300 hover:light:text-accent-700" title="View attachment"><Paperclip size={12} /></button>
                           )}
@@ -2570,6 +2638,7 @@ function Shell({ user, onLogout }) {
   const openTxForm = (t = null, defaultAccountId = '', defaultRepayment = null) => { setTxEditing(t); setTxDefaultAccountId(defaultAccountId); setTxDefaultRepayment(defaultRepayment); setTxFormOpen(true) }
   const closeTxForm = () => { setTxFormOpen(false); setTxEditing(null); setTxDefaultAccountId(''); setTxDefaultRepayment(null) }
   const onTxSaved = async () => { closeTxForm(); await refresh() }
+  const setHasHiddenPin = (v) => setData((d) => ({ ...d, profile: { ...d.profile, has_hidden_pin: v } }))
 
   const openAccForm = (a = null) => { setAccEditing(a); setAccFormOpen(true) }
   const closeAccForm = () => { setAccFormOpen(false); setAccEditing(null) }
@@ -3526,6 +3595,7 @@ function Shell({ user, onLogout }) {
                   onLogout={onLogout}
                   onReplayTour={() => setForceTour(true)}
                   onClearAllData={clearAllData}
+                  onHiddenPinChanged={setHasHiddenPin}
                 />
               )}
             </div>
@@ -3577,7 +3647,7 @@ function Shell({ user, onLogout }) {
       </BottomSheet>
 
       {/* Modals */}
-      <TransactionForm open={txFormOpen} onClose={closeTxForm} onSaved={onTxSaved} editing={txEditing} accounts={dropdownAccounts} categories={data.categories} creditCards={data.credit_cards} lendBorrow={data.lend_borrow} loans={data.loans} transactions={data.transactions} onAddAccount={() => { closeTxForm(); openAccForm() }} onAddCategory={() => openCatForm()} toast={toast} profile={data.profile} defaultAccountId={txDefaultAccountId} defaultRepayment={txDefaultRepayment} mutate={mutate} />
+      <TransactionForm open={txFormOpen} onClose={closeTxForm} onSaved={onTxSaved} onHiddenPinChanged={setHasHiddenPin} editing={txEditing} accounts={dropdownAccounts} categories={data.categories} creditCards={data.credit_cards} lendBorrow={data.lend_borrow} loans={data.loans} transactions={data.transactions} onAddAccount={() => { closeTxForm(); openAccForm() }} onAddCategory={() => openCatForm()} toast={toast} profile={data.profile} defaultAccountId={txDefaultAccountId} defaultRepayment={txDefaultRepayment} mutate={mutate} />
       <AccountForm open={accFormOpen} onClose={closeAccForm} onSaved={onAccSaved} editing={accEditing} accounts={data.accounts} toast={toast} mutate={mutate} />
       <CategoryForm open={catFormOpen} onClose={closeCatForm} onSaved={onCatSaved} editing={catEditing} defaultType={catFormDefaultType} toast={toast} mutate={mutate} />
       <RecurringManager open={recurringManagerOpen} onClose={closeRecurringManager} rules={data.recurring_transactions} onAdd={() => openRecurringForm()} onEdit={openRecurringForm} onToggle={toggleRecurring} onDelete={deleteRecurring} showMoney={showMoney} />
@@ -3677,7 +3747,7 @@ function AppInner() {
   }, [])
   if (user === undefined) return <LoadingScreen />
   if (!user) return <AuthScreen onAuth={setUser} initialError={authError} />
-  return <Shell user={user} onLogout={async () => { await fetch('/api/auth/logout', { method: 'POST' }); await clearSnapshot().catch(() => {}); setTheme('dark'); try { localStorage.removeItem('financeNavState') } catch {}; setUser(null) }} />
+  return <HiddenTxProvider><Shell user={user} onLogout={async () => { await fetch('/api/auth/logout', { method: 'POST' }); await clearSnapshot().catch(() => {}); setTheme('dark'); try { localStorage.removeItem('financeNavState') } catch {}; setUser(null) }} /></HiddenTxProvider>
 }
 
 // Respects prefers-reduced-motion for every Framer Motion animation in the app (pulse loading,

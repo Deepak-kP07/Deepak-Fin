@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { ArrowDownRight, ArrowUpRight, CheckCircle2, ChevronLeft, ChevronRight, Eye, EyeOff, MoreVertical, Pencil, RefreshCw, Target, Trash2, X } from 'lucide-react'
+import { ArrowDownRight, ArrowUpRight, CheckCircle2, ChevronLeft, ChevronRight, Eye, EyeOff, Lock, MoreVertical, Pencil, RefreshCw, Target, Trash2, X } from 'lucide-react'
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { BankCardFace } from '@/components/shared/BankCardFace'
 import { StatCard } from '@/components/shared/StatCard'
@@ -10,6 +10,7 @@ import { EmptyState } from '@/components/shared/EmptyState'
 import { MonthCursor } from '@/components/shared/MonthCursor'
 import { currentSpendingCycle, nextBillDue, utilisationSeverity } from '@/lib/creditCards'
 import { capitalizeFirst, dateToLocalISO, formatDate, formatDateTime, money, monthName, ordinal } from '@/lib/format'
+import { hiddenTransferGroups, isHiddenTx, useHiddenTx } from '@/lib/hiddenTransactions'
 
 // Bill payments are logged through /finance/credit_cards/:id/pay_bill, which creates a plain
 // transaction with a fixed, app-generated description rather than a linked_module reference —
@@ -66,6 +67,12 @@ export function CreditCardDetailView({ card, cardTransactions, allTransactions, 
   const displayedTotal = displayedActivity.reduce((s, a) => s + (a.direction === 'debit' ? a.amount : -a.amount), 0)
   const reimbursableTotal = displayedDebits.filter((a) => a.row?.is_reimbursable).reduce((s, a) => s + a.amount, 0)
   const ownTotal = displayedDebits.reduce((s, a) => s + a.amount, 0) - reimbursableTotal
+  // Rows listed by name leave out hidden transactions unless unlocked (only 'linked' rows can be
+  // hidden — card-log rows have no such flag). Totals above keep the full displayedActivity.
+  const { revealed: hiddenRevealed } = useHiddenTx()
+  const hiddenGroups = hiddenTransferGroups(allTransactions)
+  const rowHidden = (a) => a.source === 'linked' && isHiddenTx(a.row, hiddenGroups)
+  const displayedRows = hiddenRevealed ? displayedActivity : displayedActivity.filter((a) => !rowHidden(a))
 
   const now = new Date()
   const months = []
@@ -83,6 +90,7 @@ export function CreditCardDetailView({ card, cardTransactions, allTransactions, 
     .filter((t) => t.type === 'expense' && t.description === billPaymentDescription(card))
     .sort((a, b) => new Date(b.date) - new Date(a.date))
   const totalRepaid = repayments.reduce((s, t) => s + Number(t.amount || 0), 0)
+  const repaymentRows = hiddenRevealed ? repayments : repayments.filter((t) => !isHiddenTx(t, hiddenGroups))
 
   const deleteActivity = (a) => (a.source === 'log' ? onDeleteSpend(a.row) : onDeleteTx(a.row))
 
@@ -119,7 +127,7 @@ export function CreditCardDetailView({ card, cardTransactions, allTransactions, 
   // buildActivity above) — onDeleteActivityBulk splits the selection by source itself, so this
   // just hands it the full activity rows for whatever got selected.
   const handleActivityBulkDelete = async () => {
-    const rows = displayedActivity.filter((a) => selectedIds.has(a.id))
+    const rows = displayedRows.filter((a) => selectedIds.has(a.id))
     const didDelete = await onDeleteActivityBulk(rows)
     if (didDelete) exitSelectMode()
   }
@@ -220,13 +228,13 @@ export function CreditCardDetailView({ card, cardTransactions, allTransactions, 
         <div className="mt-1 text-sm text-slate-500">of {money(card.credit_limit)} limit</div>
         <div className="mt-5 grid grid-cols-2 gap-3">
           <HeroStatTile icon={Target} label="Utilisation" value={`${util}%`} valueTone={utilisationSeverity(util).tone} sub={utilisationSeverity(util).label} />
-          <HeroStatTile icon={ArrowUpRight} label="Total repaid" value={showMoney ? money(totalRepaid) : '••••'} valueTone="text-emerald-300 light:text-emerald-700" sub={`${repayments.length} payment${repayments.length === 1 ? '' : 's'}`} />
+          <HeroStatTile icon={ArrowUpRight} label="Total repaid" value={showMoney ? money(totalRepaid) : '••••'} valueTone="text-emerald-300 light:text-emerald-700" sub={`${repaymentRows.length} payment${repaymentRows.length === 1 ? '' : 's'}`} />
         </div>
       </div>
       <div className="hidden gap-4 sm:grid sm:grid-cols-3">
         <StatCard label="Outstanding" value={showMoney ? money(card.current_outstanding) : '••••'} icon={ArrowDownRight} accent="bg-rose-400/15 text-rose-200 light:text-rose-700" tone="text-rose-300 light:text-rose-700" sub={<span>of {money(card.credit_limit)} limit</span>} />
         <StatCard label="Utilisation" value={`${util}%`} icon={Target} accent="bg-accent-400/15 text-accent-200 light:text-accent-700" tone={utilisationSeverity(util).tone} sub={<span>{utilisationSeverity(util).label}</span>} />
-        <StatCard label="Total repaid" value={showMoney ? money(totalRepaid) : '••••'} icon={ArrowUpRight} accent="bg-emerald-400/15 text-emerald-200 light:text-emerald-700" sub={<span>{repayments.length} payment{repayments.length === 1 ? '' : 's'}</span>} />
+        <StatCard label="Total repaid" value={showMoney ? money(totalRepaid) : '••••'} icon={ArrowUpRight} accent="bg-emerald-400/15 text-emerald-200 light:text-emerald-700" sub={<span>{repaymentRows.length} payment{repaymentRows.length === 1 ? '' : 's'}</span>} />
       </div>
 
       <div className="rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card p-5">
@@ -263,7 +271,7 @@ export function CreditCardDetailView({ card, cardTransactions, allTransactions, 
         ) : (
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 light:border-black/10 px-5 py-3">
             <div className="text-xs uppercase tracking-widest text-slate-500">
-              Card activity · {displayedActivity.length}
+              Card activity · {displayedRows.length}
               {cycleMode && <span className="normal-case tracking-normal text-slate-600"> · {formatDate(dateToLocalISO(cycle.start))} – {formatDate(dateToLocalISO(cycle.end))}</span>}
             </div>
             <div className="flex items-center gap-2">
@@ -285,7 +293,7 @@ export function CreditCardDetailView({ card, cardTransactions, allTransactions, 
             </div>
           </div>
         )}
-        {displayedActivity.length === 0 ? (
+        {displayedRows.length === 0 ? (
           <EmptyState compact icon={ArrowDownRight} title={cycleMode ? 'No activity this billing cycle' : showAllMonths ? 'No activity yet' : 'No activity this month'} message="Log a spend, or pay for something with this card, to see it here." cta="Log spend" onCta={() => onSpend(card)} />
         ) : (
           <>
@@ -297,7 +305,7 @@ export function CreditCardDetailView({ card, cardTransactions, allTransactions, 
               <span />
             </div>
             <div className="divide-y divide-white/5 light:divide-black/5">
-            {displayedActivity.map((a) => {
+            {displayedRows.map((a) => {
               const cat = categories.find((c) => c.id === a.categoryId)
               const isDebit = a.direction === 'debit'
               const color = isDebit ? 'text-rose-300 light:text-rose-700' : 'text-emerald-300 light:text-emerald-700'
@@ -327,7 +335,7 @@ export function CreditCardDetailView({ card, cardTransactions, allTransactions, 
                       </div>
                     )}
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-medium text-white light:text-slate-900">{capitalizeFirst(a.description)}</div>
+                      <div className="flex items-center gap-1.5 truncate text-sm font-medium text-white light:text-slate-900"><span className="truncate">{capitalizeFirst(a.description)}</span>{rowHidden(a) && <Lock size={11} className="shrink-0 text-slate-500" aria-label="Hidden" />}</div>
                       <div className="truncate text-[11px] text-slate-500">{cat?.name || 'Uncategorised'} · {formatDateTime(a.date, a.time)}{a.status ? ` · ${a.status}` : ''}</div>
                     </div>
                     <div className={`shrink-0 text-sm font-semibold ${color}`}>{isDebit ? '-' : '+'}{showMoney ? money(a.amount) : '••••'}</div>
@@ -340,7 +348,7 @@ export function CreditCardDetailView({ card, cardTransactions, allTransactions, 
                         {isDebit ? <ArrowDownRight size={16} /> : <ArrowUpRight size={16} />}
                       </div>
                       <div className="min-w-0">
-                        <div className="truncate text-sm font-medium text-white light:text-slate-900">{capitalizeFirst(a.description)}</div>
+                        <div className="flex items-center gap-1.5 truncate text-sm font-medium text-white light:text-slate-900"><span className="truncate">{capitalizeFirst(a.description)}</span>{rowHidden(a) && <Lock size={11} className="shrink-0 text-slate-500" aria-label="Hidden" />}</div>
                         {a.status && <div className="text-[11px] uppercase tracking-widest text-slate-500">{a.status}</div>}
                       </div>
                     </div>
@@ -360,7 +368,7 @@ export function CreditCardDetailView({ card, cardTransactions, allTransactions, 
             </div>
           </>
         )}
-        {displayedActivity.length > 0 && (
+        {displayedRows.length > 0 && (
           <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-white/10 light:border-black/10 px-5 py-3">
             <span className="text-xs uppercase tracking-widest text-slate-500">Total</span>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
@@ -386,13 +394,13 @@ export function CreditCardDetailView({ card, cardTransactions, allTransactions, 
             <button type="button" disabled={selectedIds.size === 0} onClick={handleRepaymentsBulkDelete} className="shrink-0 rounded-xl border border-rose-300/30 bg-rose-300/10 p-2 text-rose-300 light:text-rose-700 hover:bg-rose-300/20 disabled:opacity-40 disabled:pointer-events-none" title="Delete selected"><Trash2 size={15} /></button>
           </div>
         ) : (
-          <div className="border-b border-white/10 light:border-black/10 px-5 py-3 text-xs uppercase tracking-widest text-slate-500">Repayment history · {repayments.length}</div>
+          <div className="border-b border-white/10 light:border-black/10 px-5 py-3 text-xs uppercase tracking-widest text-slate-500">Repayment history · {repaymentRows.length}</div>
         )}
-        {repayments.length === 0 ? (
+        {repaymentRows.length === 0 ? (
           <div className="px-5 py-6 text-sm text-slate-500">No payments logged yet.</div>
         ) : (
           <div className="divide-y divide-white/5 light:divide-black/5">
-            {repayments.map((r) => (
+            {repaymentRows.map((r) => (
               <div key={r.id} className="px-5 py-3">
                 {/* Mobile: long-press to multi-select, no visible delete icon */}
                 <button
