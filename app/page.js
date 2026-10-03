@@ -3521,12 +3521,9 @@ function Shell({ user, onLogout }) {
       <div className="mx-auto flex min-h-screen max-w-[1480px]">
         {/* Sidebar */}
         <aside className="hidden w-64 shrink-0 flex-col border-r border-white/5 light:border-black/5 px-5 py-6 lg:flex lg:sticky lg:top-0 lg:h-screen lg:self-start lg:overflow-y-auto glassy:z-10 glassy:glass-nav glassy:border-r-0">
-          <div className="flex items-center justify-between gap-2">
-            <button type="button" onClick={() => setView('dashboard')} className="flex items-center gap-3 text-sm font-semibold text-white light:text-slate-900">
-              <img src="/logo.png" alt="" className="h-10 w-10 rounded-2xl object-cover" />Personal Fin
-            </button>
-            <NotificationBell state={notificationsState} onNavigate={setView} align="left" />
-          </div>
+          <button type="button" onClick={() => setView('dashboard')} className="flex items-center gap-3 text-sm font-semibold text-white light:text-slate-900">
+            <img src="/logo.png" alt="" className="h-10 w-10 rounded-2xl object-cover" />Personal Fin
+          </button>
           <nav className="mt-10 space-y-1">
             {nav.map((n) => (
               <button key={n.key} data-tour={`nav-${n.key}`} onClick={() => setView(n.key)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition ${view === n.key ? 'bg-white/[.06] light:bg-black/[.04] text-white light:text-slate-900' : 'text-slate-400 light:text-slate-500 hover:bg-white/[.04] hover:light:bg-black/[.03] hover:text-white hover:light:text-slate-900'}`}>
@@ -3576,17 +3573,10 @@ function Shell({ user, onLogout }) {
                 <button type="button" onClick={() => setShowMoney((v) => !v)} aria-label="Hide amounts" aria-pressed={!showMoney} className={`rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5 lg:flex ${netWorthWidgetEnabled ? 'hidden' : 'flex'}`} title={showMoney ? 'Hide amounts' : 'Show amounts'}>
                   {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
                 </button>
-                {/* Desktop has the bell in the sidebar. */}
-                <NotificationBell state={notificationsState} onNavigate={setView} className="lg:hidden" />
+                {/* The notification bell lives on the Dashboard header only, phone and desktop. */}
+                <NotificationBell state={notificationsState} onNavigate={setView} />
               </div>
             </header>
-          )}
-          {/* Mobile, every other screen: the bell on its own slim row so it never collides with
-              each page's own header buttons. */}
-          {view !== 'dashboard' && (
-            <div className="-mt-2 mb-2 flex justify-end lg:hidden">
-              <NotificationBell state={notificationsState} onNavigate={setView} />
-            </div>
           )}
 
           {loading ? (

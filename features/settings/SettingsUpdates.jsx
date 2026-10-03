@@ -10,7 +10,7 @@ const CHANGELOG = [
   {
     date: '3 Oct 2026',
     points: [
-      'New: a notification bell at the top of every screen (top of the sidebar on desktop). It keeps every reminder in one place — bills, EMIs and chit fund payments due soon, budgets over limit, recurring entries added, detected SMS transactions, share invites, report emails and new versions — even if you missed the push or have push turned off.',
+      'New: a notification bell at the top of the Dashboard. It keeps every reminder in one place — bills, EMIs and chit fund payments due soon, budgets over limit, recurring entries added, detected SMS transactions, share invites, report emails and new versions — even if you missed the push or have push turned off.',
       'Tapping a notification (in the bell or a push on your phone) now opens the right screen, instead of whatever screen you had open last.',
     ],
   },
