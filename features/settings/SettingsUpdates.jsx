@@ -8,6 +8,13 @@ import { triggerAppUpdate } from '@/lib/pwaUpdate'
 // whenever something user-visible ships; no need to log every internal fix.
 const CHANGELOG = [
   {
+    date: '3 Oct 2026',
+    points: [
+      'New: a notification bell at the top of every screen (top of the sidebar on desktop). It keeps every reminder in one place — bills, EMIs and chit fund payments due soon, budgets over limit, recurring entries added, detected SMS transactions, share invites, report emails and new versions — even if you missed the push or have push turned off.',
+      'Tapping a notification (in the bell or a push on your phone) now opens the right screen, instead of whatever screen you had open last.',
+    ],
+  },
+  {
     date: '29 Sep 2026',
     points: [
       'New: "Hide this transaction" when adding or editing one. A hidden transaction still counts in your balances, totals and charts, but disappears from every list that shows transactions by name — Transactions and its search, the Dashboard, account and card activity, exports and report emails.',

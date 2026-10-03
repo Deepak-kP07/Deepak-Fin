@@ -6,12 +6,12 @@ import { nextLoanDueDate } from '@/lib/amortization'
 import { nextChitFundDueDate } from '@/lib/chitFunds'
 import { generateDueRecurring } from '@/lib/server/services/recurring'
 import { generateDueRecurringMoneyProfileEntries } from '@/lib/server/services/recurringMoneyProfileEntries'
-import { sendPushToUser } from '@/lib/server/services/pushSend'
+import { notifyUser, pruneNotifications } from '@/lib/server/services/notifications'
+import { listAllUsers } from '@/lib/server/adminUsers'
 import { dateToLocalISO, money } from '@/lib/format'
 import { isValidCronSecret } from '@/lib/server/cronAuth'
 
 const DUE_SOON_DAYS = 4
-const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
 
 // One dedup row per (user, type, entity, period) — checked before sending, written after. A row
 // already existing for this exact key means this exact cycle already notified; a fresh cycle
@@ -92,7 +92,7 @@ async function checkUser(supabase, userId, buildId) {
     if (await alreadyNotified(supabase, userId, 'card_due', card.id, periodKey)) continue
     notifications.push({
       type: 'card_due', entityId: card.id, periodKey,
-      title: `${card.name} bill due soon`, body: `Due ${periodKey} — outstanding ${money(card.current_outstanding)}`, url: '/?view=credit_cards',
+      title: `${card.name} bill due soon`, body: `Due ${periodKey} — outstanding ${money(card.current_outstanding)}`, url: '/?view=cards',
     })
   }
 
@@ -173,22 +173,32 @@ async function handler(request) {
   }
 
   const supabase = createAdminClient()
-  const { data: usersPage, error: listError } = await supabase.auth.admin.listUsers()
-  if (listError) return NextResponse.json({ error: listError.message }, { status: 500 })
+  let users
+  try { users = await listAllUsers(supabase) } catch (e) { return NextResponse.json({ error: e.message }, { status: 500 }) }
 
   const buildId = process.env.VERCEL_GIT_COMMIT_SHA || null
   const results = []
-  for (const user of usersPage.users) {
+  for (const user of users) {
     const notifications = await checkUser(supabase, user.id, buildId)
     let sent = 0
     for (const n of notifications) {
-      const count = await sendPushToUser(supabase, user.id, { title: n.title, body: n.body, url: `${BASE_URL}${n.url}` })
-      if (count > 0) { sent += count; await recordNotified(supabase, user.id, n.type, n.entityId, n.periodKey) }
+      // Every item lands in the bell (notifyUser), push or not — so it's recorded as handled
+      // either way, instead of being recomputed every day for users with no push set up.
+      // `?view=x` links become the bell row's view; anything else (e.g. ?update=1) is a link.
+      const viewMatch = n.url.match(/^\/\?view=([a-z_]+)$/)
+      const { pushed } = await notifyUser(supabase, user.id, {
+        type: n.type, title: n.title, body: n.body,
+        view: viewMatch ? viewMatch[1] : null, link: viewMatch ? null : n.url,
+        dedupKey: `${n.type}:${n.entityId}:${n.periodKey}`,
+      })
+      sent += pushed
+      await recordNotified(supabase, user.id, n.type, n.entityId, n.periodKey)
     }
     if (notifications.length > 0) results.push({ userId: user.id, triggered: notifications.length, sent })
   }
+  await pruneNotifications(supabase).catch(() => {})
 
-  return NextResponse.json({ usersChecked: usersPage.users.length, results })
+  return NextResponse.json({ usersChecked: users.length, results })
 }
 
 export const GET = handler

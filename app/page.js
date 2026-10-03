@@ -96,6 +96,8 @@ import { scholarshipDisplayStatus } from '@/lib/scholarships'
 import { NetWorthCustomizeSheet } from '@/features/dashboard/NetWorthCustomizeSheet'
 import { HiddenTxProvider, isHiddenTx, hiddenTransferGroups, listableTransactions, runPinSetup, useHiddenTx } from '@/lib/hiddenTransactions'
 import { usePinDialog } from '@/components/shared/PinDialog'
+import { useNotifications } from '@/features/notifications/useNotifications'
+import { NotificationBell } from '@/features/notifications/NotificationBell'
 import { VaultItemForm } from '@/features/vault/VaultItemForm'
 import { InsightsView } from '@/features/insights/InsightsView'
 import { NetWorthDetailView } from '@/features/dashboard/NetWorthDetailView'
@@ -2396,11 +2398,27 @@ function Shell({ user, onLogout }) {
   const initialNavState = useRef(null)
   if (initialNavState.current === null) {
     initialNavState.current = (() => {
-      try { return JSON.parse(localStorage.getItem('financeNavState') || 'null') || {} }
-      catch { return {} }
+      let saved = {}
+      try { saved = JSON.parse(localStorage.getItem('financeNavState') || 'null') || {} } catch { saved = {} }
+      // A tapped push notification opens /?view=<key> — that wins over the restored screen. Older
+      // pushes still on devices used a couple of non-view names, mapped here. The param is then
+      // stripped so a refresh doesn't keep forcing it.
+      try {
+        const params = new URLSearchParams(window.location.search)
+        const requested = params.get('view')
+        if (requested) {
+          const mapped = { credit_cards: 'cards', chit_funds: 'chitfunds', lend_borrow: 'lend' }[requested] || requested
+          if (VIEW_TO_MODULE[mapped] || ['dashboard', 'transactions', 'accounts', 'profile'].includes(mapped)) saved = { view: mapped }
+          params.delete('view')
+          const qs = params.toString()
+          window.history.replaceState({}, '', window.location.pathname + (qs ? `?${qs}` : ''))
+        }
+      } catch {}
+      return saved
     })()
   }
   const [view, setView] = useState(() => initialNavState.current.view || 'dashboard')
+  const notificationsState = useNotifications()
   const [showMoney, setShowMoney] = useState(true)
   // "Welcome back, X" shows on open, then crossfades to just "X" a couple seconds later — a
   // timer, not a nav-triggered flip, so the transition is actually visible on the dashboard
@@ -3503,9 +3521,12 @@ function Shell({ user, onLogout }) {
       <div className="mx-auto flex min-h-screen max-w-[1480px]">
         {/* Sidebar */}
         <aside className="hidden w-64 shrink-0 flex-col border-r border-white/5 light:border-black/5 px-5 py-6 lg:flex lg:sticky lg:top-0 lg:h-screen lg:self-start lg:overflow-y-auto glassy:z-10 glassy:glass-nav glassy:border-r-0">
-          <button type="button" onClick={() => setView('dashboard')} className="flex items-center gap-3 text-sm font-semibold text-white light:text-slate-900">
-            <img src="/logo.png" alt="" className="h-10 w-10 rounded-2xl object-cover" />Personal Fin
-          </button>
+          <div className="flex items-center justify-between gap-2">
+            <button type="button" onClick={() => setView('dashboard')} className="flex items-center gap-3 text-sm font-semibold text-white light:text-slate-900">
+              <img src="/logo.png" alt="" className="h-10 w-10 rounded-2xl object-cover" />Personal Fin
+            </button>
+            <NotificationBell state={notificationsState} onNavigate={setView} align="left" />
+          </div>
           <nav className="mt-10 space-y-1">
             {nav.map((n) => (
               <button key={n.key} data-tour={`nav-${n.key}`} onClick={() => setView(n.key)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition ${view === n.key ? 'bg-white/[.06] light:bg-black/[.04] text-white light:text-slate-900' : 'text-slate-400 light:text-slate-500 hover:bg-white/[.04] hover:light:bg-black/[.03] hover:text-white hover:light:text-slate-900'}`}>
@@ -3555,8 +3576,17 @@ function Shell({ user, onLogout }) {
                 <button type="button" onClick={() => setShowMoney((v) => !v)} aria-label="Hide amounts" aria-pressed={!showMoney} className={`rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5 lg:flex ${netWorthWidgetEnabled ? 'hidden' : 'flex'}`} title={showMoney ? 'Hide amounts' : 'Show amounts'}>
                   {showMoney ? <Eye size={16} /> : <EyeOff size={16} />}
                 </button>
+                {/* Desktop has the bell in the sidebar. */}
+                <NotificationBell state={notificationsState} onNavigate={setView} className="lg:hidden" />
               </div>
             </header>
+          )}
+          {/* Mobile, every other screen: the bell on its own slim row so it never collides with
+              each page's own header buttons. */}
+          {view !== 'dashboard' && (
+            <div className="-mt-2 mb-2 flex justify-end lg:hidden">
+              <NotificationBell state={notificationsState} onNavigate={setView} />
+            </div>
           )}
 
           {loading ? (

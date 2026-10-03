@@ -849,6 +849,26 @@ export const notificationEvents = pgTable('notification_events', {
   index('notification_events_user_idx').on(t.userId),
 ])
 
+// The in-app notification center (bell icon). Every notification — whether or not a push was
+// delivered — lands here via lib/server/services/notifications.js's notifyUser, which is the only
+// writer. `view` is an in-app view key to open on tap; `link` is a full in-app path instead (e.g.
+// a share invite's accept page). dedup_key keeps the same reminder from appearing twice.
+export const notifications = pgTable('notifications', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
+  type: text('type').notNull(),
+  title: text('title').notNull(),
+  body: text('body'),
+  view: text('view'),
+  link: text('link'),
+  dedupKey: text('dedup_key'),
+  readAt: timestamp('read_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  unique('notifications_user_dedup_key').on(t.userId, t.dedupKey),
+  index('notifications_user_created_idx').on(t.userId, t.createdAt),
+])
+
 // One row per registered native device (a user can have several) — the FCM registration token
 // handed back by @capacitor/push-notifications on the native Android app. Separate from
 // push_subscriptions (Web Push, browser/PWA) because a closed native app doesn't keep the
