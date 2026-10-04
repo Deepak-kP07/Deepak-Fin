@@ -342,6 +342,9 @@ export const loanPayments = pgTable('loan_payments', {
   emiBefore: numeric('emi_before', { precision: 14, scale: 2 }),
   linkedTransactionId: uuid('linked_transaction_id').references(() => transactions.id, { onDelete: 'set null' }),
   notes: text('notes'),
+  // Did this payment settle an EMI (true) or was it all prepayment (false)? NULL on older rows,
+  // which fall back to "amount >= EMI". See drizzle/0067_loan_payment_covers_emi.sql.
+  coversEmi: boolean('covers_emi'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [check('loan_payments_amount_check', sql`${t.amount} > 0`), index('loan_payments_loan_idx').on(t.loanId), index('loan_payments_user_idx').on(t.userId)])
 

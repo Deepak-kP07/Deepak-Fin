@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import crypto from 'crypto'
 import { getRouteClient, applyCookies } from '@/lib/supabase/server'
-import { calcEmi, projectSchedule, totalInterest, accrueInterest, daysBetween } from '@/lib/amortization'
+import { calcEmi, projectSchedule, totalInterest, accrueInterest, daysBetween, upcomingEmiCovered } from '@/lib/amortization'
 import { handleCORS } from '@/lib/server/cors'
 import { currentUser } from '@/lib/server/auth'
 import { safeFields, pickFields } from '@/lib/server/safeFields'
@@ -728,8 +728,15 @@ async function handleRoute(request, { params }) {
       // have come up in that window, so there's no "next EMI" left to attribute anything to.
       // The whole amount is genuine prepayment. A same-day payment with NO prior payment at all
       // (e.g. day-one disbursal) still gets the normal carve-out — there's nothing to double up.
-      const claimsFreshCycle = !(hasPriorPayment && days === 0)
+      //
+      // Likewise, if the next EMI is already paid in advance (an 'advance_emi' row — the lender is
+      // holding it until its due date), nothing here can be that EMI: the whole amount is a
+      // prepayment, applied to principal after the interest owed so far.
+      const { data: advanceEmis } = await supabase.from('loan_payments').select('loan_id, type, payment_date').eq('loan_id', loan_id).eq('user_id', user.id).eq('type', 'advance_emi')
+      const nextEmiAlreadyPaid = upcomingEmiCovered(loan, effectiveDate, advanceEmis || [])
+      const claimsFreshCycle = !(hasPriorPayment && days === 0) && !nextEmiAlreadyPaid
       excessAmount = claimsFreshCycle ? Math.max(0, amount - currentEmi) : amount
+      const coversEmi = claimsFreshCycle && amount >= currentEmi - 0.01
       if (excessAmount > 0.01) {
         prepayMode = rawPrepayMode === 'reduce_emi' ? 'reduce_emi' : 'reduce_tenure'
         const standardPrincipal = Math.max(0, (amount - excessAmount) - interestPortion)
@@ -756,7 +763,7 @@ async function handleRoute(request, { params }) {
         const loanCategoryId = await ensureCategory(supabase, user.id, 'Loan / Debt', 'expense')
         const txPayload = {
           user_id: user.id, account_id: payingCardId ? null : payingAccountId, amount, type: 'expense',
-          description: `Loan ${excessAmount > 0.01 ? 'EMI + prepayment' : 'EMI'} · ${loan.name}`,
+          description: `Loan ${!claimsFreshCycle ? 'prepayment' : excessAmount > 0.01 ? 'EMI + prepayment' : 'EMI'} · ${loan.name}`,
           date: effectiveDate, category_id: loanCategoryId,
           notes: notes || null, linked_module: payingCardId ? 'credit_card' : 'loan', linked_module_id: payingCardId || loan_id,
         }
@@ -768,7 +775,7 @@ async function handleRoute(request, { params }) {
       }
 
       const paymentPayload = {
-        user_id: user.id, loan_id, amount, type: paymentType,
+        user_id: user.id, loan_id, amount, type: nextEmiAlreadyPaid ? 'prepayment' : paymentType, covers_emi: coversEmi,
         payment_date: effectiveDate,
         account_id: payingCardId ? null : payingAccountId, interest_saved: interestSaved || null,
         interest_portion: interestPortion || 0, prepay_mode: prepayMode,

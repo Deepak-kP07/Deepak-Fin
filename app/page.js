@@ -3685,7 +3685,7 @@ function Shell({ user, onLogout }) {
       <OtherInvestmentForm open={otherInvestmentFormOpen} onClose={closeOtherInvestmentForm} onSaved={onOtherInvestmentSaved} editing={otherInvestmentEditing} portfolioId={otherInvestmentPortfolioId} toast={toast} mutate={mutate} />
       <HoldingsBulkImport open={bulkImportOpen} onClose={closeBulkImport} onImported={onBulkImported} portfolio={bulkImportPortfolio} toast={toast} />
       <LoanForm open={loanFormOpen} onClose={closeLoanForm} onSaved={onLoanSaved} editing={loanEditing} accounts={dropdownAccounts} toast={toast} />
-      <LoanPaymentForm open={loanPayOpen} onClose={closeLoanPay} onSaved={onLoanPaid} loan={loanPayLoan} accounts={dropdownAccounts} creditCards={data.credit_cards} toast={toast} />
+      <LoanPaymentForm open={loanPayOpen} onClose={closeLoanPay} onSaved={onLoanPaid} loan={loanPayLoan} accounts={dropdownAccounts} creditCards={data.credit_cards} payments={(data.loan_payments || []).filter((p) => p.loan_id === loanPayLoan?.id)} toast={toast} />
       <BucketForm open={bucketFormOpen} onClose={closeBucketForm} onSaved={onBucketSaved} editing={bucketEditing} toast={toast} mutate={mutate} />
       <LendForm open={lendFormOpen} onClose={closeLendForm} onSaved={onLendSaved} editing={lendEditing} accounts={dropdownAccounts} creditCards={data.credit_cards} toast={toast} />
       <LendAddMoreForm open={lendAddFormOpen} onClose={closeLendAddForm} onSaved={onLendAdded} record={lendAddRecord} accounts={dropdownAccounts} creditCards={data.credit_cards} toast={toast} />

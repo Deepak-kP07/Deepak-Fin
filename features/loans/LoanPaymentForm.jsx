@@ -2,14 +2,14 @@
 
 import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
-import { calcEmi, projectSchedule, totalInterest } from '@/lib/amortization'
-import { money, todayISO } from '@/lib/format'
+import { calcEmi, nextLoanDueDate, projectSchedule, totalInterest, upcomingEmiCovered } from '@/lib/amortization'
+import { formatDate, money, todayISO } from '@/lib/format'
 import { Select } from '@/components/shared/Select'
 import { DateInput } from '@/components/shared/DateInput'
 import { BottomSheet } from '@/components/shared/BottomSheet'
 import { useIsMobile } from '@/hooks/use-mobile'
 
-function LoanPaymentFormFields({ form, setForm, accounts, creditCards, loan, currentEmiAmount, excessAmount, showPrepayModeToggle, prepayPreview }) {
+function LoanPaymentFormFields({ form, setForm, accounts, creditCards, loan, currentEmiAmount, excessAmount, showPrepayModeToggle, prepayPreview, coveredDueDate }) {
   return (
     <div className="grid gap-4">
       <div className="grid grid-cols-2 gap-2">
@@ -20,10 +20,12 @@ function LoanPaymentFormFields({ form, setForm, accounts, creditCards, loan, cur
       <label className="text-sm text-slate-300 light:text-slate-700">Amount
         <input required type="number" step="0.01" min="0.01" value={form.amount} onChange={(e) => {
           const amount = e.target.value
-          const excess = Math.max(0, Number(amount || 0) - currentEmiAmount)
+          const excess = coveredDueDate ? Number(amount || 0) : Math.max(0, Number(amount || 0) - currentEmiAmount)
           setForm({ ...form, amount, type: excess > 0.01 ? 'prepayment' : form.type })
         }} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
-        {excessAmount > 0.01 && (
+        {coveredDueDate ? (
+          <div className="mt-1 text-[11px] text-accent-200 light:text-accent-700">Your {formatDate(coveredDueDate)} EMI is already paid in advance — all of this goes to prepayment.</div>
+        ) : excessAmount > 0.01 && (
           <div className="mt-1 text-[11px] text-accent-200 light:text-accent-700">{money(currentEmiAmount)} covers the regular EMI — the extra {money(excessAmount)} is treated as a prepayment.</div>
         )}
       </label>
@@ -68,7 +70,7 @@ function LoanPaymentFormFields({ form, setForm, accounts, creditCards, loan, cur
 // A real repayment — one POST here touches loan_payments, loans (outstanding/interest_saved/
 // emi_amount/status), a mirrored transactions row, and optionally a credit card's outstanding.
 // Stays online-only, same rule as Transactions' own repayment path — no mutate() here.
-export function LoanPaymentForm({ open, onClose, onSaved, loan, accounts, creditCards = [], toast }) {
+export function LoanPaymentForm({ open, onClose, onSaved, loan, accounts, creditCards = [], payments = [], toast }) {
   const initial = { amount: '', type: 'emi', prepay_mode: 'reduce_tenure', payment_date: todayISO(), account_id: loan?.paid_from_account_id || accounts[0]?.id || '', notes: '' }
   const [form, setForm] = useState(initial)
   const [busy, setBusy] = useState(false)
@@ -77,7 +79,12 @@ export function LoanPaymentForm({ open, onClose, onSaved, loan, accounts, credit
   if (!open || !loan) return null
 
   const currentEmiAmount = Number(loan.emi_amount || 0)
-  const excessAmount = Math.max(0, Number(form.amount || 0) - currentEmiAmount)
+  // Same rule as the server: while the next EMI is already paid in advance, none of this payment
+  // can be that EMI — it's all prepayment.
+  const paymentDate = form.payment_date || todayISO()
+  const covered = upcomingEmiCovered(loan, paymentDate, payments)
+  const coveredDueDate = covered ? (() => { const [y, m, d] = paymentDate.split('-').map(Number); return nextLoanDueDate(loan, new Date(y, m - 1, d), []) })() : null
+  const excessAmount = covered ? Number(form.amount || 0) : Math.max(0, Number(form.amount || 0) - currentEmiAmount)
   const showPrepayModeToggle = excessAmount > 0.01
 
   // Live preview — mirrors the backend's unified logic: interest owed since the last payment is
@@ -91,7 +98,7 @@ export function LoanPaymentForm({ open, onClose, onSaved, loan, accounts, credit
     const currentOutstanding = Number(loan.outstanding || 0)
     const anchorDate = form.payment_date || todayISO()
     const nominalInterest = Math.min(currentOutstanding * (annualRatePct / 100 / 365) * 30, amount)
-    const standardPrincipal = Math.max(0, Math.min(currentEmiAmount, amount) - nominalInterest)
+    const standardPrincipal = covered ? 0 : Math.max(0, Math.min(currentEmiAmount, amount) - nominalInterest)
     const standardOutstandingAfter = Math.max(0, currentOutstanding - standardPrincipal)
     const actualOutstandingAfter = Math.max(0, currentOutstanding - (amount - nominalInterest))
     const scheduleStandard = projectSchedule({ outstanding: standardOutstandingAfter, annualRatePct, emiAmount: currentEmiAmount, startDate: anchorDate })
@@ -119,7 +126,7 @@ export function LoanPaymentForm({ open, onClose, onSaved, loan, accounts, credit
     } catch (err) { toast.push(err.message, 'error') } finally { setBusy(false) }
   }
 
-  const fieldsProps = { form, setForm, accounts, creditCards, loan, currentEmiAmount, excessAmount, showPrepayModeToggle, prepayPreview }
+  const fieldsProps = { form, setForm, accounts, creditCards, loan, currentEmiAmount, excessAmount, showPrepayModeToggle, prepayPreview, coveredDueDate }
   const submitButton = <button disabled={busy} className="mt-6 w-full rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : 'Log payment'}</button>
 
   if (isMobile) {

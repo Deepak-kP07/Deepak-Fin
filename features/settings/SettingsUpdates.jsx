@@ -12,6 +12,7 @@ const CHANGELOG = [
     points: [
       'Loans: an EMI paid in advance (next month\'s EMI paid early, held by the lender until its due date) is now shown as that month\'s EMI instead of a prepayment — the EMI calendar marks the month paid, and the "Next EMI due" banner and reminders skip it.',
       'Loans: the "Next EMI due" banner now shows the actual date, and no longer jumps to next month on the due date itself.',
+      'Loans: once your next EMI is paid in advance, any extra you pay goes fully to prepayment (reducing your loan) — it no longer gets counted as the following month\'s EMI. The payment form tells you when this applies.',
     ],
   },
   {

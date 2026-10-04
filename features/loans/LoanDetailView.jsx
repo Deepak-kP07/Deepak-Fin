@@ -36,7 +36,10 @@ export function LoanDetailView({ loan, payments, accounts, onBack, onPay, onDele
   // "EMIs paid" counts installments actually fully settled — an amount that covered the EMI
   // in force at the time — regardless of which button (EMI/Prepayment) was tapped to log it.
   // The type field is just a label now; both compute identically since the unified calc.
-  const emisPaid = payments.filter((p) => p.type !== 'adjustment' && Number(p.amount) >= Number(p.emi_before || 0) - 0.01).length
+  // Newer payments record covers_emi explicitly (false when the whole amount was prepayment, e.g.
+  // paid while the next EMI was already covered in advance); older rows fall back to the amount rule.
+  const coversEmi = (p) => p.type !== 'adjustment' && (p.covers_emi ?? (Number(p.amount) >= Number(p.emi_before || 0) - 0.01))
+  const emisPaid = payments.filter(coversEmi).length
 
   // Anchor the projection at the actual next EMI due date (not just "today") so the real
   // day-count for the first projected month is accurate.
@@ -93,7 +96,7 @@ export function LoanDetailView({ loan, payments, accounts, onBack, onPay, onDele
     chrono.forEach((p, i) => {
       const prev = chrono[i - 1]
       if (!(prev && prev.payment_date === p.payment_date)) freshSet.add(p.id)
-      if (Number(p.amount) >= Number(p.emi_before || 0) - 0.01 && emiCalendar[cursor]) {
+      if (coversEmi(p) && emiCalendar[cursor]) {
         dateMap.set(p.id, emiCalendar[cursor].date)
         cursor++
       }
@@ -106,7 +109,7 @@ export function LoanDetailView({ loan, payments, accounts, onBack, onPay, onDele
   // it's a same-day repeat (see above), in which case the whole amount is extra.
   const prepaymentEvents = payments
     .filter((p) => p.prepay_mode)
-    .map((p) => ({ ...p, extra: freshCyclePayments.has(p.id) ? Math.max(0, Number(p.amount) - Number(p.emi_before || 0)) : Number(p.amount) }))
+    .map((p) => ({ ...p, extra: p.covers_emi === false || !freshCyclePayments.has(p.id) ? Number(p.amount) : Math.max(0, Number(p.amount) - Number(p.emi_before || 0)) }))
   const totalExtraPrepaid = prepaymentEvents.reduce((s, p) => s + p.extra, 0)
 
   const paymentRowLabel = (p) => {
