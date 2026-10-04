@@ -80,6 +80,9 @@ export const transactions = pgTable('transactions', {
   // Hidden from every list that shows a transaction by name until the owner unlocks with their
   // hidden-transactions PIN (lib/hiddenTransactions.js). Still counts in every balance and total.
   isHidden: boolean('is_hidden').notNull().default(false),
+  // 'scheduled' = future-dated, not happened yet: excluded from balances (sync_account_balance()),
+  // totals and side effects until confirmed. See drizzle/0068_scheduled_transactions.sql.
+  status: text('status').notNull().default('confirmed'),
   linkedModule: text('linked_module'),
   linkedModuleId: uuid('linked_module_id'),
   transferGroupId: uuid('transfer_group_id'),

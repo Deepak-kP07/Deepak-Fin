@@ -85,7 +85,7 @@ async function checkUser(supabase, userId, buildId) {
   // Credit card bills due soon.
   const [{ data: creditCards }, { data: transactions }] = await Promise.all([
     supabase.from('credit_cards').select('*').eq('user_id', userId),
-    supabase.from('transactions').select('*').eq('user_id', userId),
+    supabase.from('transactions').select('*').eq('user_id', userId).neq('status', 'scheduled'),
   ])
   for (const { card, due } of cardsDueSoon(creditCards || [], transactions || [], DUE_SOON_DAYS)) {
     const periodKey = due.toISOString().slice(0, 10)

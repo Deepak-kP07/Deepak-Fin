@@ -10,6 +10,9 @@ const CHANGELOG = [
   {
     date: '4 Oct 2026',
     points: [
+      'New: scheduled transactions. Pick a future date when adding a transaction and it\'s saved as scheduled — shown greyed out with a "Scheduled" tag, and not counted in your balance, totals or charts until it actually happens.',
+      'When a scheduled transaction\'s date arrives, the app asks you to confirm it happened (then it counts), move it to a later date, or cancel it. Ones you haven\'t confirmed yet show as "Overdue", with a reminder on the Transactions page.',
+      'For a future income or expense you can also mark "This is money someone owes me" (or "…I owe someone") — it\'s tracked in Lend / Borrow too, and confirming it later counts as the repayment.',
       'Loans: an EMI paid in advance (next month\'s EMI paid early, held by the lender until its due date) is now shown as that month\'s EMI instead of a prepayment — the EMI calendar marks the month paid, and the "Next EMI due" banner and reminders skip it.',
       'Loans: the "Next EMI due" banner now shows the actual date, and no longer jumps to next month on the due date itself.',
       'Loans: once your next EMI is paid in advance, any extra you pay goes fully to prepayment (reducing your loan) — it no longer gets counted as the following month\'s EMI. The payment form tells you when this applies.',

@@ -298,7 +298,12 @@ async function handleRoute(request, { params }) {
       // fields, not the original SMS text; keeping it server-side only limits its exposure
       // window even before the 7-day purge cron clears it (see app/api/cron/pending_transactions/purge).
       const pendingTransactionsSafe = pending_transactions.map(({ raw_message, ...rest }) => rest)
-      return cors(NextResponse.json({ accounts, categories, transactions, budgets, portfolios, holdings, sips, other_investments, kite_orders, loans, loan_payments, bucket_list, lend_borrow, lend_repayments, lend_borrow_additions, credit_cards, credit_card_transactions, scholarships, scholarship_payments, money_rules, recurring_transactions, money_profiles, money_profile_entries, recurring_money_profile_entries, budget_months, budget_month_categories, vault_items: vaultItemsSafe, pending_transactions: pendingTransactionsSafe, sms_parse_patterns, chit_funds, chit_fund_payments, profile: profileSafe }))
+      // Scheduled (future-dated, not yet confirmed) transactions go in their own list, so every
+      // balance/total/chart in the app — all of which read `transactions` — leaves them out
+      // without each having to filter. Only the Transactions list and the confirm prompt read them.
+      const scheduled_transactions = transactions.filter((t) => t.status === 'scheduled')
+      transactions = transactions.filter((t) => t.status !== 'scheduled')
+      return cors(NextResponse.json({ scheduled_transactions, accounts, categories, transactions, budgets, portfolios, holdings, sips, other_investments, kite_orders, loans, loan_payments, bucket_list, lend_borrow, lend_repayments, lend_borrow_additions, credit_cards, credit_card_transactions, scholarships, scholarship_payments, money_rules, recurring_transactions, money_profiles, money_profile_entries, recurring_money_profile_entries, budget_months, budget_month_categories, vault_items: vaultItemsSafe, pending_transactions: pendingTransactionsSafe, sms_parse_patterns, chit_funds, chit_fund_payments, profile: profileSafe }))
     }
 
     // ---- PRICES: Yahoo Finance fallback (public); Kite when creds set ----
@@ -880,43 +885,52 @@ async function handleRoute(request, { params }) {
         if (table === 'transactions' && updated?.transfer_group_id && oldRow && patch.is_hidden !== undefined && !!oldRow.is_hidden !== !!patch.is_hidden) {
           await supabase.from('transactions').update({ is_hidden: !!patch.is_hidden }).eq('transfer_group_id', updated.transfer_group_id).eq('user_id', user.id).neq('id', id)
         }
+        // Same for scheduling: confirming or rescheduling one side of a transfer moves both.
+        if (table === 'transactions' && updated?.transfer_group_id && oldRow && (oldRow.status !== updated.status || oldRow.date !== updated.date)) {
+          await supabase.from('transactions').update({ status: updated.status, date: updated.date }).eq('transfer_group_id', updated.transfer_group_id).eq('user_id', user.id).neq('id', id)
+        }
 
         if (table === 'transactions' && updated?.id) {
           // Unwind whatever side-effect the old version of this transaction had applied,
           // then reapply based on the new version — handles relinking, unlinking, and amount edits.
-          if (oldRow?.linked_module === 'lend' && oldRow.linked_module_id) {
+          // A scheduled version has no effects applied, so it's skipped on either side — which is
+          // also what applies them on confirm (scheduled → confirmed) and undoes them if a
+          // confirmed transaction is moved into the future.
+          const oldActive = !!oldRow && oldRow.status !== 'scheduled'
+          const newActive = updated.status !== 'scheduled'
+          if (oldActive && oldRow.linked_module === 'lend' && oldRow.linked_module_id) {
             await reverseLendRepayment(supabase, user.id, id, oldRow.linked_module_id, oldRow.amount)
           }
-          if (updated.linked_module === 'lend' && updated.linked_module_id) {
+          if (newActive && updated.linked_module === 'lend' && updated.linked_module_id) {
             await applyLendRepayment(supabase, user.id, updated.id, updated.linked_module_id, updated.amount, { date: updated.date, account_id: updated.account_id, notes: updated.notes || null })
           }
-          if (oldRow?.linked_module === 'lend_addition' && oldRow.linked_module_id) {
+          if (oldActive && oldRow.linked_module === 'lend_addition' && oldRow.linked_module_id) {
             await reverseLendAddition(supabase, user.id, id, oldRow.linked_module_id, oldRow.amount)
           }
-          if (updated.linked_module === 'lend_addition' && updated.linked_module_id) {
+          if (newActive && updated.linked_module === 'lend_addition' && updated.linked_module_id) {
             await applyLendAddition(supabase, user.id, updated.id, updated.linked_module_id, updated.amount, { date: updated.date, account_id: updated.account_id, notes: updated.notes || null })
           }
-          if (oldRow?.linked_module === 'chit_fund_payment' && oldRow.linked_module_id) {
+          if (oldActive && oldRow.linked_module === 'chit_fund_payment' && oldRow.linked_module_id) {
             await reverseChitFundPayment(supabase, user.id, id)
           }
-          if (updated.linked_module === 'chit_fund_payment' && updated.linked_module_id) {
+          if (newActive && updated.linked_module === 'chit_fund_payment' && updated.linked_module_id) {
             await applyChitFundPayment(supabase, user.id, updated.id, updated.linked_module_id, updated.amount, { payment_date: updated.date, account_id: updated.account_id, notes: updated.notes || null })
           }
-          if (oldRow?.linked_module === 'credit_card' && oldRow.linked_module_id) {
+          if (oldActive && oldRow.linked_module === 'credit_card' && oldRow.linked_module_id) {
             const delta = oldRow.type === 'income' ? Number(oldRow.amount) : -Number(oldRow.amount)
             await supabase.rpc('adjust_credit_card_outstanding', { p_card_id: oldRow.linked_module_id, p_delta: delta })
           }
-          if (updated.linked_module === 'credit_card' && updated.linked_module_id) {
+          if (newActive && updated.linked_module === 'credit_card' && updated.linked_module_id) {
             const delta = updated.type === 'income' ? -Number(updated.amount) : Number(updated.amount)
             await supabase.rpc('adjust_credit_card_outstanding', { p_card_id: updated.linked_module_id, p_delta: delta })
           }
           // A bill payment always reduces outstanding by its amount, unlike a card-funded
           // transaction above — there's no 'income' variant to branch on, it's always money
           // paid TO the card from a real account, never the other direction.
-          if (oldRow?.linked_module === 'credit_card_bill_payment' && oldRow.linked_module_id) {
+          if (oldActive && oldRow.linked_module === 'credit_card_bill_payment' && oldRow.linked_module_id) {
             await supabase.rpc('adjust_credit_card_outstanding', { p_card_id: oldRow.linked_module_id, p_delta: Number(oldRow.amount) })
           }
-          if (updated.linked_module === 'credit_card_bill_payment' && updated.linked_module_id) {
+          if (newActive && updated.linked_module === 'credit_card_bill_payment' && updated.linked_module_id) {
             await supabase.rpc('adjust_credit_card_outstanding', { p_card_id: updated.linked_module_id, p_delta: -Number(updated.amount) })
           }
         }
@@ -926,33 +940,35 @@ async function handleRoute(request, { params }) {
       if (method === 'DELETE' && id) {
         // If deleting a transaction that is part of a transfer group, remove both sides
         if (table === 'transactions') {
-          const { data: row } = await supabase.from('transactions').select('id, transfer_group_id, linked_module, linked_module_id, amount, type, attachment_path').eq('id', id).eq('user_id', user.id).maybeSingle()
+          const { data: row } = await supabase.from('transactions').select('id, transfer_group_id, linked_module, linked_module_id, amount, type, attachment_path, status').eq('id', id).eq('user_id', user.id).maybeSingle()
           if (row?.attachment_path) await supabase.storage.from('attachments').remove([row.attachment_path])
           const groupId = row?.transfer_group_id
           if (groupId) {
             const { error } = await supabase.from('transactions').delete().eq('transfer_group_id', groupId).eq('user_id', user.id)
             return cors(NextResponse.json({ ok: !error }))
           }
+          // A scheduled transaction never applied any side effects, so there's nothing to reverse.
+          const rowActive = !!row && row.status !== 'scheduled'
           // Reverse the credit card outstanding this transaction had applied
-          if (row?.linked_module === 'credit_card' && row.linked_module_id) {
+          if (rowActive && row.linked_module === 'credit_card' && row.linked_module_id) {
             const delta = row.type === 'income' ? Number(row.amount) : -Number(row.amount)
             await supabase.rpc('adjust_credit_card_outstanding', { p_card_id: row.linked_module_id, p_delta: delta })
           }
           // Reverse a bill payment's outstanding reduction — always +amount, no 'income' branch
           // (see the matching PATCH-side comment above for why).
-          if (row?.linked_module === 'credit_card_bill_payment' && row.linked_module_id) {
+          if (rowActive && row.linked_module === 'credit_card_bill_payment' && row.linked_module_id) {
             await supabase.rpc('adjust_credit_card_outstanding', { p_card_id: row.linked_module_id, p_delta: Number(row.amount) })
           }
           // Reverse the lend/borrow repayment this transaction had recorded
-          if (row?.linked_module === 'lend' && row.linked_module_id) {
+          if (rowActive && row.linked_module === 'lend' && row.linked_module_id) {
             await reverseLendRepayment(supabase, user.id, id, row.linked_module_id, row.amount)
           }
           // Reverse the lend/borrow addition this transaction had recorded
-          if (row?.linked_module === 'lend_addition' && row.linked_module_id) {
+          if (rowActive && row.linked_module === 'lend_addition' && row.linked_module_id) {
             await reverseLendAddition(supabase, user.id, id, row.linked_module_id, row.amount)
           }
           // Reverse the chit fund payment this transaction had recorded
-          if (row?.linked_module === 'chit_fund_payment' && row.linked_module_id) {
+          if (rowActive && row.linked_module === 'chit_fund_payment' && row.linked_module_id) {
             await reverseChitFundPayment(supabase, user.id, id)
           }
         }

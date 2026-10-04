@@ -98,6 +98,7 @@ import { HiddenTxProvider, isHiddenTx, hiddenTransferGroups, listableTransaction
 import { usePinDialog } from '@/components/shared/PinDialog'
 import { useNotifications } from '@/features/notifications/useNotifications'
 import { NotificationBell } from '@/features/notifications/NotificationBell'
+import { ScheduledDuePrompt } from '@/features/scheduled/ScheduledDuePrompt'
 import { VaultItemForm } from '@/features/vault/VaultItemForm'
 import { InsightsView } from '@/features/insights/InsightsView'
 import { NetWorthDetailView } from '@/features/dashboard/NetWorthDetailView'
@@ -128,7 +129,7 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
     // and it's still just a starting value, freely changeable before submitting. defaultRepayment
     // is the same idea for Lend/Borrow's own "+ Log repayment" button — pre-selects that exact
     // person in Repayment mode instead of leaving the user to find them in a dropdown themselves.
-    return { type: defaultRepayment?.type || 'expense', amount: '', description: '', date: now, time: nowTime, account_id: defaultAccountId || '', to_account_id: '', category_id: '', notes: '', is_reimbursable: false, is_hidden: false, linked_module: '', linked_module_id: '', repay_value: defaultRepayment?.value || '' }
+    return { type: defaultRepayment?.type || 'expense', amount: '', description: '', date: now, time: nowTime, account_id: defaultAccountId || '', to_account_id: '', category_id: '', notes: '', is_reimbursable: false, is_hidden: false, owe_link: false, owe_person: '', linked_module: '', linked_module_id: '', repay_value: defaultRepayment?.value || '' }
   }, [editing, open, defaultAccountId, defaultRepayment])
   const [form, setForm] = useState(initial)
   // 'category' = normal spending/income category selected; 'repayment' = this transaction is
@@ -148,6 +149,11 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
   const isMobile = useIsMobile()
   // Card bill payments and loan payments go through their own endpoints, which don't carry the
   // hidden flag — so the toggle isn't offered for those.
+  // A date after today = scheduled (see save()). The "someone owes me / I owe someone" link is
+  // only offered then, for a new plain income/expense.
+  const isFuture = !!form.date && form.date > todayISO()
+  const canOweLink = isFuture && !editing && purposeMode === 'category' && (form.type === 'income' || form.type === 'expense')
+  const oweLink = canOweLink && !!form.owe_link
   const canHide = purposeMode !== 'repayment' && !(form.type === 'transfer' && typeof form.to_account_id === 'string' && form.to_account_id.startsWith('cc:'))
   // No PIN yet → set one first; otherwise a hidden transaction could never be unlocked.
   const toggleHidden = async () => {
@@ -249,7 +255,8 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
     // When editing, the original transaction's amount is already reflected in the account balance
     // (or card outstanding). Only the extra money this edit takes out is checked; otherwise re-saving
     // an existing expense, even just to fix its description, gets blocked by its own amount.
-    const originalOut = editing && editing.type !== 'income' ? Number(editing.amount || 0) : 0
+    // (A scheduled original was never counted, so there's nothing to add back for it.)
+    const originalOut = editing && editing.type !== 'income' && editing.status !== 'scheduled' ? Number(editing.amount || 0) : 0
     const resolveAccountId = (id) => debitCards.find((c) => c.id === id)?.linked_account_id || id
     const sourceId = form.account_id
     if (typeof sourceId === 'string' && sourceId.startsWith('cc:')) {
@@ -286,7 +293,15 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
 
   const save = async (event) => {
     event.preventDefault()
-    if (!(await warnIfRisky())) return
+    // A date after today means this hasn't happened yet — it's saved as scheduled and doesn't
+    // count anywhere until confirmed, so there's no balance to check against now.
+    if (isFuture) {
+      const [kind] = purposeMode === 'repayment' ? (form.repay_value || '').split(':') : []
+      const toCard = form.type === 'transfer' && typeof form.to_account_id === 'string' && form.to_account_id.startsWith('cc:')
+      if (toCard || kind === 'loan') { toast.push('Card bill payments and loan EMIs can’t be scheduled yet — log them on the day you pay.', 'error'); return }
+      if (typeof navigator !== 'undefined' && !navigator.onLine) { toast.push('Scheduling a transaction needs a connection — try again once you’re back online.', 'error'); return }
+      if (oweLink && !String(form.owe_person || '').trim()) { toast.push('Enter who owes the money (or turn the option off).', 'error'); return }
+    } else if (!(await warnIfRisky())) return
     setBusy(true)
     try {
       const [repayKind, repayId] = purposeMode === 'repayment' ? (form.repay_value || '').split(':') : []
@@ -352,6 +367,21 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
         payload.linked_module_id = ''
       }
       if (!payload.linked_module_id) { delete payload.linked_module; delete payload.linked_module_id }
+      payload.status = isFuture ? 'scheduled' : 'confirmed'
+      // "Someone owes me this" / "I owe someone this" on a scheduled entry: record who in
+      // Lend/Borrow now (no money moves today — it already did, or will on the day), and link
+      // the scheduled transaction to it, so confirming it later counts as their repayment.
+      if (oweLink) {
+        const lendRes = await fetch('/api/finance/lend_borrow', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+          person_name: String(form.owe_person).trim(), type: form.type === 'income' ? 'lent' : 'borrowed', amount: Number(form.amount),
+          date: todayISO(), due_date: form.date, reason: form.description || null,
+        }) })
+        const lendBody = await lendRes.json()
+        if (!lendRes.ok) throw new Error(lendBody.error || 'Could not record who owes the money')
+        payload.linked_module = 'lend'
+        payload.linked_module_id = lendBody.id
+      }
+      delete payload.owe_link; delete payload.owe_person
       if (typeof payload.account_id === 'string' && payload.account_id.startsWith('cc:')) {
         payload.credit_card_id = payload.account_id.slice(3)
         delete payload.account_id
@@ -361,7 +391,17 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
         const debitCard = debitCards.find((c) => c.id === payload.account_id)
         if (debitCard) payload.account_id = debitCard.linked_account_id
       }
-      const { record: data, queued } = await mutate({ table: 'transactions', method: editing ? 'PATCH' : 'POST', id: editing?.id, body: payload })
+      // Scheduled saves (and edits of one) go straight to the server: the offline queue patches
+      // the confirmed `transactions` list optimistically, which a scheduled row isn't part of.
+      let data, queued = false
+      if (payload.status === 'scheduled' || editing?.status === 'scheduled') {
+        const res = await fetch(endpoint, { method: editing ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+        const body = await res.json()
+        if (!res.ok) throw new Error(body.error || body.message || 'Could not save')
+        data = Array.isArray(body) ? body[0] : body
+      } else {
+        ({ record: data, queued } = await mutate({ table: 'transactions', method: editing ? 'PATCH' : 'POST', id: editing?.id, body: payload }))
+      }
 
       // A queued (offline) write only has a temp id — Storage upload / attachment PATCH both
       // need a real, already-persisted row, so they're deferred rather than attempted against
@@ -379,7 +419,8 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
       }
 
       const hiddenNote = payload.is_hidden && !hiddenRevealed ? ' — hidden from lists' : ''
-      toast.push(queued ? `Transaction ${editing ? 'updated' : 'added'}${hiddenNote} — will sync when back online` : `Transaction ${editing ? 'updated' : 'added'}${hiddenNote}`)
+      if (payload.status === 'scheduled') toast.push(`Scheduled for ${formatDate(form.date)} — it won’t count in your balance until you confirm it${hiddenNote}`)
+      else toast.push(queued ? `Transaction ${editing ? 'updated' : 'added'}${hiddenNote} — will sync when back online` : `Transaction ${editing ? 'updated' : 'added'}${hiddenNote}`)
       onSaved()
     } catch (e) { toast.push(e.message, 'error') } finally { setBusy(false) }
   }
@@ -417,6 +458,26 @@ function TransactionForm({ open, onClose, onSaved, editing, accounts, categories
         <label className="text-sm text-slate-300 light:text-slate-700">Date
           <DateInput value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value, time: new Date().toTimeString().slice(0, 5) })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
         </label>
+        {isFuture && (
+          <div className="col-span-2 rounded-xl border border-sky-300/25 bg-sky-300/5 px-4 py-3 text-xs leading-5 text-sky-200 light:text-sky-800">
+            <div className="flex items-center gap-1.5 font-semibold"><Clock size={13} />Scheduled for {formatDate(form.date)}</div>
+            <div className="mt-0.5 text-sky-200/80 light:text-sky-800/80">It won’t count in your balance or totals until you confirm it happened — the app asks you on that day.</div>
+            {canOweLink && (
+              <div className="mt-3 border-t border-sky-300/15 pt-3">
+                <div onClick={() => setForm({ ...form, owe_link: !form.owe_link })} className="flex cursor-pointer items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm text-slate-200 light:text-slate-800">{form.type === 'income' ? 'This is money someone owes me' : 'This is money I owe someone'}</div>
+                    <div className="text-[11px] text-slate-400 light:text-slate-500">Also tracks it in Lend / Borrow; confirming it later counts as {form.type === 'income' ? 'their repayment' : 'your repayment'}.</div>
+                  </div>
+                  <ToggleSwitch checked={!!form.owe_link} onChange={() => {}} />
+                </div>
+                {form.owe_link && (
+                  <input value={form.owe_person || ''} onChange={(e) => setForm({ ...form, owe_person: e.target.value })} placeholder={form.type === 'income' ? 'Who owes you?' : 'Who do you owe?'} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-2.5 text-sm text-white light:text-slate-900 outline-none focus:border-accent-300/50" />
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         <label className="text-sm text-slate-300 light:text-slate-700">{form.type === 'transfer' ? 'From account' : 'Account'}
           <Select required={hasAnySource} value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-[#101621] light:bg-white px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50">
@@ -665,6 +726,17 @@ function CsvImport({ open, onClose, onImported, accounts, categories, transactio
   )
 }
 
+
+// "Scheduled" (sky) for a future-dated transaction not yet confirmed; "Overdue" (amber) once its
+// date has passed without being confirmed.
+function ScheduledTag({ date }) {
+  const overdue = date < todayISO()
+  return (
+    <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${overdue ? 'bg-amber-400/15 text-amber-200 light:text-amber-700' : 'bg-sky-400/15 text-sky-200 light:text-sky-700'}`}>
+      {overdue ? 'Overdue' : 'Scheduled'}
+    </span>
+  )
+}
 
 function TransactionRow({ t, categories, accounts, creditCards = [], showMoney }) {
   const cat = categories.find((c) => c.id === t.category_id)
@@ -1709,7 +1781,7 @@ function renderExplodedPieSlice(props) {
   )
 }
 
-function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTxBulk, onImport, showMoney, onToggleMoney, onOpenRecurring, onPayCardBill, onApprovePending, onRejectPending }) {
+function TransactionsView({ data, scheduledDueCount = 0, onOpenScheduledPrompt, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTxBulk, onImport, showMoney, onToggleMoney, onOpenRecurring, onPayCardBill, onApprovePending, onRejectPending }) {
   const { transactions, accounts, categories, credit_cards: creditCards = [], pending_transactions: pendingTransactions = [] } = data
   const pendingSms = useMemo(() => pendingTransactions.filter((p) => p.status === 'pending').sort((a, b) => new Date(b.created_at) - new Date(a.created_at)), [pendingTransactions])
   const [query, setQuery] = useState('')
@@ -1813,7 +1885,10 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTx
   const { revealed: hiddenRevealed, unlock: unlockHidden, lock: lockHidden } = useHiddenTx()
   const pinDialog = usePinDialog()
   const hiddenGroups = useMemo(() => hiddenTransferGroups(transactions), [transactions])
-  const inPeriod = useMemo(() => transactions.filter((t) => {
+  // Scheduled (future-dated, unconfirmed) rows come in their own list from the server. They're
+  // listed here (muted) but never counted — not in the chart, not in day totals.
+  const scheduledTx = data.scheduled_transactions || []
+  const inPeriodAll = useMemo(() => [...transactions, ...scheduledTx].filter((t) => {
     if (type !== 'all' && t.type !== type) return false
     if (accountId !== 'all') {
       if (accountId.startsWith('cc:')) {
@@ -1828,10 +1903,11 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTx
       if (d.getFullYear() !== monthCursor.year || d.getMonth() !== monthCursor.month) return false
     }
     return true
-  }), [transactions, type, accountId, categoryId, customRange, monthCursor])
+  }), [transactions, scheduledTx, type, accountId, categoryId, customRange, monthCursor])
+  const inPeriod = useMemo(() => inPeriodAll.filter((t) => t.status !== 'scheduled'), [inPeriodAll])
   const visible = useMemo(() => {
     const q = query.toLowerCase()
-    return inPeriod.filter((t) => {
+    return inPeriodAll.filter((t) => {
       if (!hiddenRevealed && isHiddenTx(t, hiddenGroups)) return false
       if (!q) return true
       const acc = resolveSource(t)
@@ -1839,10 +1915,10 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTx
       const searchable = `${t.description || ''} ${t.notes || ''} ${t.type || ''} ${acc?.name || ''} ${cat?.name || ''}`.toLowerCase()
       return searchable.includes(q)
     })
-  }, [inPeriod, hiddenRevealed, hiddenGroups, query, accounts, creditCards, categories])
+  }, [inPeriodAll, hiddenRevealed, hiddenGroups, query, accounts, creditCards, categories])
   // While searching, the chart only describes the listed rows — a search-filtered chart that still
   // counted a hidden match would give it away.
-  const chartSource = query ? visible : inPeriod
+  const chartSource = query ? visible.filter((t) => t.status !== 'scheduled') : inPeriod
 
   // amount is always stored positive (income vs. expense is the `type`, not the sign) — sorting
   // by the raw column would rank a ₹50,000 expense above a ₹10,000 income, which reads backwards
@@ -1892,6 +1968,7 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTx
     const map = {}
     for (const t of sorted) {
       if (t.type === 'transfer') continue // a transfer between your own accounts isn't spend or income
+      if (t.status === 'scheduled') continue // hasn't happened yet
       const bucket = map[t.date] || { income: 0, expense: 0 }
       if (t.type === 'income') bucket.income += Number(t.amount || 0)
       else bucket.expense += Number(t.amount || 0)
@@ -2022,6 +2099,11 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTx
         <div>
           <div className="mb-2 text-xs uppercase tracking-widest text-accent-200/70 light:text-accent-700">Money movement</div>
           <h1 className="text-3xl font-semibold tracking-tight text-white light:text-slate-900">Transactions</h1>
+          {scheduledDueCount > 0 && (
+            <button type="button" onClick={onOpenScheduledPrompt} className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-amber-300/30 bg-amber-300/10 px-2.5 py-1 text-[11px] font-medium text-amber-200 light:text-amber-700 hover:bg-amber-300/15">
+              <Clock size={12} />{scheduledDueCount} scheduled transaction{scheduledDueCount === 1 ? '' : 's'} to confirm
+            </button>
+          )}
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           {/* Mobile: month nav + custom range combined into one pill — tapping the month label
@@ -2288,7 +2370,7 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTx
                     </div>
                   )
                 })()}
-                <div className="px-5 py-3 sm:py-4">
+                <div className={`px-5 py-3 sm:py-4 ${t.status === 'scheduled' ? 'opacity-70' : ''}`}>
                   {/* Mobile: icon-bubble + name/subtitle + trailing amount, one row — tap opens
                       edit. No per-row delete icon here; long-press enters selection mode (tap
                       toggles rows, the toolbar above handles bulk delete) instead. */}
@@ -2323,6 +2405,7 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTx
                         <div className="flex items-center gap-1.5 truncate text-sm font-medium text-white light:text-slate-900">
                           <span className="truncate">{capitalizeFirst(t.description)}</span>
                           {isHiddenTx(t, hiddenGroups) && <Lock size={11} className="shrink-0 text-slate-500" aria-label="Hidden" />}
+                          {t.status === 'scheduled' && <ScheduledTag date={t.date} />}
                           {t.attachment_path && (
                             <button type="button" onClick={(e) => { e.stopPropagation(); setViewingAttachment(t) }} className="shrink-0 pl-0.5 text-slate-500 hover:text-accent-300 hover:light:text-accent-700" title="View attachment"><Paperclip size={12} /></button>
                           )}
@@ -2344,6 +2427,7 @@ function TransactionsView({ data, onOpenTxForm, onEditTx, onDeleteTx, onDeleteTx
                         <div className="flex items-center gap-1.5 text-sm font-medium text-white light:text-slate-900">
                           {capitalizeFirst(t.description)}
                           {isHiddenTx(t, hiddenGroups) && <Lock size={11} className="shrink-0 text-slate-500" aria-label="Hidden" />}
+                          {t.status === 'scheduled' && <ScheduledTag date={t.date} />}
                           {t.attachment_path && (
                             <button type="button" onClick={(e) => { e.stopPropagation(); setViewingAttachment(t) }} className="shrink-0 text-slate-500 hover:text-accent-300 hover:light:text-accent-700" title="View attachment"><Paperclip size={12} /></button>
                           )}
@@ -2445,8 +2529,28 @@ function Shell({ user, onLogout }) {
     setActiveDetailId(id)
     if (initialNavState.current.detailId != null) initialNavState.current = { ...initialNavState.current, detailId: null }
   }
-  const [data, setData] = useState({ accounts: [], categories: [], transactions: [], budgets: [], portfolios: [], holdings: [], sips: [], other_investments: [], kite_orders: [], loans: [], loan_payments: [], bucket_list: [], lend_borrow: [], lend_repayments: [], lend_borrow_additions: [], credit_cards: [], credit_card_transactions: [], scholarships: [], scholarship_payments: [], money_rules: [], recurring_transactions: [], money_profiles: [], money_profile_entries: [], recurring_money_profile_entries: [], budget_months: [], budget_month_categories: [], vault_items: [], pending_transactions: [], sms_parse_patterns: [], chit_funds: [], chit_fund_payments: [], profile: null })
+  const [data, setData] = useState({ accounts: [], categories: [], transactions: [], budgets: [], portfolios: [], holdings: [], sips: [], other_investments: [], kite_orders: [], loans: [], loan_payments: [], bucket_list: [], lend_borrow: [], lend_repayments: [], lend_borrow_additions: [], credit_cards: [], credit_card_transactions: [], scholarships: [], scholarship_payments: [], money_rules: [], recurring_transactions: [], money_profiles: [], money_profile_entries: [], recurring_money_profile_entries: [], budget_months: [], budget_month_categories: [], vault_items: [], pending_transactions: [], sms_parse_patterns: [], chit_funds: [], chit_fund_payments: [], scheduled_transactions: [], profile: null })
   const [loading, setLoading] = useState(true)
+  // Scheduled transactions whose date has arrived or passed, one row per transfer, waiting for
+  // the user to confirm they happened. Hidden ones only appear while unlocked. The prompt opens by
+  // itself once per app open while any are due (not over the first-run tour), and again from the
+  // Transactions page badge.
+  const { revealed: shellHiddenRevealed } = useHiddenTx()
+  const dueScheduled = useMemo(() => {
+    const today = todayISO()
+    const seenGroups = new Set()
+    return (data.scheduled_transactions || [])
+      .filter((t) => t.date <= today && (shellHiddenRevealed || !t.is_hidden))
+      .filter((t) => { if (!t.transfer_group_id) return true; if (seenGroups.has(t.transfer_group_id)) return false; seenGroups.add(t.transfer_group_id); return true })
+      .sort((a, b) => a.date.localeCompare(b.date))
+  }, [data.scheduled_transactions, shellHiddenRevealed])
+  const [duePromptOpen, setDuePromptOpen] = useState(false)
+  const duePromptShown = useRef(false)
+  useEffect(() => {
+    if (loading || duePromptShown.current || dueScheduled.length === 0 || !data.profile?.tour_completed_at) return
+    duePromptShown.current = true
+    setDuePromptOpen(true)
+  }, [loading, dueScheduled.length, data.profile?.tour_completed_at])
   const [pendingCount, setPendingCount] = useState(0)
   const mutate = useMemo(() => createMutate(setData, setPendingCount), [])
 
@@ -2586,6 +2690,7 @@ function Shell({ user, onLogout }) {
         pending_transactions: result.pending_transactions || [],
         sms_parse_patterns: result.sms_parse_patterns || [],
         chit_funds: result.chit_funds || [], chit_fund_payments: result.chit_fund_payments || [],
+        scheduled_transactions: result.scheduled_transactions || [],
         profile: result.profile || null,
       }
       setData(snapshot)
@@ -3280,10 +3385,17 @@ function Shell({ user, onLogout }) {
     reverseLocalLendOnDelete(row)
     reverseLocalChitFundPaymentOnDelete(row)
   }
+  const dropLocalScheduled = (ids) => setData((d) => {
+    const list = d.scheduled_transactions || []
+    const groups = new Set(list.filter((x) => ids.includes(x.id) && x.transfer_group_id).map((x) => x.transfer_group_id))
+    return { ...d, scheduled_transactions: list.filter((x) => !ids.includes(x.id) && !(x.transfer_group_id && groups.has(x.transfer_group_id))) }
+  })
   const deleteTx = async (t) => {
     if (!(await confirm.ask('Delete this transaction? Balances will be recomputed.'))) return
     const { queued } = await mutate({ table: 'transactions', method: 'DELETE', id: t.id })
-    reverseLocalLinkedStateOnDelete(t)
+    // A scheduled transaction never applied any side effects, and lives in its own list.
+    if (t.status === 'scheduled') dropLocalScheduled([t.id])
+    else reverseLocalLinkedStateOnDelete(t)
     toast.push(queued ? 'Transaction deleted — will sync when back online' : 'Transaction deleted')
   }
   // Mobile's long-press-to-select flow (TransactionsView) deletes in bulk rather than one confirm
@@ -3299,6 +3411,7 @@ function Shell({ user, onLogout }) {
     const rows = ids.map((id) => data.transactions.find((t) => t.id === id)).filter(Boolean)
     const results = await Promise.all(ids.map((id) => mutate({ table: 'transactions', method: 'DELETE', id })))
     for (const row of rows) reverseLocalLinkedStateOnDelete(row)
+    dropLocalScheduled(ids)
     const queuedCount = results.filter((r) => r.queued).length
     toast.push(queuedCount > 0 ? `${n} transaction${n === 1 ? '' : 's'} deleted — ${queuedCount} will sync when back online` : `${n} transaction${n === 1 ? '' : 's'} deleted`)
     return true
@@ -3587,7 +3700,7 @@ function Shell({ user, onLogout }) {
           ) : (
             <div className={fitScreen ? 'min-h-0 flex-1 lg:overflow-y-auto' : ''}>
               {view === 'dashboard' && <DashboardView data={data} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onOpenTxForm={() => openTxForm()} setView={setView} onManageMoneyRules={() => openSettings('money_rules')} onPayCardBill={openCardPay} onToggleIncludeInNetWorth={toggleIncludeInNetWorth} onToggleIncludeInNetWorthGroup={toggleIncludeInNetWorthGroup} />}
-              {view === 'transactions' && <TransactionsView data={data} onOpenTxForm={() => openTxForm()} onEditTx={openTxForm} onDeleteTx={deleteTx} onDeleteTxBulk={deleteTxBulk} onImport={() => setCsvOpen(true)} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onOpenRecurring={openRecurringManager} onPayCardBill={openCardPay} onApprovePending={approvePending} onRejectPending={rejectPending} />}
+              {view === 'transactions' && <TransactionsView data={data} scheduledDueCount={dueScheduled.length} onOpenScheduledPrompt={() => setDuePromptOpen(true)} onOpenTxForm={() => openTxForm()} onEditTx={openTxForm} onDeleteTx={deleteTx} onDeleteTxBulk={deleteTxBulk} onImport={() => setCsvOpen(true)} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onOpenRecurring={openRecurringManager} onPayCardBill={openCardPay} onApprovePending={approvePending} onRejectPending={rejectPending} />}
               {view === 'accounts' && <AccountsView data={data} onAdd={() => openAccForm()} onEdit={openAccForm} onDelete={deleteAccount} onDeleteTx={deleteTx} onDeleteTxBulk={deleteTxBulk} onAddTransaction={(accountId) => openTxForm(null, accountId)} onSyncBalance={syncAccountBalance} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onDetailChange={onDetailChange} initialSelectedId={initialNavState.current.detailId} />}
               {view === 'budgets' && <BudgetsView data={data} onSetMonth={openBudgetMonthForm} onCloseMonth={closeBudgetMonth} onReopenMonth={reopenBudgetMonth} onDeleteMonth={deleteBudgetMonth} onAddYearly={() => openBudgetForm()} onEditYearly={openBudgetForm} onDeleteYearly={deleteBudget} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />}
               {view === 'investments' && <InvestmentsView data={data} onAddPortfolio={() => openPortfolioForm()} onEditPortfolio={openPortfolioForm} onDeletePortfolio={deletePortfolio} onAddHolding={openHoldingForm} onBulkImport={openBulkImport} onEditHolding={openHoldingEdit} onDeleteHolding={deleteHolding} onRefreshRowPrice={onRefreshRowPrice} onManualPriceEntry={onManualPriceEntry} onRefreshAll={refreshAllPrices} pricesLoading={pricesLoading} onAddFunds={openFundsForm} onWithdrawFunds={openWithdrawForm} onConnectKite={connectKite} onLinkKite={linkPortfolioKite} onUnlinkKite={unlinkPortfolioKite} onSyncKite={syncPortfolioKite} kiteSyncBusy={kiteSyncBusy} onAddSip={openSipForm} onEditSip={openSipForm} onDeleteSip={deleteSip} onSyncSipsKite={syncSipsKite} onAddOtherInvestment={openOtherInvestmentForm} onEditOtherInvestment={openOtherInvestmentEdit} onDeleteOtherInvestment={deleteOtherInvestment} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onDetailChange={onDetailChange} initialSelectedId={initialNavState.current.detailId} />}
@@ -3685,6 +3798,7 @@ function Shell({ user, onLogout }) {
       <OtherInvestmentForm open={otherInvestmentFormOpen} onClose={closeOtherInvestmentForm} onSaved={onOtherInvestmentSaved} editing={otherInvestmentEditing} portfolioId={otherInvestmentPortfolioId} toast={toast} mutate={mutate} />
       <HoldingsBulkImport open={bulkImportOpen} onClose={closeBulkImport} onImported={onBulkImported} portfolio={bulkImportPortfolio} toast={toast} />
       <LoanForm open={loanFormOpen} onClose={closeLoanForm} onSaved={onLoanSaved} editing={loanEditing} accounts={dropdownAccounts} toast={toast} />
+      <ScheduledDuePrompt open={duePromptOpen && dueScheduled.length > 0} onClose={() => setDuePromptOpen(false)} items={dueScheduled} accounts={data.accounts} creditCards={data.credit_cards} onChanged={() => refresh({ silent: true })} toast={toast} />
       <LoanPaymentForm open={loanPayOpen} onClose={closeLoanPay} onSaved={onLoanPaid} loan={loanPayLoan} accounts={dropdownAccounts} creditCards={data.credit_cards} payments={(data.loan_payments || []).filter((p) => p.loan_id === loanPayLoan?.id)} toast={toast} />
       <BucketForm open={bucketFormOpen} onClose={closeBucketForm} onSaved={onBucketSaved} editing={bucketEditing} toast={toast} mutate={mutate} />
       <LendForm open={lendFormOpen} onClose={closeLendForm} onSaved={onLendSaved} editing={lendEditing} accounts={dropdownAccounts} creditCards={data.credit_cards} toast={toast} />
