@@ -6,7 +6,7 @@ import {
   Landmark, MoreVertical, Pencil, RefreshCw, Sparkles, Target, Trash2, X,
 } from 'lucide-react'
 import { nextLoanDueDate, projectSchedule } from '@/lib/amortization'
-import { dateToLocalISO, formatDate, liveOutstanding, money, monthAbbr, ordinal, paymentTypeLabel, todayISO } from '@/lib/format'
+import { dateToLocalISO, formatDate, liveOutstanding, money, monthAbbr, paymentTypeLabel, todayISO } from '@/lib/format'
 import { StatCard } from '@/components/shared/StatCard'
 import { DismissibleBanner } from '@/components/shared/DismissibleBanner'
 
@@ -40,7 +40,7 @@ export function LoanDetailView({ loan, payments, accounts, onBack, onPay, onDele
 
   // Anchor the projection at the actual next EMI due date (not just "today") so the real
   // day-count for the first projected month is accurate.
-  const nextDueDate = useMemo(() => nextLoanDueDate(loan) || todayISO(), [loan.emi_due_day])
+  const nextDueDate = useMemo(() => nextLoanDueDate(loan, new Date(), payments) || todayISO(), [loan.emi_due_day, payments])
 
   const schedule = useMemo(() => loan.status === 'closed' ? [] : projectSchedule({ outstanding, annualRatePct: rate, emiAmount: emi, startDate: nextDueDate }), [outstanding, rate, emi, loan.status, nextDueDate])
   const monthsRemaining = schedule.length
@@ -151,13 +151,14 @@ export function LoanDetailView({ loan, payments, accounts, onBack, onPay, onDele
     if (didDelete) exitSelectMode()
   }
 
+  // Same payment-aware date as nextDueDate above, so an EMI already paid in advance isn't shown
+  // as the one coming up.
   const emiDue = (() => {
     if (!loan.emi_due_day || loan.status === 'closed') return null
-    const now = new Date(); const day = Number(loan.emi_due_day)
-    let due = new Date(now.getFullYear(), now.getMonth(), day)
-    if (now > due) due = new Date(now.getFullYear(), now.getMonth() + 1, day)
-    const days = Math.ceil((due - now) / 86400000)
-    return { days }
+    const dueIso = nextLoanDueDate(loan, new Date(), payments)
+    const due = new Date(`${dueIso}T00:00:00`)
+    const today = new Date(); today.setHours(0, 0, 0, 0)
+    return { dueIso, days: Math.round((due - today) / 86400000) }
   })()
 
   return (
@@ -236,7 +237,7 @@ export function LoanDetailView({ loan, payments, accounts, onBack, onPay, onDele
 
       {emiDue && (
         <DismissibleBanner id={`loan-emi-due-${loan.id}-${new Date().getFullYear()}-${new Date().getMonth()}`} tone={emiDue.days <= 3 ? 'amber' : 'slate'}>
-          Next EMI due on the {ordinal(loan.emi_due_day)} · {emiDue.days > 0 ? `in ${emiDue.days} day${emiDue.days === 1 ? '' : 's'}` : emiDue.days === 0 ? 'today' : 'overdue'}
+          Next EMI due {formatDate(emiDue.dueIso)} · {emiDue.days > 0 ? `in ${emiDue.days} day${emiDue.days === 1 ? '' : 's'}` : emiDue.days === 0 ? 'today' : 'overdue'}
         </DismissibleBanner>
       )}
 

@@ -8,6 +8,13 @@ import { triggerAppUpdate } from '@/lib/pwaUpdate'
 // whenever something user-visible ships; no need to log every internal fix.
 const CHANGELOG = [
   {
+    date: '4 Oct 2026',
+    points: [
+      'Loans: an EMI paid in advance (next month\'s EMI paid early, held by the lender until its due date) is now shown as that month\'s EMI instead of a prepayment — the EMI calendar marks the month paid, and the "Next EMI due" banner and reminders skip it.',
+      'Loans: the "Next EMI due" banner now shows the actual date, and no longer jumps to next month on the due date itself.',
+    ],
+  },
+  {
     date: '3 Oct 2026',
     points: [
       'New: a notification bell at the top of the Dashboard. It keeps every reminder in one place — bills, EMIs and chit fund payments due soon, budgets over limit, recurring entries added, detected SMS transactions, share invites, report emails and new versions — even if you missed the push or have push turned off.',

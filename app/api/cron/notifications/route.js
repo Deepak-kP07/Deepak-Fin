@@ -98,9 +98,10 @@ async function checkUser(supabase, userId, buildId) {
 
   // Loan EMIs due soon.
   const { data: loans } = await supabase.from('loans').select('*').eq('user_id', userId).eq('status', 'active')
+  const { data: advanceEmis } = await supabase.from('loan_payments').select('loan_id, type, payment_date').eq('user_id', userId).eq('type', 'advance_emi')
   const now = new Date()
   for (const loan of loans || []) {
-    const due = nextLoanDueDate(loan, now)
+    const due = nextLoanDueDate(loan, now, advanceEmis || [])
     if (!due) continue
     const days = Math.ceil((new Date(due) - now) / 86400000)
     if (days > DUE_SOON_DAYS) continue
