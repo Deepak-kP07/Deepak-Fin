@@ -8,6 +8,13 @@ import { triggerAppUpdate } from '@/lib/pwaUpdate'
 // whenever something user-visible ships; no need to log every internal fix.
 const CHANGELOG = [
   {
+    date: '5 Oct 2026',
+    points: [
+      'Refreshed the weekly and monthly report emails: a clean Personal Fin logo, and amounts now line up neatly on the right on phones.',
+      'Emails from the app now show "Personal Fin" as the sender, and reports come from hello@ instead of the invites address.',
+    ],
+  },
+  {
     date: '4 Oct 2026',
     points: [
       'New: scheduled transactions. Pick a future date when adding a transaction and it\'s saved as scheduled — shown greyed out with a "Scheduled" tag, and not counted in your balance, totals or charts until it actually happens.',
