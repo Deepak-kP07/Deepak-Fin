@@ -565,15 +565,12 @@ async function handleRoute(request, { params }) {
     }
 
     // ---- CREDIT CARD sync outstanding ----
-    // current_outstanding isn't derived from a sum of transactions the way an account's
-    // current_balance is (see accounts.js's syncAccountBalance comment) — it's a directly-
-    // mutated column, adjusted piecemeal by every card-funded spend/payoff/repayment across the
-    // app via adjust_credit_card_outstanding. That makes it the one balance in this app with no
-    // self-healing "recompute from source rows" story if something ever nudges it out of sync
-    // with the real statement (a missed edge case, a manual DB fix, etc.) — logging a labeled
-    // "Balance adjustment" transaction the way syncAccountBalance/syncMoneyProfileBalance do
-    // wouldn't touch this column at all. Sets it directly instead, via the same atomic RPC every
-    // other adjustment here already goes through.
+    // current_outstanding is a directly-mutated column (every card-funded spend/payoff/repayment
+    // adjusts it via adjust_credit_card_outstanding), so it can drift from the real statement.
+    // Syncing logs the difference as a labeled "Balance sync" transaction linked to the card —
+    // expense when the statement is higher, income when lower — the same way account syncs do,
+    // so the correction shows in the card's activity and Transactions, and editing or deleting
+    // it later reverses it through the normal credit_card side-effect paths.
     if (route.match(/^\/finance\/credit_cards\/([^/]+)\/sync_outstanding$/) && method === 'POST') {
       const user = await currentUser(supabase)
       if (!user) return cors(NextResponse.json({ error: 'Not authenticated' }, { status: 401 }))
@@ -585,8 +582,18 @@ async function handleRoute(request, { params }) {
       if (!card) return cors(NextResponse.json({ error: 'Card not found' }, { status: 404 }))
       const diff = target - Number(card.current_outstanding || 0)
       if (Math.abs(diff) < 0.01) return cors(NextResponse.json({ error: 'Outstanding already matches — nothing to adjust' }, { status: 400 }))
+      const type = diff > 0 ? 'expense' : 'income'
+      const categoryId = await ensureCategory(supabase, user.id, 'Balance adjustment', type)
+      const now = new Date()
+      const { data: tx, error: txError } = await supabase.from('transactions').insert({
+        user_id: user.id, account_id: null, amount: Number(Math.abs(diff).toFixed(2)), type, description: 'Balance sync',
+        category_id: categoryId, date: now.toISOString().slice(0, 10), time: now.toTimeString().slice(0, 5),
+        notes: `Reconciled with your card statement (${diff > 0 ? '+' : ''}${diff.toFixed(2)})`,
+        linked_module: 'credit_card', linked_module_id: cardId,
+      }).select().single()
+      if (txError) return cors(NextResponse.json({ error: txError.message }, { status: 400 }))
       const { data: newOutstanding } = await supabase.rpc('adjust_credit_card_outstanding', { p_card_id: cardId, p_delta: diff })
-      return cors(NextResponse.json({ new_outstanding: Number(newOutstanding ?? target) }))
+      return cors(NextResponse.json({ new_outstanding: Number(newOutstanding ?? target), transaction: tx }))
     }
 
     // ---- SCHOLARSHIP payment to college ----

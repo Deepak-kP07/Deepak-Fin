@@ -192,7 +192,7 @@ export function CreditCardDetailView({ card, cardTransactions, allTransactions, 
         <div className="rounded-xl border border-accent-300/20 bg-accent-400/[.03] p-4">
           <div className="text-sm text-slate-300 light:text-slate-700">Sync with your card's real statement</div>
           <div className="mt-1 text-[11px] text-slate-500">
-            Outstanding isn't summed from transactions the way an account balance is — it's adjusted piecemeal by every spend, payment, and repayment. If it's ever drifted from what your card actually shows, enter the real number here to set it directly (no adjustment transaction, since there's nothing to log — just correcting a number).
+            If your card statement shows a different outstanding — a fee, forex markup, or a spend you never logged here — enter the real number and the difference is recorded as a &quot;Balance sync&quot; entry in this card's activity.
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <input type="number" step="0.01" value={syncValue} onChange={(e) => setSyncValue(e.target.value)} placeholder={String(Math.round(card.current_outstanding))} className="w-40 rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-2 text-sm text-white light:text-slate-900 outline-none focus:border-accent-300/50" />

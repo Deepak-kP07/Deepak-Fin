@@ -8,6 +8,12 @@ import { triggerAppUpdate } from '@/lib/pwaUpdate'
 // whenever something user-visible ships; no need to log every internal fix.
 const CHANGELOG = [
   {
+    date: '7 Oct 2026',
+    points: [
+      'Syncing a credit card\'s outstanding with your statement now records the difference as a "Balance sync" entry in the card\'s activity and in Transactions, just like account syncs — so you can see what changed, and delete it to undo.',
+    ],
+  },
+  {
     date: '5 Oct 2026',
     points: [
       'Refreshed the weekly and monthly report emails: a clean Personal Fin logo, and amounts now line up neatly on the right on phones.',
