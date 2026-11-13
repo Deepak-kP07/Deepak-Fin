@@ -196,7 +196,7 @@ async function handleRoute(request, { params }) {
       // A single indexed UPDATE, no-op when nothing's stale — cheap enough to run unconditionally
       // on every load rather than gating it behind a staleness check like the Kite syncs below.
       await closeStaleBudgetMonths(supabase, user.id).catch(() => {})
-      let [accounts, categories, transactions, budgets, portfolios, holdings, sips, other_investments, kite_orders, loans, loan_payments, bucket_list, lend_borrow, lend_repayments, lend_borrow_additions, credit_cards, credit_card_transactions, scholarships, scholarship_payments, money_rules, recurring_transactions, money_profiles, money_profile_entries, recurring_money_profile_entries, budget_months, budget_month_categories, vault_items, pending_transactions, sms_parse_patterns, chit_funds, chit_fund_payments, profile] = await Promise.all([
+      let [accounts, categories, transactions, budgets, portfolios, holdings, sips, other_investments, kite_orders, loans, loan_payments, bucket_list, lend_borrow, lend_repayments, lend_borrow_additions, credit_cards, credit_card_transactions, scholarships, scholarship_payments, money_rules, recurring_transactions, money_profiles, money_profile_entries, recurring_money_profile_entries, budget_months, budget_month_categories, vault_items, chit_funds, chit_fund_payments, profile] = await Promise.all([
         readAll('accounts'),
         readAll('categories'),
         readAll('transactions'),
@@ -229,10 +229,6 @@ async function handleRoute(request, { params }) {
         readAll('budget_months'),
         readAll('budget_month_categories'),
         readAll('vault_items'),
-        readAll('pending_transactions'),
-        // Global config, no user_id — can't go through readAll's owner-scoped filter. RLS makes
-        // this SELECT-only for every authenticated user regardless (see drizzle/0048).
-        supabase.from('sms_parse_patterns').select('*').eq('is_active', true).then((r) => r.data || []),
         readAll('chit_funds'),
         readAll('chit_fund_payments'),
         supabase.from('profiles').select('*').eq('id', user.id).maybeSingle().then((r) => r.data),
@@ -294,16 +290,12 @@ async function handleRoute(request, { params }) {
       // Ciphertext never needs to reach the browser on a bulk load — only the dedicated reveal
       // route decrypts a single item, on demand, when its card is actually flipped.
       const vaultItemsSafe = vault_items.map(({ encrypted_payload, ...rest }) => rest)
-      // raw_message never needs to reach the browser — the approval card shows the parsed
-      // fields, not the original SMS text; keeping it server-side only limits its exposure
-      // window even before the 7-day purge cron clears it (see app/api/cron/pending_transactions/purge).
-      const pendingTransactionsSafe = pending_transactions.map(({ raw_message, ...rest }) => rest)
       // Scheduled (future-dated, not yet confirmed) transactions go in their own list, so every
       // balance/total/chart in the app — all of which read `transactions` — leaves them out
       // without each having to filter. Only the Transactions list and the confirm prompt read them.
       const scheduled_transactions = transactions.filter((t) => t.status === 'scheduled')
       transactions = transactions.filter((t) => t.status !== 'scheduled')
-      return cors(NextResponse.json({ scheduled_transactions, accounts, categories, transactions, budgets, portfolios, holdings, sips, other_investments, kite_orders, loans, loan_payments, bucket_list, lend_borrow, lend_repayments, lend_borrow_additions, credit_cards, credit_card_transactions, scholarships, scholarship_payments, money_rules, recurring_transactions, money_profiles, money_profile_entries, recurring_money_profile_entries, budget_months, budget_month_categories, vault_items: vaultItemsSafe, pending_transactions: pendingTransactionsSafe, sms_parse_patterns, chit_funds, chit_fund_payments, profile: profileSafe }))
+      return cors(NextResponse.json({ scheduled_transactions, accounts, categories, transactions, budgets, portfolios, holdings, sips, other_investments, kite_orders, loans, loan_payments, bucket_list, lend_borrow, lend_repayments, lend_borrow_additions, credit_cards, credit_card_transactions, scholarships, scholarship_payments, money_rules, recurring_transactions, money_profiles, money_profile_entries, recurring_money_profile_entries, budget_months, budget_month_categories, vault_items: vaultItemsSafe, chit_funds, chit_fund_payments, profile: profileSafe }))
     }
 
     // ---- PRICES: Yahoo Finance fallback (public); Kite when creds set ----

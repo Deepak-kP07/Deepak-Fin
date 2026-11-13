@@ -585,6 +585,9 @@ export function AuthScreen({ onAuth, initialError, initialMode = 'landing', init
                 {mode === 'login' ? 'Create a new account' : 'I already have an account'}
               </button>
               <div className="mt-8 flex items-center justify-center gap-2 text-xs text-slate-500"><ShieldCheck size={14} className="text-emerald-300" />Your data is protected by Supabase Auth</div>
+              <p className="mt-3 text-center text-[11px] text-slate-500">
+                {mode === 'signup' ? 'By creating an account you agree to our ' : ''}<a href="/privacy" target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-slate-300">Privacy policy</a>
+              </p>
             </div>
           </div>
         )}

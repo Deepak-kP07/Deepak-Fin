@@ -3,7 +3,7 @@ import { requireUser } from '@/lib/server/auth'
 import { revealVaultItem } from '@/lib/server/services/vault'
 
 // The only route that ever returns plaintext card/account secrets — never included in
-// /finance/summary. Two modes: the default full reveal (card/account number, PIN/CVV/expiry/
+// /finance/summary. Two modes: the default full reveal (card/account number, expiry/
 // IFSC/branch/notes, everything) only ever runs from an explicit "Tap to reveal" or the edit
 // form. ?preview=1 is the one exception that IS prefetched (on every vault card mount) — but it
 // still decrypts everything server-side only to strip the response down to just the holder name,

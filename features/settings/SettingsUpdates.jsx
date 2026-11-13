@@ -8,6 +8,15 @@ import { triggerAppUpdate } from '@/lib/pwaUpdate'
 // whenever something user-visible ships; no need to log every internal fix.
 const CHANGELOG = [
   {
+    date: '13 Nov 2026',
+    points: [
+      'New: you can now permanently delete your account from Settings > Profile > Delete account, or on the web at personalfin.site/delete-account.',
+      'New: a privacy policy page explaining exactly what the app stores and who it\'s shared with — linked from sign-up and Settings > Profile.',
+      'Vault no longer stores card CVVs or PINs. Any you saved before have been removed — your card number and expiry are kept.',
+      'SMS auto-detect has been removed, along with the Pending screen. The Android app no longer asks for SMS access.',
+    ],
+  },
+  {
     date: '7 Oct 2026',
     points: [
       'Syncing a credit card\'s outstanding with your statement now records the difference as a "Balance sync" entry in the card\'s activity and in Transactions, just like account syncs — so you can see what changed, and delete it to undo.',

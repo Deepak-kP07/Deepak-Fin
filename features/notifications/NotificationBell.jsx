@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Bell, CheckCheck, Coins, CreditCard, Inbox, Landmark, Mail, RefreshCw, Repeat, Target, UserPlus, Users } from 'lucide-react'
+import { Bell, CheckCheck, Coins, CreditCard, Landmark, Mail, RefreshCw, Repeat, Target, UserPlus, Users } from 'lucide-react'
 import { BottomSheet } from '@/components/shared/BottomSheet'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { useIsMobile } from '@/hooks/use-mobile'
@@ -11,7 +11,7 @@ import { relativeTime } from '@/lib/format'
 const TYPE_ICON = {
   card_due: CreditCard, loan_due: Landmark, chit_fund_due: Coins, budget_overspend: Target,
   recurring_generated: Repeat, recurring_money_profile_generated: Repeat,
-  pending_review_digest: Inbox, sms_detected: Inbox, app_update: RefreshCw,
+  app_update: RefreshCw,
   share_invite: UserPlus, share_accepted: Users, report_ready: Mail,
 }
 

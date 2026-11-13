@@ -13,8 +13,7 @@ function groupNumber(v) {
   return String(v || '').replace(/\s+/g, '').replace(/(.{4})/g, '$1 ').trim()
 }
 
-// Deliberately excludes pin/cvv even though they're on screen at this point (the manual reveal
-// shows everything) — sharing is for handing someone your account/card number, not your PIN.
+// Sharing is for handing someone your account/card number — expiry and notes stay out of it.
 // Carries the same referral signature the page-level share button would have, since every real
 // share now doubles as a mention of the app instead of that button existing on its own.
 function shareCaption(item, secrets) {
@@ -147,7 +146,7 @@ export function VaultCardFlip({ item, onEdit, onDelete, toast }) {
 
   // The front shows the real number and holder name without a tap — unlike the back's `secrets`
   // above, which stays gated behind an explicit reveal. `?preview=1` decrypts server-side but
-  // strips PIN/CVV/expiry/IFSC/branch/notes before responding, so those never reach the client
+  // strips expiry/IFSC/branch/notes before responding, so those never reach the client
   // just from a card being on screen.
   const [preview, setPreview] = useState(null)
   useEffect(() => {
@@ -257,8 +256,7 @@ export function VaultCardFlip({ item, onEdit, onDelete, toast }) {
                         </button>
                       )}
                     </div>
-                    <div>Expiry: <span className="text-white">{secrets.expiry_month || '--'}/{secrets.expiry_year || '--'}</span> &nbsp; CVV: <span className="text-white">{secrets.cvv || '—'}</span></div>
-                    {secrets.pin && <div>PIN: <span className="text-white">{secrets.pin}</span></div>}
+                    <div>Expiry: <span className="text-white">{secrets.expiry_month || '--'}/{secrets.expiry_year || '--'}</span></div>
                   </>
                 )}
                 {secrets.notes && <div className="pt-1 text-slate-400">{capitalizeFirst(secrets.notes)}</div>}
