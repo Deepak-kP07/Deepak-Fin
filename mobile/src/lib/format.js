@@ -31,3 +31,12 @@ export function timeLabel(t) {
   if (Number.isNaN(hn)) return ''
   return `${((hn + 11) % 12) + 1}:${m} ${hn >= 12 ? 'PM' : 'AM'}`
 }
+
+// Same output as the web's formatDate ("05-Jan-2026"), without relying on toLocaleString. A bare
+// YYYY-MM-DD is read as a local date so it never rolls back a day.
+export function formatDate(d) {
+  if (!d) return ''
+  const dt = typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d) ? new Date(`${d}T00:00:00`) : new Date(d)
+  if (Number.isNaN(dt.getTime())) return ''
+  return `${String(dt.getDate()).padStart(2, '0')}-${MONTH_NAMES[dt.getMonth()].slice(0, 3)}-${dt.getFullYear()}`
+}

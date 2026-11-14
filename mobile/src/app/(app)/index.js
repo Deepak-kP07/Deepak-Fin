@@ -15,6 +15,9 @@ import { AccountsView } from '../../views/AccountsView'
 import { CreditCardsView } from '../../views/CreditCardsView'
 import { SettingsView } from '../../views/SettingsView'
 import { VaultView } from '../../views/VaultView'
+import { LoansView } from '../../views/LoansView'
+import { LoanForm, LoanPaymentForm } from '../../views/forms/LoanForms'
+import { toast } from '../../lib/toast'
 import { AccountForm } from '../../views/forms/AccountForm'
 import { CreditCardForm, CsvImport, RecurringManager } from '../../views/forms/MiscForms'
 import { tw } from '../../lib/tw'
@@ -29,7 +32,7 @@ import { enablePush, pushPermissionStatus } from '../../lib/push'
 // the Dashboard header, the configurable 3-slot bottom nav + "More" sheet, and the floating
 // quick-add button. Modules not yet ported open their interim native screens.
 const INTERIM_ROUTES = {
-  loans: '/loans', lend: '/lend', chitfunds: '/chits', family_company: '/family', budgets: '/budgets',
+  lend: '/lend', chitfunds: '/chits', family_company: '/family', budgets: '/budgets',
   investments: '/investments', scholarships: '/scholarships', bucket: '/bucket', insights: '/insights',
 }
 const PUSH_PROMPTED_KEY = 'push_prompted'
@@ -74,6 +77,8 @@ export default function Shell() {
   const [recurringOpen, setRecurringOpen] = useState(false)
   const [csvOpen, setCsvOpen] = useState(false)
   const [typeConfirm, setTypeConfirm] = useState(null)
+  const [loanForm, setLoanForm] = useState({ open: false, editing: null })
+  const [loanPay, setLoanPay] = useState(null)
   useEffect(() => { setActiveDetailId(null) }, [view])
 
   useEffect(() => { const t = setTimeout(() => setHasGreetedOnce(true), 2200); return () => clearTimeout(t) }, [])
@@ -109,6 +114,7 @@ export default function Shell() {
   const runFabAction = () => {
     if (view === 'accounts') return activeDetailId ? openTxForm({ source: activeDetailId }) : setAccountForm({ open: true, editing: null })
     if (view === 'cards') return activeDetailId ? openTxForm({ source: `cc:${activeDetailId}` }) : setCardForm({ open: true, editing: null })
+    if (view === 'loans') { const loan = data.loans.find((l) => l.id === activeDetailId); return loan ? setLoanPay(loan) : setLoanForm({ open: true, editing: null }) }
     return openTxForm()
   }
   const saveProfile = async (body) => { try { await api('/finance/profile', { method: 'PATCH', body }); await refresh() } catch (e) { Alert.alert('Could not save', e.message) } }
@@ -143,6 +149,27 @@ export default function Shell() {
       } },
     ])
   })
+  // Loans — same handlers as the PWA's Shell (app/page.js).
+  const deleteLoan = (l, after) => confirmDelete(`Delete loan "${l.name}"?`, 'All payment records will be removed.', async () => { try { await api(`/finance/loans/${l.id}`, { method: 'DELETE' }); after?.(); toast.push('Loan deleted'); await refresh() } catch (e) { toast.push(e.message, 'error') } })
+  const deleteLoanPayment = (p) => confirmDelete('Reverse this payment?', 'The linked transaction and outstanding will restore.', async () => { try { await api(`/finance/loan_payments/${p.id}`, { method: 'DELETE' }); toast.push('Payment reversed'); await refresh() } catch { toast.push('Delete failed', 'error') } })
+  // Reversals must run one at a time, newest first — each restores from its own snapshot.
+  const deleteLoanPaymentBulk = (payments) => new Promise((resolve) => {
+    const n = payments.length
+    if (n === 0) return resolve(false)
+    Alert.alert(`Reverse ${n} payment${n === 1 ? '' : 's'}?`, 'The linked transactions and outstanding will restore.', [
+      { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+      { text: 'Reverse', style: 'destructive', onPress: async () => {
+        const ordered = [...payments].sort((a, b) => (a.payment_date === b.payment_date ? new Date(b.created_at) - new Date(a.created_at) : new Date(b.payment_date) - new Date(a.payment_date)))
+        let failed = 0
+        for (const p of ordered) { try { await api(`/finance/loan_payments/${p.id}`, { method: 'DELETE' }) } catch { failed++ } }
+        await refresh()
+        toast.push(failed > 0 ? `${n - failed} of ${n} payments reversed — ${failed} failed` : `${n} payment${n === 1 ? '' : 's'} reversed`, failed > 0 ? 'error' : undefined)
+        resolve(true)
+      } },
+    ])
+  })
+  const syncLoanOutstanding = async (loan, target) => { try { await api('/finance/loan_payments', { method: 'POST', body: { loan_id: loan.id, type: 'adjustment', target_outstanding: target } }); toast.push('Outstanding synced'); await refresh() } catch (e) { toast.push(e.message || 'Sync failed', 'error') } }
+  const dropdownAccounts = data.accounts.filter((a) => a.is_active !== false)
   const toggleIncludeInNetWorth = async (table, row) => { try { await api(`/finance/${table}/${row.id}`, { method: 'PATCH', body: { include_in_net_worth: row.include_in_net_worth === false } }); await refresh() } catch { Alert.alert('Update failed') } }
   const toggleIncludeInNetWorthGroup = async (table, rows, next) => { try { await Promise.all(rows.map((r) => api(`/finance/${table}/${r.id}`, { method: 'PATCH', body: { include_in_net_worth: next } }))); await refresh() } catch { Alert.alert('Update failed') } }
   const deleteUserAccount = () => setTypeConfirm({
@@ -211,6 +238,11 @@ export default function Shell() {
           onSyncOutstanding={async (card, target) => { try { await api(`/finance/credit_cards/${card.id}/sync_outstanding`, { method: 'POST', body: { target_outstanding: target } }); await refresh() } catch (e) { Alert.alert('Sync failed', e.message) } }}
           onDelete={(card, after) => confirmDelete(`Delete card "${card.name}"?`, 'All linked spends will be removed.', async () => { try { await api(`/finance/credit_cards/${card.id}`, { method: 'DELETE' }); after?.(); await refresh() } catch (e) { Alert.alert('Delete failed', e.message) } })} />,
       )}
+      {view === 'loans' && page(
+        <LoansView data={data} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onDetailChange={setActiveDetailId}
+          onAdd={() => setLoanForm({ open: true, editing: null })} onEdit={(l) => setLoanForm({ open: true, editing: l })} onDelete={deleteLoan}
+          onPay={setLoanPay} onDeletePayment={deleteLoanPayment} onDeletePaymentBulk={deleteLoanPaymentBulk} onSync={syncLoanOutstanding} />,
+      )}
       {view === 'profile' && page(
         <SettingsView data={data} user={user} refresh={refresh} section={settingsSection} onSectionChange={setSettingsSection} onSaveProfile={saveProfile}
           onDeleteAccount={deleteUserAccount} onClearAllData={clearAllData} onSignOut={() => Alert.alert('Sign out?', '', [{ text: 'Cancel', style: 'cancel' }, { text: 'Sign out', onPress: signOut }])}
@@ -260,6 +292,8 @@ export default function Shell() {
       <CreditCardForm open={cardForm.open} editing={cardForm.editing} onClose={() => setCardForm({ open: false, editing: null })} onSaved={async () => { setCardForm({ open: false, editing: null }); await refresh() }} />
       <RecurringManager open={recurringOpen} onClose={() => setRecurringOpen(false)} data={data} refresh={refresh} showMoney={showMoney} />
       <CsvImport open={csvOpen} onClose={() => setCsvOpen(false)} data={data} refresh={refresh} />
+      <LoanForm open={loanForm.open} editing={loanForm.editing} accounts={dropdownAccounts} onClose={() => setLoanForm({ open: false, editing: null })} onSaved={async () => { setLoanForm({ open: false, editing: null }); await refresh() }} />
+      <LoanPaymentForm open={!!loanPay} loan={loanPay} accounts={dropdownAccounts} creditCards={data.credit_cards || []} payments={(data.loan_payments || []).filter((p) => p.loan_id === loanPay?.id)} onClose={() => setLoanPay(null)} onSaved={async () => { setLoanPay(null); await refresh() }} />
       <TypeToConfirm state={typeConfirm} onClose={async (ok) => { const s = typeConfirm; setTypeConfirm(null); if (ok) await s.run() }} />
     </View>
   )

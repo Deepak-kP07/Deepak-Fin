@@ -332,6 +332,15 @@
         ],
         "createdAt": "2026-11-14T06:27:42.790Z",
         "reason": "false positive: the Paused chip is slate-400 text on a 6% white wash (not a coloured background), copied from features/recurring/RecurringManager.jsx"
+      },
+      {
+        "rule": "gray-on-color",
+        "value": "*",
+        "files": [
+          "mobile/src/views/LoansView.js"
+        ],
+        "createdAt": "2026-11-14T09:06:41.935Z",
+        "reason": "Claude: label sits on a 3% emerald tint (bg-emerald-500/[.03]) copied verbatim from the PWA's LoanDetailView; effectively the neutral card surface"
       }
     ]
   }

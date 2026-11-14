@@ -3,7 +3,14 @@ import { api } from '../lib/api'
 import { DEFAULT_ACCENT } from '../lib/theme'
 import { useAuth } from './AuthProvider'
 
-const EMPTY = { accounts: [], categories: [], transactions: [], credit_cards: [], profile: null }
+// Same shape as the PWA's initial state, so every module can read its arrays before the first load.
+const EMPTY = {
+  accounts: [], categories: [], transactions: [], budgets: [], portfolios: [], holdings: [], sips: [], other_investments: [], kite_orders: [],
+  loans: [], loan_payments: [], bucket_list: [], lend_borrow: [], lend_repayments: [], lend_borrow_additions: [], credit_cards: [],
+  credit_card_transactions: [], scholarships: [], scholarship_payments: [], money_rules: [], recurring_transactions: [], money_profiles: [],
+  money_profile_entries: [], recurring_money_profile_entries: [], budget_months: [], budget_month_categories: [], vault_items: [],
+  chit_funds: [], chit_fund_payments: [], scheduled_transactions: [], profile: null,
+}
 const DataContext = createContext(null)
 
 // One /finance/summary load hydrates everything, the same model as the web app: mutations call

@@ -11,4 +11,4 @@ export { currentValueOf, OTHER_INVESTMENT_CATEGORIES } from '@/lib/otherInvestme
 export { resolveModuleSettings, orderedEnabledKeys, resolveDashboardWidgets, resolveMobileNavSlots, resolveQuickActionSlots } from '@/lib/moduleSettings'
 export { computeDashboardMetrics } from '@/lib/dashboardMetrics'
 export { perspectiveType, canLogRepayment, canDeleteRecord, roleFor as lendRole } from '@/lib/lendBorrowSharing'
-export { liveOutstanding, paymentTypeLabel, money as webMoney } from '@/lib/format'
+export { liveOutstanding, paymentTypeLabel, monthAbbr, addMonthsToDate, ordinal, money as webMoney } from '@/lib/format'
