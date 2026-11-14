@@ -18,7 +18,7 @@ function RootStack() {
   if (loading) return <Loading />
   const signedIn = !!user
   return (
-    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
+    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}>
       <Stack.Protected guard={signedIn}>
         <Stack.Screen name="(app)" />
       </Stack.Protected>
@@ -36,7 +36,6 @@ export default function RootLayout() {
         <DataProvider>
           <ThemeProvider>
             <HiddenTxProvider>
-              <StatusBar style="light" />
               <RootStack />
             </HiddenTxProvider>
           </ThemeProvider>

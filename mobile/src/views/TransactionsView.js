@@ -186,11 +186,11 @@ export function TransactionsView({ data, showMoney, onToggleMoney, onOpenTxForm,
         </View>
         <View className="flex-row flex-wrap items-center justify-end gap-2">
           <View className={tw('flex-row items-center rounded-xl border', customRange ? 'border-accent-300/40 bg-accent-400/10' : 'border-white/10 light:border-black/10')}>
-            <Pressable disabled={!!customRange} onPress={() => shiftMonth(-1)} className={tw('rounded-l-xl p-2.5', customRange && 'opacity-40')}><Icon as={ChevronLeft} size={15} className="text-slate-400 light:text-slate-500" /></Pressable>
+            <Pressable disabled={!!customRange} onPress={() => shiftMonth(-1)} className={tw('rounded-l-xl p-2.5', customRange && 'opacity-40')}><Icon as={ChevronLeft} size={15} className={tw('text-slate-400 light:text-slate-500')} /></Pressable>
             <Pressable onPress={() => { setRangeDraft(customRange || { start: '', end: '' }); setRangeOpen(true) }} className="px-0.5">
               <Text className={tw('text-center text-xs font-semibold uppercase tracking-wider', customRange ? 'text-accent-200 light:text-accent-700' : 'text-slate-300 light:text-slate-700')}>{customRange ? 'Custom' : MONTH_NAMES[monthCursor.month].slice(0, 3)}</Text>
             </Pressable>
-            <Pressable disabled={!!customRange} onPress={() => shiftMonth(1)} className={tw('rounded-r-xl p-2.5', customRange && 'opacity-40')}><Icon as={ChevronRight} size={15} className="text-slate-400 light:text-slate-500" /></Pressable>
+            <Pressable disabled={!!customRange} onPress={() => shiftMonth(1)} className={tw('rounded-r-xl p-2.5', customRange && 'opacity-40')}><Icon as={ChevronRight} size={15} className={tw('text-slate-400 light:text-slate-500')} /></Pressable>
           </View>
           {data.profile?.has_hidden_pin && (
             <Pressable onPress={() => (hiddenRevealed ? lockHidden() : pinDialog.ask({ title: 'Show hidden transactions', message: 'Enter your PIN. They lock again when you leave the app.', submit: unlockHidden }))}
@@ -198,16 +198,16 @@ export function TransactionsView({ data, showMoney, onToggleMoney, onOpenTxForm,
               <Icon as={hiddenRevealed ? LockOpen : Lock} size={16} className={hiddenRevealed ? 'text-accent-200 light:text-accent-700' : 'text-slate-400 light:text-slate-500'} />
             </Pressable>
           )}
-          <Pressable onPress={onToggleMoney} className={tw(iconBtn)}><Icon as={showMoney ? Eye : EyeOff} size={16} className="text-slate-400 light:text-slate-500" /></Pressable>
+          <Pressable onPress={onToggleMoney} className={tw(iconBtn)}><Icon as={showMoney ? Eye : EyeOff} size={16} className={tw('text-slate-400 light:text-slate-500')} /></Pressable>
         </View>
       </View>
       {pinDialog.view}
 
       {selectMode ? (
         <View className="flex-row items-center gap-2">
-          <Pressable onPress={exitSelectMode} className={tw(iconBtn)}><Icon as={X} size={16} className="text-slate-400 light:text-slate-500" /></Pressable>
+          <Pressable onPress={exitSelectMode} className={tw(iconBtn)}><Icon as={X} size={16} className={tw('text-slate-400 light:text-slate-500')} /></Pressable>
           <Text className={tw('flex-1 text-sm font-medium text-white light:text-slate-900')}>{selectedIds.size} selected</Text>
-          <Pressable disabled={selectedIds.size === 0} onPress={handleBulkDelete} className={tw('rounded-xl border border-rose-300/30 bg-rose-300/10 p-2.5', selectedIds.size === 0 && 'opacity-40')}><Icon as={Trash2} size={16} className="text-rose-300 light:text-rose-700" /></Pressable>
+          <Pressable disabled={selectedIds.size === 0} onPress={handleBulkDelete} className={tw('rounded-xl border border-rose-300/30 bg-rose-300/10 p-2.5', selectedIds.size === 0 && 'opacity-40')}><Icon as={Trash2} size={16} className={tw('text-rose-300 light:text-rose-700')} /></Pressable>
         </View>
       ) : (
         <View className="flex-row gap-2">
@@ -229,14 +229,14 @@ export function TransactionsView({ data, showMoney, onToggleMoney, onOpenTxForm,
           <View><Text className={tw('text-sm text-slate-300 light:text-slate-700')}>Account</Text><Select value={accountId} onChange={setAccountId} options={accountOptions} className={filterSelect} textClassName="text-slate-300 light:text-slate-700" title="Account" /></View>
           <View><Text className={tw('text-sm text-slate-300 light:text-slate-700')}>Category</Text><Select value={categoryId} onChange={setCategoryId} options={categoryOptions} className={filterSelect} textClassName="text-slate-300 light:text-slate-700" title="Category" /></View>
           <Pressable onPress={() => setChartView((v) => !v)} className={tw('flex-row items-center justify-between rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-4 py-3')}>
-            <View className="flex-row items-center gap-2"><Icon as={PieChart} size={15} className="text-slate-300 light:text-slate-700" /><Text className={tw('text-sm text-slate-300 light:text-slate-700')}>Chart view</Text></View>
+            <View className="flex-row items-center gap-2"><Icon as={PieChart} size={15} className={tw('text-slate-300 light:text-slate-700')} /><Text className={tw('text-sm text-slate-300 light:text-slate-700')}>Chart view</Text></View>
             <ToggleSwitch checked={chartView} onChange={() => setChartView((v) => !v)} />
           </Pressable>
           <View className={tw('border-t border-white/10 light:border-black/10 pt-2')}>
             <Pressable onPress={() => { setMobileFiltersOpen(false); onImport() }} className="rounded-lg px-1 py-2.5"><Text className={tw('text-sm text-slate-300 light:text-slate-700')}>Import CSV</Text></Pressable>
             <Pressable onPress={exportCsv} className="rounded-lg px-1 py-2.5"><Text className={tw('text-sm text-slate-300 light:text-slate-700')}>Export as CSV</Text></Pressable>
             <Pressable onPress={exportPdf} className="rounded-lg px-1 py-2.5"><Text className={tw('text-sm text-slate-300 light:text-slate-700')}>Export as PDF</Text></Pressable>
-            <Pressable onPress={() => { setMobileFiltersOpen(false); onOpenRecurring() }} className="flex-row items-center gap-2 rounded-lg px-1 py-2.5"><Icon as={Repeat} size={14} className="text-slate-300 light:text-slate-700" /><Text className={tw('text-sm text-slate-300 light:text-slate-700')}>Recurring transactions</Text></Pressable>
+            <Pressable onPress={() => { setMobileFiltersOpen(false); onOpenRecurring() }} className="flex-row items-center gap-2 rounded-lg px-1 py-2.5"><Icon as={Repeat} size={14} className={tw('text-slate-300 light:text-slate-700')} /><Text className={tw('text-sm text-slate-300 light:text-slate-700')}>Recurring transactions</Text></Pressable>
           </View>
         </View>
       </BottomSheet>
@@ -315,7 +315,7 @@ export function TransactionsView({ data, showMoney, onToggleMoney, onOpenTxForm,
                   return (
                     <View className={tw('flex-row items-center justify-between gap-3 bg-white/[.02] light:bg-black/[.02] px-5 py-2', i > 0 && 'border-t border-white/5 light:border-black/5')}>
                       <View className="flex-row items-center gap-2">
-                        <View className="h-6 w-6 items-center justify-center rounded-lg bg-white/[.06] light:bg-black/[.05]"><Text className={tw('text-[11px] font-semibold text-slate-300 light:text-slate-700')}>{day}</Text></View>
+                        <View className={tw('h-6 w-6 items-center justify-center rounded-lg bg-white/[.06] light:bg-black/[.05]')}><Text className={tw('text-[11px] font-semibold text-slate-300 light:text-slate-700')}>{day}</Text></View>
                         <Text className="text-xs text-slate-500">{weekday} · {month}</Text>
                       </View>
                       {dayTotal && (
@@ -332,7 +332,7 @@ export function TransactionsView({ data, showMoney, onToggleMoney, onOpenTxForm,
                   {selectMode ? (
                     selectedIds.has(t.id) ? <Icon as={CheckCircle2} size={22} className="text-accent-400" /> : <View className={tw('h-[22px] w-[22px] rounded-full border-2 border-white/20 light:border-black/20')} />
                   ) : (
-                    <View className="h-10 w-10 items-center justify-center rounded-xl bg-white/[.05] light:bg-black/[.035]">
+                    <View className={tw('h-10 w-10 items-center justify-center rounded-xl bg-white/[.05] light:bg-black/[.035]')}>
                       {(() => { const I = isTransfer ? ArrowLeftRight : CatIcon || (isIn ? ArrowUpRight : ArrowDownRight); return <I size={16} color={iconColor} /> })()}
                     </View>
                   )}

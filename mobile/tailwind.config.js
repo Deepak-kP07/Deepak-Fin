@@ -3,14 +3,38 @@
 // `glassy:`) are resolved at runtime by src/lib/tw.js instead of CSS ancestor selectors (native has
 // none). So every class those variants can switch to must also exist un-prefixed: the content
 // transform below strips the prefixes while scanning, so Tailwind generates the bare classes.
+const fs = require('fs')
+const path = require('path')
 const ACCENT_STEPS = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950]
+
+// Every `light:x` / `glassy:x` (also nested, e.g. `hover:light:x`) used in src/ → safelist the bare
+// class so it's generated. (Tailwind's content `transform` didn't apply under this setup, so the
+// classes those variants switch to were silently missing — that broke the Light theme.)
+function themeVariantSafelist() {
+  const out = new Set()
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name)
+      if (entry.isDirectory()) walk(full)
+      else if (/\.jsx?$/.test(entry.name)) {
+        const src = fs.readFileSync(full, 'utf8')
+        for (const m of src.matchAll(/[\w:-]*\b(?:light|glassy):[^\s"'`{}()]+/g)) {
+          const bare = m[0].split(':').filter((p) => p !== 'light' && p !== 'glassy').join(':')
+          if (bare) out.add(bare)
+        }
+      }
+    }
+  }
+  walk(path.join(__dirname, 'src'))
+  // The plain utilities src/lib/tw.js expands the glass-* classes into.
+  'bg-white/[.07] border-white/10 bg-[#0c0f18]/[.78] border-white/[.09] border-white/[.11] bg-accent-500/[.16] border-accent-300/[.22]'.split(' ').forEach((c) => out.add(c))
+  return [...out]
+}
 
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  content: {
-    files: ['./src/**/*.{js,jsx}'],
-    transform: { js: (src) => src.replace(/\b(?:light|glassy):/g, ' ') },
-  },
+  content: ['./src/**/*.{js,jsx}'],
+  safelist: themeVariantSafelist(),
   presets: [require('nativewind/preset')],
   theme: {
     extend: {

@@ -94,7 +94,7 @@ function ProfilePanel({ data, user, onSaveProfile, onDeleteAccount }) {
       <View className={tw('mt-10 border-t border-white/10 light:border-black/10 pt-6')}>
         <Text className={tw(T.title)}>Delete account</Text>
         <Text className="mt-1 text-xs leading-5 text-slate-500">Permanently deletes your login, every record across the app, and every file you uploaded. This can't be undone.</Text>
-        <Pressable onPress={onDeleteAccount} className="mt-3 flex-row items-center gap-2 self-start rounded-xl border border-rose-400/20 bg-rose-400/10 px-3.5 py-2.5"><Icon as={Trash2} size={14} className="text-rose-300 light:text-rose-700" /><Text className={tw('text-xs font-medium text-rose-300 light:text-rose-700')}>Delete my account</Text></Pressable>
+        <Pressable onPress={onDeleteAccount} className="mt-3 flex-row items-center gap-2 self-start rounded-xl border border-rose-400/20 bg-rose-400/10 px-3.5 py-2.5"><Icon as={Trash2} size={14} className={tw('text-rose-300 light:text-rose-700')} /><Text className={tw('text-xs font-medium text-rose-300 light:text-rose-700')}>Delete my account</Text></Pressable>
         <Pressable onPress={() => WebBrowser.openBrowserAsync(`${WEB_URL}/privacy`)} className="mt-4"><Text className="text-[11px] text-slate-500 underline">Privacy policy</Text></Pressable>
       </View>
     </View>
@@ -161,7 +161,7 @@ function NotificationsPanel({ data, onSaveProfile }) {
       <View className={tw(CARD)}>
         <Text className={tw(T.title)}>Push notifications</Text>
         <View className={tw('mt-3', ROW)}>
-          <Icon as={Bell} size={16} className="text-slate-400 light:text-slate-500" />
+          <Icon as={Bell} size={16} className={tw('text-slate-400 light:text-slate-500')} />
           <View className="flex-1"><Text className={tw(T.body)}>Notify this device</Text><Text className="mt-0.5 text-xs text-slate-500">Credit card bills due soon, loan EMIs due soon, recurring transactions added, and budget overspend — nothing else.</Text></View>
           {status === null || busy ? <ActivityIndicator /> : <ToggleSwitch checked={status === 'on'} onChange={toggle} />}
         </View>
@@ -227,7 +227,7 @@ function MobileNavPanel({ data, onSaveProfile }) {
     <View className={tw(CARD)}>
       <Text className={tw(T.title)}>Mobile nav</Text>
       <Text className="mt-1 text-[11px] text-slate-500">This is your phone screen. Tap a spot in the bottom nav or the quick actions to choose what goes there. Home always stays in the bottom nav, but you can move it to any of the 3 positions.</Text>
-      <View className="mt-5 self-center w-full max-w-[280px] rounded-[40px] border border-white/15 light:border-black/15 p-2">
+      <View className={tw('mt-5 self-center w-full max-w-[280px] rounded-[40px] border border-white/15 light:border-black/15 p-2')}>
         <View className={tw('overflow-hidden rounded-[34px] bg-[#080b12] light:bg-[#eef1f6]')}>
           <View className="px-4 pt-8">
             <Text className="text-[9px] uppercase tracking-widest text-slate-500">Net worth</Text>
@@ -241,12 +241,12 @@ function MobileNavPanel({ data, onSaveProfile }) {
               ) })}
             </View>
           </View>
-          <View className="mt-5 gap-2 px-4"><View className="h-3 w-2/3 rounded-full bg-white/[.05] light:bg-black/[.04]" /><View className="h-14 rounded-2xl bg-white/[.04] light:bg-black/[.03]" /></View>
+          <View className="mt-5 gap-2 px-4"><View className={tw('h-3 w-2/3 rounded-full bg-white/[.05] light:bg-black/[.04]')} /><View className={tw('h-14 rounded-2xl bg-white/[.04] light:bg-black/[.03]')} /></View>
           <View className="h-6" />
           <View className={tw('flex-row border-t border-white/10 light:border-black/10 bg-black/40 light:bg-white/70 px-1')}>
             {navSlots.map((key, i) => { const it = find(navDest, key); return (
               <Pressable key={i} onPress={() => setPicking({ group: 'nav', index: i })} className="flex-1 items-center gap-0.5 py-1.5">
-                {it ? <Icon as={it.icon} size={15} className="text-slate-300 light:text-slate-600" /> : null}
+                {it ? <Icon as={it.icon} size={15} className={tw('text-slate-300 light:text-slate-600')} /> : null}
                 <Text numberOfLines={1} className={tw('text-[8px] text-slate-300 light:text-slate-600')}>{it?.label}</Text>
               </Pressable>
             ) })}
@@ -258,7 +258,7 @@ function MobileNavPanel({ data, onSaveProfile }) {
         <View className="flex-row flex-wrap gap-2 pb-4">
           {options.map((it) => (
             <Pressable key={it.key} onPress={() => choose(it.key)} style={{ width: '31%' }} className={tw('items-center gap-1 rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-2.5')}>
-              <Icon as={it.icon} size={16} className="text-accent-300 light:text-accent-700" />
+              <Icon as={it.icon} size={16} className={tw('text-accent-300 light:text-accent-700')} />
               <Text className={tw('text-center text-[10px] text-slate-300 light:text-slate-700')}>{it.label}</Text>
             </Pressable>
           ))}
@@ -294,7 +294,7 @@ function CategoriesPanel({ data, refresh }) {
     <View className={tw(CARD)}>
       <View className="flex-row items-center justify-between gap-2">
         <Text className={tw(T.title)}>Categories</Text>
-        <Pressable onPress={() => setEditing(null)} className="flex-row items-center gap-1.5 rounded-xl bg-accent-400/15 px-3 py-1.5"><Icon as={Plus} size={13} className="text-accent-200 light:text-accent-700" /><Text className={tw('text-xs font-semibold text-accent-200 light:text-accent-700')}>Add</Text></Pressable>
+        <Pressable onPress={() => setEditing(null)} className="flex-row items-center gap-1.5 rounded-xl bg-accent-400/15 px-3 py-1.5"><Icon as={Plus} size={13} className={tw('text-accent-200 light:text-accent-700')} /><Text className={tw('text-xs font-semibold text-accent-200 light:text-accent-700')}>Add</Text></Pressable>
       </View>
       <Text className="mt-1 text-xs text-slate-500">Reorder how categories appear in pickers, and choose which modules each one shows up in.</Text>
       <Pills value={type} onChange={setType} options={[{ value: 'expense', label: 'Expense' }, { value: 'income', label: 'Income' }]} />
@@ -308,7 +308,7 @@ function CategoriesPanel({ data, refresh }) {
                 <View className="h-5 w-5 items-center justify-center rounded-md" style={{ backgroundColor: `${c.color || '#94a3b8'}33` }}><I size={12} color={c.color || '#94a3b8'} /></View>
                 <Text numberOfLines={1} className={tw('min-w-0 flex-1 text-sm text-white light:text-slate-900')}>{c.name}</Text>
                 <Pressable onPress={() => setEditing(c)} className="rounded-lg p-1.5"><Icon as={Pencil} size={13} className="text-slate-500" /></Pressable>
-                <Pressable onPress={() => remove(c)} className="rounded-lg p-1.5"><Icon as={Trash2} size={13} className="text-rose-300/70 light:text-rose-700" /></Pressable>
+                <Pressable onPress={() => remove(c)} className="rounded-lg p-1.5"><Icon as={Trash2} size={13} className={tw('text-rose-300/70 light:text-rose-700')} /></Pressable>
               </View>
               <View className="mt-3 flex-row flex-wrap gap-1.5">
                 {MODULE_OPTIONS.map((m) => {
@@ -387,7 +387,7 @@ function HiddenPanel({ data, onHiddenPinChanged, onSignOut }) {
   const forgot = async () => { const r = await post('/reset'); if (r.ok) { onHiddenPinChanged(false); Alert.alert('PIN cleared — set a new one') } else Alert.alert(r.error) }
   return (
     <View className={tw(CARD)}>
-      <View className="flex-row items-center gap-2"><Icon as={Lock} size={15} className="text-accent-300 light:text-accent-700" /><Text className={tw(T.title)}>Hidden transactions</Text></View>
+      <View className="flex-row items-center gap-2"><Icon as={Lock} size={15} className={tw('text-accent-300 light:text-accent-700')} /><Text className={tw(T.title)}>Hidden transactions</Text></View>
       <Text className="mt-1.5 text-xs leading-5 text-slate-500">Turn on "Hide this transaction" when adding one to keep it out of every list. It still counts in your balances, totals and charts. To see hidden transactions, tap the lock on the Transactions page and enter this PIN. They lock again when you leave the app.</Text>
       <View className={tw('mt-4', ROW, 'justify-between')}>
         <View><Text className={tw(T.body)}>PIN</Text><Text className="mt-0.5 text-xs text-slate-500">{hasPin ? 'Set' : 'Not set — needed before you can hide a transaction'}</Text></View>
@@ -424,7 +424,7 @@ function MoneyRulesPanel({ data, refresh }) {
               <Pressable onPress={async () => { await api(`/finance/money_rules/${r.id}`, { method: 'PATCH', body: { is_active: !r.is_active } }).catch(() => {}); await refresh() }} className={tw('rounded-lg px-3 py-1.5', r.is_active ? 'bg-emerald-400/15' : 'bg-white/[.06] light:bg-black/[.04]')}>
                 <Text className={tw('text-xs font-medium', r.is_active ? 'text-emerald-200 light:text-emerald-700' : 'text-slate-400 light:text-slate-500')}>{r.is_active ? 'Active' : 'Off'}</Text>
               </Pressable>
-              <Pressable onPress={() => Alert.alert(`Delete rule "${r.rule_text}"?`, '', [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: async () => { await api(`/finance/money_rules/${r.id}`, { method: 'DELETE' }).catch(() => {}); await refresh() } }])} className="rounded-lg p-1.5"><Icon as={Trash2} size={13} className="text-rose-300/70 light:text-rose-700" /></Pressable>
+              <Pressable onPress={() => Alert.alert(`Delete rule "${r.rule_text}"?`, '', [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: async () => { await api(`/finance/money_rules/${r.id}`, { method: 'DELETE' }).catch(() => {}); await refresh() } }])} className="rounded-lg p-1.5"><Icon as={Trash2} size={13} className={tw('text-rose-300/70 light:text-rose-700')} /></Pressable>
             </View>
           ))}
         </View>
@@ -449,7 +449,7 @@ function KitePanel({ data, refresh }) {
       </View>
       {!profile?.kite_connected && (
         <Pressable onPress={() => Linking.openURL('https://zerodha.com/?c=ZGF543&s=CONSOLE')} className="mb-3 flex-row items-center justify-center gap-2 rounded-xl border border-accent-300/25 bg-accent-400/10 px-4 py-2.5">
-          <Text className={tw('text-sm font-medium text-accent-200 light:text-accent-700')}>Don't have a Zerodha account? Create one</Text><Icon as={ExternalLink} size={13} className="text-accent-200 light:text-accent-700" />
+          <Text className={tw('text-sm font-medium text-accent-200 light:text-accent-700')}>Don't have a Zerodha account? Create one</Text><Icon as={ExternalLink} size={13} className={tw('text-accent-200 light:text-accent-700')} />
         </Pressable>
       )}
       <Text className={tw('text-sm leading-6 text-slate-400 light:text-slate-600')}>Connecting Kite already works out of the box using the app's default Kite Connect app — you don't need to do anything here unless you want to use your own instead. If you do, register a free app at Zerodha's Kite Connect API page, set its redirect URL to the address below, then paste the API key and secret it gives you.</Text>
@@ -479,7 +479,7 @@ function GuidePanel({ onClearAllData }) {
             return (
               <View key={item.label} className={tw('overflow-hidden rounded-xl bg-black/20 light:bg-black/[.06]')}>
                 <Pressable onPress={() => setOpenKey(isOpen ? null : item.label)} className="flex-row items-center gap-3 px-4 py-3">
-                  <Icon as={I} size={16} className="text-accent-300 light:text-accent-700" />
+                  <Icon as={I} size={16} className={tw('text-accent-300 light:text-accent-700')} />
                   <View className="min-w-0 flex-1"><Text className={tw('text-sm font-medium text-white light:text-slate-900')}>{item.label}</Text>{!isOpen ? <Text numberOfLines={1} className="text-xs text-slate-500">{item.blurb}</Text> : null}</View>
                   <View style={{ transform: [{ rotate: isOpen ? '180deg' : '0deg' }] }}><Icon as={ChevronDown} size={15} className="text-slate-500" /></View>
                 </Pressable>
@@ -495,10 +495,10 @@ function GuidePanel({ onClearAllData }) {
         </View>
       </View>
       <View className={tw(CARD)}>
-        <View className="flex-row items-center gap-2"><Icon as={ShieldAlert} size={16} className="text-accent-300 light:text-accent-700" /><Text className={tw(T.title)}>Keeping your data safe</Text></View>
+        <View className="flex-row items-center gap-2"><Icon as={ShieldAlert} size={16} className={tw('text-accent-300 light:text-accent-700')} /><Text className={tw(T.title)}>Keeping your data safe</Text></View>
         <Text className={tw('mt-2 text-xs leading-5 text-slate-400 light:text-slate-600')}>We've taken care to keep your data safe — encrypted storage, access limited to what you explicitly share, and role-based permissions on anything shared with someone else. Even so, you're responsible for your own data: keep your login private, only grant access to people you trust, and use CSV exports where available if you want your own backup.</Text>
         <View className={tw('mt-4 border-t border-white/10 light:border-black/10 pt-4')}>
-          <Pressable onPress={onClearAllData} className="flex-row items-center gap-2 self-start rounded-xl border border-rose-400/20 bg-rose-400/10 px-3.5 py-2.5"><Icon as={Trash2} size={14} className="text-rose-300 light:text-rose-700" /><Text className={tw('text-xs font-medium text-rose-300 light:text-rose-700')}>Clear all data</Text></Pressable>
+          <Pressable onPress={onClearAllData} className="flex-row items-center gap-2 self-start rounded-xl border border-rose-400/20 bg-rose-400/10 px-3.5 py-2.5"><Icon as={Trash2} size={14} className={tw('text-rose-300 light:text-rose-700')} /><Text className={tw('text-xs font-medium text-rose-300 light:text-rose-700')}>Clear all data</Text></Pressable>
           <Text className="mt-2 text-[11px] leading-5 text-slate-500">Permanently deletes every account, transaction, and record you have across the app. This can't be undone.</Text>
         </View>
       </View>
@@ -509,7 +509,7 @@ function GuidePanel({ onClearAllData }) {
 function UpdatesPanel() {
   return (
     <View className={tw(CARD)}>
-      <View className="flex-row items-center gap-2"><Icon as={Sparkles} size={16} className="text-accent-300 light:text-accent-700" /><Text className={tw(T.title)}>What's new</Text></View>
+      <View className="flex-row items-center gap-2"><Icon as={Sparkles} size={16} className={tw('text-accent-300 light:text-accent-700')} /><Text className={tw(T.title)}>What's new</Text></View>
       <View className="mt-3 gap-4">
         {CHANGELOG.map((entry) => (
           <View key={entry.date}>
@@ -550,11 +550,11 @@ export function SettingsView({ data, user, refresh, onSaveProfile, onDeleteAccou
           <Text className={tw('mb-1 text-xs uppercase tracking-widest text-accent-200/70 light:text-accent-700')}>Your space</Text>
           <Text className={tw('text-2xl font-semibold tracking-tight text-white light:text-slate-900')}>Settings</Text>
         </View>
-        <Pressable onPress={onSignOut} className={tw('flex-row items-center gap-2 rounded-xl border border-white/10 light:border-black/10 px-3 py-2')}><Icon as={LogOut} size={13} className="text-slate-400 light:text-slate-500" /><Text className={tw('text-xs text-slate-400 light:text-slate-500')}>Sign out</Text></Pressable>
+        <Pressable onPress={onSignOut} className={tw('flex-row items-center gap-2 rounded-xl border border-white/10 light:border-black/10 px-3 py-2')}><Icon as={LogOut} size={13} className={tw('text-slate-400 light:text-slate-500')} /><Text className={tw('text-xs text-slate-400 light:text-slate-500')}>Sign out</Text></Pressable>
       </View>
       <Pressable onPress={() => setMenuOpen(true)} className={tw('flex-row items-center gap-2.5 rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3.5 py-3')}>
-        <Icon as={Menu} size={16} className="text-slate-400 light:text-slate-500" />
-        <Icon as={active.icon} size={16} className="text-accent-300 light:text-accent-700" />
+        <Icon as={Menu} size={16} className={tw('text-slate-400 light:text-slate-500')} />
+        <Icon as={active.icon} size={16} className={tw('text-accent-300 light:text-accent-700')} />
         <Text className={tw('flex-1 text-sm font-medium text-white light:text-slate-900')}>{active.label}</Text>
       </Pressable>
       {active.render()}
