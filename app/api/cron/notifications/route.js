@@ -66,22 +66,6 @@ async function checkUser(supabase, userId, buildId) {
     })
   }
 
-  // Pending transactions (SMS auto-detect) waiting for review — a digest, not one notification
-  // per row, and capped at once a day per user via periodKey=today regardless of how many are
-  // pending or how many cron runs happen today. The instant per-detection push
-  // (lib/server/genericCrud.js's pending_transactions ingestion) is the primary signal; this is
-  // just a catch-up for anything still sitting unreviewed.
-  const { data: pending } = await supabase.from('pending_transactions').select('id').eq('user_id', userId).eq('status', 'pending')
-  if (pending && pending.length > 0) {
-    const periodKey = new Date().toISOString().slice(0, 10)
-    if (!(await alreadyNotified(supabase, userId, 'pending_review_digest', userId, periodKey))) {
-      notifications.push({
-        type: 'pending_review_digest', entityId: userId, periodKey,
-        title: 'Transactions waiting for review', body: `${pending.length} detected transaction${pending.length === 1 ? '' : 's'} need${pending.length === 1 ? 's' : ''} your approval`, url: '/?view=pending',
-      })
-    }
-  }
-
   // Credit card bills due soon.
   const [{ data: creditCards }, { data: transactions }] = await Promise.all([
     supabase.from('credit_cards').select('*').eq('user_id', userId),

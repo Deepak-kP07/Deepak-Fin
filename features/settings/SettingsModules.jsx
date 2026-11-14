@@ -18,7 +18,6 @@ const MODULE_INFO = {
   budgets: { label: 'Budgets', description: 'Monthly plans, category breakdowns, and yearly budgets.' },
   bucket_list: { label: 'Bucket list', description: "The 30-day rule for things you're tempted to buy." },
   insights: { label: 'Insights', description: 'Charts and trends across your finances.' },
-  pending_sms: { label: 'Pending', description: 'SMS-detected transactions awaiting your approval (Android app only).' },
   chit_funds: { label: 'Chit funds', description: 'Track a chit fund you\'re a member of — monthly payments, payout, and net worth.' },
 }
 

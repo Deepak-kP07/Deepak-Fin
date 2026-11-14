@@ -1,47 +1,34 @@
-# Android app setup — SMS Auto-Detect
+# Android app setup (interim Capacitor wrapper)
 
-Everything web/backend for SMS Auto-Detect Transactions is built, tested (`npm run test`), and
-building clean (`npm run build`). This file covers the parts that can't be done or verified from
-this session — no Android SDK, emulator, or physical device is available here. Everything below
-is Phases E–H of the feature plan.
+`android/` is a Capacitor project that loads the live site (personalfin.site) in a WebView. It is
+an interim build: it will be replaced by a real native app before the production Play Store
+release, because Play rejects apps that are only a website in a frame. Until then it is useful
+for starting the Play closed test (12 testers, 14 days) under the final package name
+`com.personalfin.app` — later builds of the native app are uploaded as updates to the same app.
 
-## What's already in the repo
+SMS auto-detect has been removed: the app no longer requests `READ_SMS`/`RECEIVE_SMS`, so no
+SMS permissions declaration is needed on Play.
 
-- `capacitor.config.js` — points the native WebView at your **production URL**, read straight from
-  `NEXT_PUBLIC_BASE_URL` in `.env` (same variable every other absolute-URL builder in this app
-  already uses) — nothing to edit here, already resolves to `https://personalfin.site`. This has
-  to be your real deployed domain, not `localhost`, since the app authenticates via cookies tied
-  to that origin. If you ever change `NEXT_PUBLIC_BASE_URL`, just re-run `npx cap sync android` to
-  pick it up.
-- `android/` — a real Capacitor Android project (`npx cap add android` was run for you).
-- `android/app/src/main/java/com/personalfin/app/sms/SmsReceiver.kt` — listens for incoming SMS.
-- `android/app/src/main/java/com/personalfin/app/sms/SmsListenerPlugin.kt` — bridges detected SMS
-  to the web app's JS, and exposes permission request/check + a battery-optimization settings
-  shortcut.
-- `lib/sms/nativeBridge.js` — the JS side: parses each SMS (`lib/sms/parseEngine.js`) and POSTs it
-  to `/api/finance/pending_transactions`. Wired into `app/page.js` automatically once the
-  "Pending" module is turned on in Settings.
-- `features/settings/SettingsSmsAutoDetect.jsx` — where you'll request the SMS permission and open
-  the battery-optimization screen once the app is installed.
-- `lib/auth/nativeGoogleAuth.js` + a `login-callback` intent-filter in `AndroidManifest.xml` —
-  native Google sign-in. The web app's normal Google button (Google Identity Services,
-  `AuthScreen.jsx`) doesn't work inside an embedded WebView — Google routes it out to a separate
-  system browser process with no way back, which is the "opens Chrome, never returns to the app"
-  behavior you hit. Inside the native app, `AuthScreen.jsx` swaps to a plain button that opens
-  Google's consent screen in a Chrome Custom Tab via Supabase's OAuth redirect flow, and the new
-  intent-filter is what hands control back to the app once it completes. **This needs dashboard
-  configuration you'll have to do yourself — see step 2 below — nothing will log in natively
-  until that's done, independent of anything code-related.**
+## What's in the repo
 
-**None of the Kotlin/Gradle code has been compiled or run.** Treat it as a first draft to build
-and debug, not verified-working native code.
+- `capacitor.config.js` — points the WebView at `NEXT_PUBLIC_BASE_URL` (with `www.` added, see the
+  comment there). Re-run `npx cap sync android` after changing it.
+- `android/app/src/main/java/com/personalfin/app/push/PushMessagingService.kt` — Firebase push
+  notifications with the full-colour logo.
+- `lib/auth/nativeGoogleAuth.js` + the `login-callback` intent-filter in `AndroidManifest.xml` —
+  native Google sign-in through a Chrome Custom Tab (Google sign-in doesn't work inside a WebView).
+- Backups are off (`allowBackup="false"` plus `res/xml/data_extraction_rules.xml`), so finance
+  data and session cookies never land in device or cloud backups.
 
-## What you need to do
+**None of the Kotlin/Gradle code has been compiled or run from this repo's tooling.** Build and
+test it in Android Studio.
+
+## Steps
 
 ### 1. Prerequisites
 - Android Studio (includes the Android SDK) — https://developer.android.com/studio
-- A way to test: an Android device with USB debugging enabled, or an emulator (Android 7.0/API 24+,
-  matching `minSdkVersion` in `android/variables.gradle`)
+- An Android device with USB debugging, or an emulator (Android 7.0 / API 24+). The project targets
+  API 36, which Play requires for new apps.
 
 ### 2. Set up native Google sign-in (dashboard config, not code)
 Reuse the same Google Cloud OAuth client already behind `NEXT_PUBLIC_GOOGLE_CLIENT_ID` in `.env`
@@ -75,41 +62,8 @@ If Gradle sync fails on the Kotlin plugin, double check `android/build.gradle` h
 were added for you, but version mismatches with your installed Android Studio's bundled Gradle
 are the most likely first build error.
 
-### 4. Verify the plain app first, before trusting SMS detection
-Confirm the app launches and behaves like the normal web app (login, navigate around) *before*
-testing SMS — this isolates "Capacitor wrapper is broken" from "SMS plugin is broken" if something
-doesn't work.
-
-### 5. Turn on SMS Auto-Detect
-In the app: Settings → SMS auto-detect → tap **Enable** to grant the SMS permission (Android will
-show its own permission dialog), then **Open settings** to exempt the app from battery
-optimization (recommended, especially on Xiaomi/Oppo/Vivo devices — see the PRD's note on OEMs
-aggressively killing background apps). Also turn on the "Pending" module under Settings → Modules
-if you haven't already — that's the master switch.
-
-### 6. Test with a real SMS
-Have a bank or UPI app send you a real transaction SMS (or trigger a small real transaction).
-Expect it to show up within a few seconds, pre-filled with amount/type/merchant — either as a
-"Detected from SMS" banner right at the top of the **Transactions** tab (one-tap approve/reject
-icons, no navigation needed), or under the **Pending** nav tab if you want to correct a field
-before approving. If it doesn't show up:
-- Confirm the SMS permission shows "Granted" in Settings → SMS auto-detect.
-- Confirm the sender ID matches one of the patterns in `drizzle/0048_pending_transactions.sql`'s
-  seed data (HDFCBK, ICICIB, SBI, AXISBK, GPAY, PHONEPE) — a different bank/format needs its own
-  pattern row added to the `sms_parse_patterns` table (via Supabase's SQL editor; there's
-  currently no in-app editor for these, by design — see the RLS in that migration).
-- Check `adb logcat` filtered to your app's package (`com.personalfin.app`) for errors from
-  `SmsReceiver`/`SmsListenerPlugin`.
-
-### 7. Sign and distribute
-This ships as a sideloaded APK, not the Play Store (Play policy restricts `READ_SMS`/`RECEIVE_SMS`
-to apps whose core function is SMS handling). In Android Studio: **Build → Generate Signed Bundle
-/ APK**, create/use a keystore, build a release APK, and share the `.apk` file directly (a link,
-file transfer, or QR code to a hosted copy).
-
-## Database migration
-
-Already applied to the live database this session — `pending_transactions` and
-`sms_parse_patterns` exist, RLS is on, and the starter patterns are seeded. Nothing to do here
-unless you're setting this up against a different/fresh database, in which case run
-`drizzle/0048_pending_transactions.sql` via Supabase's SQL editor.
+### 4. Build for Play
+In Android Studio: **Build → Generate Signed Bundle / APK → Android App Bundle (.aab)**. Use Play
+App Signing and keep the upload keystore somewhere safe — every future build, including the native
+app, must be signed with the same upload key. Bump `versionCode` in `android/app/build.gradle`
+for every upload.

@@ -10,7 +10,7 @@ import { useIsMobile } from '@/hooks/use-mobile'
 const EMPTY = {
   item_type: 'bank_account', label: '', bank_name: '', color: '#22d3ee', linked_account_id: '',
   holder_name: '', account_number: '', ifsc_code: '', branch: '',
-  card_number: '', expiry_month: '', expiry_year: '', cvv: '', pin: '',
+  card_number: '', expiry_month: '', expiry_year: '',
   notes: '',
 }
 
@@ -78,12 +78,6 @@ function VaultItemFormFields({ form, setForm, accounts, isBank, prefilling }) {
               <input required maxLength={2} value={form.expiry_year} onChange={(e) => setForm({ ...form, expiry_year: e.target.value.replace(/\D/g, '') })} className={`${inputClass} mt-0 w-16 font-mono`} placeholder="YY" />
             </div>
           </label>
-          <label className="text-sm text-slate-300 light:text-slate-700">CVV
-            <input maxLength={4} value={form.cvv} onChange={(e) => setForm({ ...form, cvv: e.target.value.replace(/\D/g, '') })} className={`${inputClass} font-mono`} placeholder="Optional" />
-          </label>
-          <label className="text-sm text-slate-300 light:text-slate-700">PIN
-            <input maxLength={6} value={form.pin} onChange={(e) => setForm({ ...form, pin: e.target.value.replace(/\D/g, '') })} className={`${inputClass} font-mono`} placeholder="Optional" />
-          </label>
         </>
       )}
 
@@ -133,7 +127,7 @@ export function VaultItemForm({ open, onClose, onSaved, editing, accounts = [], 
     try {
       const secrets = isBank
         ? { holder_name: form.holder_name, account_number: form.account_number, ifsc_code: form.ifsc_code, branch: form.branch, notes: form.notes }
-        : { holder_name: form.holder_name, card_number: form.card_number.replace(/\s+/g, ''), expiry_month: form.expiry_month, expiry_year: form.expiry_year, cvv: form.cvv, pin: form.pin, notes: form.notes }
+        : { holder_name: form.holder_name, card_number: form.card_number.replace(/\s+/g, ''), expiry_month: form.expiry_month, expiry_year: form.expiry_year, notes: form.notes }
       const last4 = String(isBank ? form.account_number : form.card_number).replace(/\s+/g, '').slice(-4)
       const payload = { item_type: form.item_type, label: form.label, bank_name: form.bank_name || null, color: form.color, linked_account_id: form.linked_account_id || null, last4, secrets }
       const endpoint = editing ? `/api/finance/vault_items/${editing.id}` : '/api/finance/vault_items'
