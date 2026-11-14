@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { BackHandler, Pressable, ScrollView, Text, View } from 'react-native'
+import { Alert, BackHandler, Pressable, ScrollView, Text, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Bell, MoreHorizontal, Plus, Settings } from 'lucide-react-native'
@@ -8,7 +8,8 @@ import { Avatar } from '../../ui/Avatar'
 import { AccentGradient } from '../../ui/Gradient'
 import { BottomSheet } from '../../ui/BottomSheet'
 import { DashboardView } from '../../views/DashboardView'
-import TransactionsLegacy from '../../views/legacy/TransactionsLegacy'
+import { TransactionsView } from '../../views/TransactionsView'
+import { CreditCardsView } from '../../views/CreditCardsView'
 import AccountsLegacy from '../../views/legacy/AccountsLegacy'
 import SettingsLegacy from '../../views/legacy/SettingsLegacy'
 import { tw } from '../../lib/tw'
@@ -22,7 +23,7 @@ import { api } from '../../lib/api'
 // the Dashboard header, the configurable 3-slot bottom nav + "More" sheet, and the floating
 // quick-add button. Modules not yet ported open their interim native screens.
 const INTERIM_ROUTES = {
-  cards: '/cards', loans: '/loans', lend: '/lend', chitfunds: '/chits', family_company: '/family', budgets: '/budgets',
+  loans: '/loans', lend: '/lend', chitfunds: '/chits', family_company: '/family', budgets: '/budgets',
   investments: '/investments', scholarships: '/scholarships', bucket: '/bucket', insights: '/insights',
 }
 
@@ -36,6 +37,8 @@ export default function Shell() {
   const [showMoney, setShowMoney] = useState(true)
   const [hasGreetedOnce, setHasGreetedOnce] = useState(false)
   const [unread, setUnread] = useState(0)
+  const [activeDetailId, setActiveDetailId] = useState(null)
+  useEffect(() => { setActiveDetailId(null) }, [view])
 
   useEffect(() => { const t = setTimeout(() => setHasGreetedOnce(true), 2200); return () => clearTimeout(t) }, [])
   useEffect(() => { api('/finance/notifications').then((r) => setUnread(r.unread || 0)).catch(() => {}) }, [data])
@@ -54,6 +57,45 @@ export default function Shell() {
     setViewState(key)
   }
   const openTxForm = () => router.push('/transaction')
+  // Same per-view quick-add as the web's runFabAction (views not ported yet fall back to a transaction).
+  const runFabAction = () => {
+    if (view === 'cards' && activeDetailId) return router.push({ pathname: '/transaction', params: { source: `cc:${activeDetailId}` } })
+    return openTxForm()
+  }
+  // Card activity mixes card-log spends (credit_card_transactions) and card-funded transactions.
+  const deleteCardActivityBulk = (rows) => new Promise((resolve) => {
+    const n = rows.length
+    if (n === 0) return resolve(false)
+    Alert.alert(`Delete ${n} ${n === 1 ? 'entry' : 'entries'}?`, 'Card outstanding will be recomputed.', [
+      { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+      { text: 'Delete', style: 'destructive', onPress: async () => {
+        const results = await Promise.all(rows.map((a) => api(a.source === 'log' ? `/finance/credit_card_transactions/${a.row.id}` : `/finance/transactions/${a.row.id}`, { method: 'DELETE' }).then(() => true, () => false)))
+        await refresh()
+        const failed = results.filter((ok) => !ok).length
+        if (failed) Alert.alert('Some deletes failed', `${n - failed} of ${n} deleted.`)
+        resolve(true)
+      } },
+    ])
+  })
+  // Same as the web's deleteTxBulk: one confirm, then delete each (a transfer leg deletes both
+  // legs server-side, so only one leg per transfer group is sent).
+  const deleteTxBulk = (ids) => new Promise((resolve) => {
+    const n = ids.length
+    if (n === 0) return resolve(false)
+    Alert.alert(`Delete ${n} transaction${n === 1 ? '' : 's'}?`, 'Account balances are restored.', [
+      { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+      { text: 'Delete', style: 'destructive', onPress: async () => {
+        const all = [...data.transactions, ...(data.scheduled_transactions || [])]
+        const seenGroups = new Set()
+        const targets = ids.filter((id) => { const t = all.find((x) => x.id === id); if (!t?.transfer_group_id) return true; if (seenGroups.has(t.transfer_group_id)) return false; seenGroups.add(t.transfer_group_id); return true })
+        const results = await Promise.all(targets.map((id) => api(`/finance/transactions/${id}`, { method: 'DELETE' }).then(() => true, () => false)))
+        await refresh()
+        const failed = results.filter((ok) => !ok).length
+        if (failed) Alert.alert('Some deletes failed', `${targets.length - failed} of ${targets.length} deleted.`)
+        resolve(true)
+      } },
+    ])
+  })
 
   const profile = data.profile
   const moduleSettings = resolveModuleSettings(profile)
@@ -95,12 +137,39 @@ export default function Shell() {
           />
         </ScrollView>
       )}
-      {view === 'transactions' && <TransactionsLegacy />}
+      {view === 'transactions' && (
+        <ScrollView contentContainerStyle={{ paddingTop: Math.max(24, insets.top + 24), paddingBottom: 96 + insets.bottom }} className="px-5" keyboardShouldPersistTaps="handled">
+          <TransactionsView
+            data={data} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onOpenTxForm={openTxForm}
+            onEditTx={(t) => router.push({ pathname: '/transaction', params: { id: t.id } })} onDeleteTxBulk={deleteTxBulk}
+            onPayCardBill={(card) => router.push({ pathname: '/forms/pay-card', params: { id: card.id } })}
+          />
+        </ScrollView>
+      )}
+      {view === 'cards' && (
+        <ScrollView contentContainerStyle={{ paddingTop: Math.max(24, insets.top + 24), paddingBottom: 96 + insets.bottom }} className="px-5" keyboardShouldPersistTaps="handled">
+          <CreditCardsView
+            data={data} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onDetailChange={setActiveDetailId}
+            onSpend={(card) => router.push({ pathname: '/transaction', params: { source: `cc:${card.id}` } })}
+            onPay={(card) => router.push({ pathname: '/forms/pay-card', params: { id: card.id } })}
+            onEditTx={(t) => router.push({ pathname: '/transaction', params: { id: t.id } })}
+            onDeleteActivityBulk={deleteCardActivityBulk} onDeleteTxBulk={deleteTxBulk}
+            onSyncOutstanding={async (card, target) => {
+              try { await api(`/finance/credit_cards/${card.id}/sync_outstanding`, { method: 'POST', body: { target_outstanding: target } }); await refresh() }
+              catch (e) { Alert.alert('Sync failed', e.message) }
+            }}
+            onDelete={(card, after) => Alert.alert(`Delete card "${card.name}"?`, 'All linked spends will be removed.', [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Delete', style: 'destructive', onPress: async () => { try { await api(`/finance/credit_cards/${card.id}`, { method: 'DELETE' }); after?.(); await refresh() } catch (e) { Alert.alert('Delete failed', e.message) } } },
+            ])}
+          />
+        </ScrollView>
+      )}
       {view === 'accounts' && <AccountsLegacy />}
       {view === 'profile' && <SettingsLegacy />}
 
       {/* Floating quick add */}
-      <Pressable onPress={openTxForm} className="absolute right-5 z-30 h-14 w-14" style={{ bottom: 96 + insets.bottom }}>
+      <Pressable onPress={runFabAction} className="absolute right-5 z-30 h-14 w-14" style={{ bottom: 96 + insets.bottom }}>
         <AccentGradient style={{ flex: 1, borderRadius: 28, alignItems: 'center', justifyContent: 'center', elevation: 10, shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 16 }}>
           <Plus size={24} color="#07101c" />
         </AccentGradient>

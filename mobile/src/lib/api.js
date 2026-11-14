@@ -3,6 +3,9 @@ import { supabase } from './supabase'
 // The native app uses the same /api routes as the web app. It has no cookies, so it sends the
 // Supabase access token instead (see lib/supabase/server.js in the web project).
 export const API_URL = (process.env.EXPO_PUBLIC_API_URL || 'https://www.personalfin.site').replace(/\/$/, '')
+// Pages people open in a browser (privacy policy, email links) always use the live site — the API
+// URL above may point at a local dev server the browser can't reach.
+export const WEB_URL = 'https://www.personalfin.site'
 
 export class ApiError extends Error {
   constructor(message, status) { super(message); this.status = status }

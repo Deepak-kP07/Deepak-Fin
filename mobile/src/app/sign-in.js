@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as WebBrowser from 'expo-web-browser'
 import { Button, Field } from '../components/ui'
 import { useAuth } from '../state/AuthProvider'
-import { API_URL } from '../lib/api'
+import { WEB_URL } from '../lib/api'
 import { GOOGLE_WEB_CLIENT_ID } from '../lib/googleAuth'
 import { colors } from '../lib/theme'
 
@@ -78,7 +78,7 @@ export default function SignIn() {
         ) : null}
         <Button label={mode === 'login' ? 'Create a new account' : 'I already have an account'} variant="secondary" onPress={() => { setMode(mode === 'login' ? 'signup' : 'login'); setFeedback(null) }} style={{ marginTop: 12 }} />
 
-        <Pressable onPress={() => WebBrowser.openBrowserAsync(`${API_URL}/privacy`)} style={{ marginTop: 28 }}>
+        <Pressable onPress={() => WebBrowser.openBrowserAsync(`${WEB_URL}/privacy`)} style={{ marginTop: 28 }}>
           <Text style={styles.footer}>{mode === 'signup' ? 'By creating an account you agree to our ' : ''}<Text style={{ textDecorationLine: 'underline' }}>Privacy policy</Text></Text>
         </Pressable>
       </ScrollView>

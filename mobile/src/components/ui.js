@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { ActivityIndicator, FlatList, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Press } from './Press'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Feather } from '@expo/vector-icons'
@@ -49,7 +50,7 @@ export function Button({ label, onPress, variant = 'primary', disabled, busy, ic
   const primary = variant === 'primary'
   const danger = variant === 'danger'
   return (
-    <Pressable
+    <Press
       onPress={onPress}
       disabled={disabled || busy}
       style={({ pressed }) => [
@@ -67,7 +68,7 @@ export function Button({ label, onPress, variant = 'primary', disabled, busy, ic
           <Text style={[styles.buttonText, primary && { color: '#07101c' }, danger && { color: colors.danger }]}>{label}</Text>
         </View>
       )}
-    </Pressable>
+    </Press>
   )
 }
 
@@ -153,7 +154,7 @@ export function ListRow({ title, detail, value, valueColor, subValue, dot, icon,
       {onPress ? <Feather name="chevron-right" size={16} color={colors.textFaint} /> : null}
     </View>
   )
-  return onPress ? <Pressable onPress={onPress} style={({ pressed }) => pressed && { opacity: 0.7 }}>{content}</Pressable> : content
+  return onPress ? <Press onPress={onPress} style={({ pressed }) => pressed && { opacity: 0.7 }}>{content}</Press> : content
 }
 
 export function ProgressBar({ pct, color }) {

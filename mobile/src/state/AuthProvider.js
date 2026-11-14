@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { API_URL, api } from '../lib/api'
+import { WEB_URL, api } from '../lib/api'
 import { signInWithGoogle, signOutOfGoogle } from '../lib/googleAuth'
 import { disablePush, syncPushToken } from '../lib/push'
 
@@ -37,13 +37,13 @@ export function AuthProvider({ children }) {
       const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
         password,
-        options: { data: { full_name: name.trim() }, emailRedirectTo: `${API_URL}/api/auth/oauth_callback` },
+        options: { data: { full_name: name.trim() }, emailRedirectTo: `${WEB_URL}/api/auth/oauth_callback` },
       })
       if (error) throw error
       return { needsConfirmation: !data.session }
     },
     resendConfirmation: async (email) => {
-      const { error } = await supabase.auth.resend({ type: 'signup', email: email.trim(), options: { emailRedirectTo: `${API_URL}/api/auth/oauth_callback` } })
+      const { error } = await supabase.auth.resend({ type: 'signup', email: email.trim(), options: { emailRedirectTo: `${WEB_URL}/api/auth/oauth_callback` } })
       if (error) throw error
     },
     signInWithGoogle,

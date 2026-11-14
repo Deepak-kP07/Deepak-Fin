@@ -5,6 +5,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { AuthProvider, useAuth } from '../state/AuthProvider'
 import { DataProvider } from '../state/DataProvider'
 import { ThemeProvider } from '../state/ThemeProvider'
+import { HiddenTxProvider } from '../state/HiddenTx'
 import { Loading } from '../components/ui'
 import { colors } from '../lib/theme'
 
@@ -30,8 +31,10 @@ export default function RootLayout() {
       <AuthProvider>
         <DataProvider>
           <ThemeProvider>
-            <StatusBar style="light" />
-            <RootStack />
+            <HiddenTxProvider>
+              <StatusBar style="light" />
+              <RootStack />
+            </HiddenTxProvider>
           </ThemeProvider>
         </DataProvider>
       </AuthProvider>

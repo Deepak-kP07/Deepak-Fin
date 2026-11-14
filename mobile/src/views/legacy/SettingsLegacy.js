@@ -2,12 +2,13 @@ import { useState } from 'react'
 import { useRouter } from 'expo-router'
 import { orderedEnabledKeys, resolveModuleSettings } from '../../lib/shared'
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Press } from '../../components/Press'
 import * as WebBrowser from 'expo-web-browser'
 import { Feather } from '@expo/vector-icons'
 import { Button, Card, Screen, SectionLabel, styles as ui } from '../../components/ui'
 import { useAuth } from '../../state/AuthProvider'
 import { useData } from '../../state/DataProvider'
-import { API_URL, api } from '../../lib/api'
+import { WEB_URL, api } from '../../lib/api'
 import { colors } from '../../lib/theme'
 
 // Module key (profiles.module_settings, same as the web app) → native screen. Only modules the
@@ -27,11 +28,11 @@ const MODULE_ROUTES = {
 
 function LinkRow({ icon, label, onPress, color }) {
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}>
+    <Press onPress={onPress} style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}>
       <Feather name={icon} size={18} color={color || colors.textMuted} />
       <Text style={[styles.rowText, color && { color }]}>{label}</Text>
       <Feather name="chevron-right" size={16} color={colors.textFaint} />
-    </Pressable>
+    </Press>
   )
 }
 
@@ -45,7 +46,7 @@ export default function More() {
   const router = useRouter()
   const modules = orderedEnabledKeys(resolveModuleSettings(data.profile)).filter((k) => MODULE_ROUTES[k])
 
-  const openWeb = (path = '/') => WebBrowser.openBrowserAsync(`${API_URL}${path}`)
+  const openWeb = (path = '/') => WebBrowser.openBrowserAsync(`${WEB_URL}${path}`)
 
   const deleteAccount = async () => {
     setBusy(true)

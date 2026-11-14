@@ -1,4 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Press } from './Press'
 import { Feather } from '@expo/vector-icons'
 import { capitalizeFirst, money, timeLabel } from '../lib/format'
 import { sourceName } from '../lib/transactions'
@@ -15,14 +16,14 @@ export function TransactionRow({ t, accounts, categories, creditCards, onPress }
   const amountColor = t.type === 'income' ? colors.income : t.type === 'expense' ? colors.expense : colors.textMuted
   const sign = t.type === 'income' ? '+' : t.type === 'expense' ? '−' : ''
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}>
+    <Press onPress={onPress} style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}>
       <View style={styles.icon}><Feather name={ICON[t.type] || 'circle'} size={16} color={amountColor} /></View>
       <View style={{ flex: 1 }}>
         <Text style={styles.title} numberOfLines={1}>{capitalizeFirst(t.description) || category?.name || 'Transaction'}</Text>
         <Text style={styles.subtitle} numberOfLines={1}>{subtitle}</Text>
       </View>
       <Text style={[styles.amount, { color: amountColor }]}>{sign}{money(t.amount)}</Text>
-    </Pressable>
+    </Press>
   )
 }
 
