@@ -14,3 +14,6 @@ export const colors = {
 }
 export const DEFAULT_ACCENT = '#d4af37'
 export const radius = { sm: 10, md: 14, lg: 20 }
+
+// Matches utilisationSeverity()'s labels from the shared credit-card module.
+export const severityColor = (label) => (label === 'Healthy' ? colors.income : label === 'Rising' ? '#fcd34d' : colors.expense)

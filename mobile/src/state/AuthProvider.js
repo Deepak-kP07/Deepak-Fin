@@ -1,6 +1,8 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { API_URL, api } from '../lib/api'
+import { signInWithGoogle, signOutOfGoogle } from '../lib/googleAuth'
+import { disablePush, syncPushToken } from '../lib/push'
 
 const AuthContext = createContext(null)
 
@@ -16,8 +18,10 @@ export function AuthProvider({ children }) {
   // First call after sign-in: the server seeds default categories and the profile row, exactly
   // as it does for the web app's /auth/me.
   useEffect(() => {
-    if (session?.access_token) api('/auth/me').catch(() => {})
-  }, [session?.access_token])
+    if (!session?.access_token) return
+    api('/auth/me').catch(() => {})
+    syncPushToken()
+  }, [session?.user?.id])
 
   const value = useMemo(() => ({
     session,
@@ -42,7 +46,13 @@ export function AuthProvider({ children }) {
       const { error } = await supabase.auth.resend({ type: 'signup', email: email.trim(), options: { emailRedirectTo: `${API_URL}/api/auth/oauth_callback` } })
       if (error) throw error
     },
-    signOut: () => supabase.auth.signOut(),
+    signInWithGoogle,
+    // Stop pushes to this phone first (needs the session), then end the session everywhere local.
+    signOut: async () => {
+      await disablePush().catch(() => {})
+      await signOutOfGoogle()
+      await supabase.auth.signOut()
+    },
   }), [session])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

@@ -4,12 +4,12 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import DateTimePicker from '@react-native-community/datetimepicker'
 import { Feather } from '@expo/vector-icons'
-import { Button, Card, Field, Picker, Segmented, styles as ui } from '../components/ui'
-import { useData } from '../state/DataProvider'
-import { api } from '../lib/api'
-import { capitalizeFirst, dateToLocalISO, dayLabel, money, nowTime, todayISO } from '../lib/format'
-import { isModuleLinked, sourceName } from '../lib/transactions'
-import { colors } from '../lib/theme'
+import { Button, Card, Field, Picker, Segmented, styles as ui } from '../../components/ui'
+import { useData } from '../../state/DataProvider'
+import { api } from '../../lib/api'
+import { capitalizeFirst, dateToLocalISO, dayLabel, money, nowTime, todayISO } from '../../lib/format'
+import { isModuleLinked, sourceName } from '../../lib/transactions'
+import { colors } from '../../lib/theme'
 
 const TYPES = [{ value: 'expense', label: 'Expense' }, { value: 'income', label: 'Income' }, { value: 'transfer', label: 'Transfer' }]
 
@@ -17,7 +17,7 @@ const TYPES = [{ value: 'expense', label: 'Expense' }, { value: 'income', label:
 // paths and sends the same request bodies. Scheduled (future-dated) entries, repayments, hidden
 // transactions and attachments stay on the web app for now.
 export default function TransactionScreen() {
-  const { id } = useLocalSearchParams()
+  const { id, source } = useLocalSearchParams()
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { data, refresh } = useData()
@@ -32,7 +32,7 @@ export default function TransactionScreen() {
   if (editing && (editing.type === 'transfer' || isModuleLinked(editing))) {
     return <ReadOnly t={editing} data={data} onClose={() => router.back()} refresh={refresh} insets={insets} />
   }
-  return <Form editing={editing} data={{ allAccounts, categories, creditCards, profile }} refresh={refresh} onClose={() => router.back()} insets={insets} />
+  return <Form editing={editing} defaultSource={source || ''} data={{ allAccounts, categories, creditCards, profile }} refresh={refresh} onClose={() => router.back()} insets={insets} />
 }
 
 function Shell({ title, onClose, insets, children, footer }) {
@@ -50,7 +50,7 @@ function Shell({ title, onClose, insets, children, footer }) {
   )
 }
 
-function Form({ editing, data, refresh, onClose, insets }) {
+function Form({ editing, defaultSource, data, refresh, onClose, insets }) {
   const { allAccounts, categories, creditCards, profile } = data
   const accounts = allAccounts.filter((a) => a.is_active !== false)
   const initial = editing
@@ -64,7 +64,7 @@ function Form({ editing, data, refresh, onClose, insets }) {
         category_id: editing.category_id || '',
         notes: editing.notes || '',
       }
-    : { type: 'expense', amount: '', description: '', date: todayISO(), account_id: '', to_account_id: '', category_id: '', notes: '' }
+    : { type: 'expense', amount: '', description: '', date: todayISO(), account_id: defaultSource, to_account_id: '', category_id: '', notes: '' }
   const [form, setForm] = useState(initial)
   const [showDate, setShowDate] = useState(false)
   const [busy, setBusy] = useState(false)

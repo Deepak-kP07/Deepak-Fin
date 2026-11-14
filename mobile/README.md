@@ -25,21 +25,45 @@ Change native settings in `app.json`, never in `android/`.
 the project root), put `EXPO_PUBLIC_API_URL=http://10.0.2.2:3000` (emulator) or your Mac's LAN IP
 (phone) in `mobile/.env.local`, and restart `npm start -- --clear`.
 
-## What's native so far
+## What's in the app
 
-| Screen | Status |
+| Area | Native screens |
 |---|---|
-| Sign in / sign up (email + password), resend confirmation | ✅ |
-| Home — bank & cash balance, card dues, this month's income/spent/saved, recent | ✅ |
-| Transactions — by month, grouped by day, pull to refresh | ✅ |
-| Add / edit / delete expense & income (bank, cash, debit card, credit card), add & delete transfers | ✅ |
-| Balance and credit-limit checks (same rules as the web form) | ✅ |
-| Accounts — balances, debit cards, credit card usage | ✅ |
-| More — privacy policy, sign out, delete account | ✅ |
-| Other modules (cards, loans, lend/borrow, investments, budgets, …) | Opens the web app for now |
+| Sign in | Email + password, resend confirmation, **Continue with Google** |
+| Home | Bank & cash balance, card dues, this month's income / spent / saved, recent |
+| Transactions | By month, grouped by day; add / edit / delete expense & income; add & delete transfers; balance and credit-limit checks |
+| Accounts | Balances, debit cards, credit card usage |
+| Credit cards | Utilisation, bill due date, activity; **Pay bill**, Add spend |
+| Loans | Live outstanding, next EMI, payments; **Log payment** (EMI / prepayment, reduce tenure or EMI) |
+| Lend / Borrow | Owed to you / you owe; **New record**, **Log repayment**, delete |
+| Chit funds | Progress, next due, payments; **Log payment** |
+| Family / Company | Balances, income / capital / spent, entries (read-only) |
+| Budgets | Monthly plan vs spend, by category |
+| Investments | Portfolios, holdings, SIPs, other investments, P&L (read-only) |
+| Scholarships, Money rules | Read-only lists |
+| Bucket list | Add, open link, remove (30-day rule shown) |
+| Insights | Spending / income by category per month |
+| Vault | Masked list, tap to reveal one item; screenshots blocked on this screen |
+| Notifications | Push on/off for this phone, in-app notification list; tapping a push opens the right screen |
+| More | Modules you've enabled (same Settings as the web), privacy policy, sign out, delete account |
 
-Hidden transactions never appear in lists, same as the web app. Scheduled, repayment, hidden and
-attachment flows stay on the web for now.
+Calculations come from the web project's own `lib/` files (loans, budgets, credit card cycles,
+Family/Company totals, module settings) through `src/lib/shared.js` and `metro.config.js`, so both
+apps show the same numbers. Still web-only: creating/editing accounts, cards, loans, profiles and
+portfolios, scheduled/hidden transactions, attachments, sharing, and Settings.
+
+## One-time setup only you can do
+
+1. **Deploy the web app** (bearer-token auth, push payload and Lend/Borrow delete fix are server-side).
+2. **Google sign-in:**
+   - Google Cloud Console → Credentials: create an **Android** OAuth client for `com.personalfin.app`
+     with the SHA-1 of your upload key *and* the Play App Signing key (Play Console → App integrity).
+   - Supabase → Authentication → Providers → Google → *Client IDs*: add the web client ID first,
+     then the Android one (comma-separated). If sign-in fails with a nonce error, turn on *Skip nonce check*.
+   - `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` in `mobile/.env` is the web client (`NEXT_PUBLIC_GOOGLE_CLIENT_ID`).
+3. **Push notifications:** set `FIREBASE_SERVICE_ACCOUNT_JSON` on Vercel (Firebase Console →
+   Project settings → Service accounts → Generate new private key, project `personal-fin-f5fce`).
+   Until then the server skips FCM sends. `google-services.json` here is the same Firebase app as the old wrapper.
 
 ## Release build (Play Store)
 

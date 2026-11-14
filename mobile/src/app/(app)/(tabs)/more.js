@@ -1,27 +1,29 @@
 import { useState } from 'react'
+import { useRouter } from 'expo-router'
+import { orderedEnabledKeys, resolveModuleSettings } from '../../../lib/shared'
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import * as WebBrowser from 'expo-web-browser'
 import { Feather } from '@expo/vector-icons'
-import { Button, Card, Screen, SectionLabel, styles as ui } from '../../components/ui'
-import { useAuth } from '../../state/AuthProvider'
-import { useData } from '../../state/DataProvider'
-import { API_URL, api } from '../../lib/api'
-import { colors } from '../../lib/theme'
+import { Button, Card, Screen, SectionLabel, styles as ui } from '../../../components/ui'
+import { useAuth } from '../../../state/AuthProvider'
+import { useData } from '../../../state/DataProvider'
+import { API_URL, api } from '../../../lib/api'
+import { colors } from '../../../lib/theme'
 
-// Modules not rebuilt natively yet — they open the web app until their native screens land.
-const WEB_MODULES = [
-  { label: 'Credit cards', icon: 'credit-card' },
-  { label: 'Investments', icon: 'trending-up' },
-  { label: 'Loans', icon: 'briefcase' },
-  { label: 'Lend / Borrow', icon: 'heart' },
-  { label: 'Budgets', icon: 'target' },
-  { label: 'Family / Company', icon: 'users' },
-  { label: 'Chit funds', icon: 'layers' },
-  { label: 'Scholarships', icon: 'award' },
-  { label: 'Bucket list', icon: 'flag' },
-  { label: 'Vault', icon: 'lock' },
-  { label: 'Settings', icon: 'settings' },
-]
+// Module key (profiles.module_settings, same as the web app) → native screen. Only modules the
+// user has turned on are listed, in their chosen order.
+const MODULE_ROUTES = {
+  credit_cards: { label: 'Credit cards', icon: 'credit-card', href: '/cards' },
+  investments: { label: 'Investments', icon: 'trending-up', href: '/investments' },
+  loans: { label: 'Loans', icon: 'briefcase', href: '/loans' },
+  family_company: { label: 'Family / Company', icon: 'users', href: '/family' },
+  lend_borrow: { label: 'Lend / Borrow', icon: 'heart', href: '/lend' },
+  scholarships: { label: 'Scholarships', icon: 'award', href: '/scholarships' },
+  budgets: { label: 'Budgets', icon: 'target', href: '/budgets' },
+  bucket_list: { label: 'Bucket list', icon: 'flag', href: '/bucket' },
+  insights: { label: 'Insights', icon: 'pie-chart', href: '/insights' },
+  chit_funds: { label: 'Chit funds', icon: 'layers', href: '/chits' },
+}
 
 function LinkRow({ icon, label, onPress, color }) {
   return (
@@ -40,6 +42,8 @@ export default function More() {
   const [confirmText, setConfirmText] = useState('')
   const [busy, setBusy] = useState(false)
   const name = data.profile?.full_name || user?.user_metadata?.full_name || ''
+  const router = useRouter()
+  const modules = orderedEnabledKeys(resolveModuleSettings(data.profile)).filter((k) => MODULE_ROUTES[k])
 
   const openWeb = (path = '/') => WebBrowser.openBrowserAsync(`${API_URL}${path}`)
 
@@ -61,11 +65,19 @@ export default function More() {
         <Text style={ui.muted}>{user?.email}</Text>
       </Card>
 
-      <SectionLabel>On the web for now</SectionLabel>
+      <SectionLabel>Modules</SectionLabel>
       <Card style={{ paddingVertical: 4 }}>
-        {WEB_MODULES.map((m) => <LinkRow key={m.label} icon={m.icon} label={m.label} onPress={() => openWeb('/')} />)}
+        {modules.map((key) => { const m = MODULE_ROUTES[key]; return <LinkRow key={key} icon={m.icon} label={m.label} onPress={() => router.push(m.href)} /> })}
+        <LinkRow icon="lock" label="Vault" onPress={() => router.push('/vault')} />
+        <LinkRow icon="book-open" label="Money rules" onPress={() => router.push('/rules')} />
       </Card>
-      <Text style={[ui.muted, { marginTop: 8, fontSize: 12 }]}>These open personalfin.site. Native screens for them are coming in the next updates.</Text>
+
+      <SectionLabel>Settings</SectionLabel>
+      <Card style={{ paddingVertical: 4 }}>
+        <LinkRow icon="bell" label="Notifications" onPress={() => router.push('/notifications')} />
+        <LinkRow icon="settings" label="More settings (on the web)" onPress={() => openWeb('/?view=profile')} />
+      </Card>
+      <Text style={[ui.muted, { marginTop: 8, fontSize: 12 }]}>Turn modules on or off, change categories and accounts in Settings on the web app.</Text>
 
       <SectionLabel>Account</SectionLabel>
       <Card style={{ paddingVertical: 4 }}>

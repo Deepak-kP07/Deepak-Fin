@@ -1,7 +1,7 @@
 import { Tabs } from 'expo-router'
 import { Feather } from '@expo/vector-icons'
-import { colors } from '../../lib/theme'
-import { useData } from '../../state/DataProvider'
+import { colors } from '../../../lib/theme'
+import { useData } from '../../../state/DataProvider'
 
 const icon = (name) => ({ color, size }) => <Feather name={name} size={size - 2} color={color} />
 

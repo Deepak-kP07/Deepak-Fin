@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "464017876540",
+    "project_id": "personal-fin-f5fce",
+    "storage_bucket": "personal-fin-f5fce.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:464017876540:android:0bebe7e159abf054a6c539",
+        "android_client_info": {
+          "package_name": "com.personalfin.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBXdYDYkowohw7xocw9csSjhvhXga8VyfI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

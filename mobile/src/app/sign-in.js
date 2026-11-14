@@ -5,16 +5,18 @@ import * as WebBrowser from 'expo-web-browser'
 import { Button, Field } from '../components/ui'
 import { useAuth } from '../state/AuthProvider'
 import { API_URL } from '../lib/api'
+import { GOOGLE_WEB_CLIENT_ID } from '../lib/googleAuth'
 import { colors } from '../lib/theme'
 
 export default function SignIn() {
   const insets = useSafeAreaInsets()
-  const { signIn, signUp, resendConfirmation } = useAuth()
+  const { signIn, signUp, resendConfirmation, signInWithGoogle } = useAuth()
   const [mode, setMode] = useState('login')
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
+  const [googleBusy, setGoogleBusy] = useState(false)
   const [feedback, setFeedback] = useState(null) // { type: 'error'|'info', message, unconfirmed? }
 
   const submit = async () => {
@@ -37,6 +39,11 @@ export default function SignIn() {
       const unconfirmed = /not confirmed/i.test(e.message || '')
       setFeedback({ type: 'error', message: unconfirmed ? 'Your email isn’t confirmed yet. Open the link we emailed you, then sign in.' : e.message || 'Something went wrong', unconfirmed })
     } finally { setBusy(false) }
+  }
+
+  const google = async () => {
+    setGoogleBusy(true); setFeedback(null)
+    try { await signInWithGoogle() } catch (e) { setFeedback({ type: 'error', message: e.message || 'Google sign-in failed' }) } finally { setGoogleBusy(false) }
   }
 
   const resend = async () => {
@@ -63,6 +70,12 @@ export default function SignIn() {
         )}
 
         <Button label={mode === 'login' ? 'Sign in securely' : 'Create account'} onPress={submit} busy={busy} />
+        {GOOGLE_WEB_CLIENT_ID ? (
+          <>
+            <View style={styles.orRow}><View style={styles.orLine} /><Text style={styles.orText}>OR</Text><View style={styles.orLine} /></View>
+            <Button label="Continue with Google" icon="globe" variant="secondary" onPress={google} busy={googleBusy} />
+          </>
+        ) : null}
         <Button label={mode === 'login' ? 'Create a new account' : 'I already have an account'} variant="secondary" onPress={() => { setMode(mode === 'login' ? 'signup' : 'login'); setFeedback(null) }} style={{ marginTop: 12 }} />
 
         <Pressable onPress={() => WebBrowser.openBrowserAsync(`${API_URL}/privacy`)} style={{ marginTop: 28 }}>
@@ -83,4 +96,7 @@ const styles = StyleSheet.create({
   feedbackInfo: { borderColor: 'rgba(253,230,138,0.25)', backgroundColor: 'rgba(253,230,138,0.1)' },
   link: { color: '#ffe4e6', fontWeight: '600', textDecorationLine: 'underline', marginTop: 8 },
   footer: { color: colors.textFaint, fontSize: 12, textAlign: 'center' },
+  orRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 20 },
+  orLine: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: colors.border },
+  orText: { color: colors.textFaint, fontSize: 12 },
 })

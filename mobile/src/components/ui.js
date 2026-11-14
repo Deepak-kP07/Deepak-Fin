@@ -1,15 +1,22 @@
 import { useState } from 'react'
 import { ActivityIndicator, FlatList, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useRouter } from 'expo-router'
 import { Feather } from '@expo/vector-icons'
 import { colors, radius } from '../lib/theme'
 import { useData } from '../state/DataProvider'
 
-export function Screen({ title, right, children, scroll = true, refreshing, onRefresh }) {
+export function Screen({ title, right, children, scroll = true, refreshing, onRefresh, back = false }) {
   const insets = useSafeAreaInsets()
+  const router = useRouter()
   const header = title ? (
     <View style={styles.header}>
-      <Text style={styles.title}>{title}</Text>
+      {back ? (
+        <Pressable hitSlop={12} onPress={() => router.back()} style={{ marginRight: 8 }} accessibilityLabel="Back">
+          <Feather name="chevron-left" size={26} color={colors.text} />
+        </Pressable>
+      ) : null}
+      <Text style={[styles.title, back && { fontSize: 22, flex: 1 }]} numberOfLines={1}>{title}</Text>
       {right}
     </View>
   ) : null
@@ -127,6 +134,47 @@ export function Picker({ label, value, options, onChange, placeholder = 'Chooseâ
   )
 }
 
+// A row inside a Card: title + detail on the left, value (and optional sub-value) on the right.
+export function ListRow({ title, detail, value, valueColor, subValue, dot, icon, onPress, last }) {
+  const content = (
+    <View style={[styles.listRow, !last && styles.listRowBorder]}>
+      {dot ? <View style={[styles.dot, { backgroundColor: dot }]} /> : null}
+      {icon ? <Feather name={icon} size={18} color={colors.textMuted} /> : null}
+      <View style={{ flex: 1 }}>
+        <Text style={styles.listTitle} numberOfLines={1}>{title}</Text>
+        {detail ? <Text style={styles.listDetail} numberOfLines={2}>{detail}</Text> : null}
+      </View>
+      {value != null || subValue ? (
+        <View style={{ alignItems: 'flex-end' }}>
+          {value != null ? <Text style={[styles.listValue, valueColor && { color: valueColor }]}>{value}</Text> : null}
+          {subValue ? <Text style={styles.listDetail}>{subValue}</Text> : null}
+        </View>
+      ) : null}
+      {onPress ? <Feather name="chevron-right" size={16} color={colors.textFaint} /> : null}
+    </View>
+  )
+  return onPress ? <Pressable onPress={onPress} style={({ pressed }) => pressed && { opacity: 0.7 }}>{content}</Pressable> : content
+}
+
+export function ProgressBar({ pct, color }) {
+  const { accent } = useData() || {}
+  const clamped = Math.max(0, Math.min(100, pct || 0))
+  return (
+    <View style={styles.progressTrack}>
+      <View style={[styles.progressFill, { width: `${clamped}%`, backgroundColor: color || accent }]} />
+    </View>
+  )
+}
+
+export function Stat({ label, value, color, style }) {
+  return (
+    <Card style={[{ flex: 1 }, style]}>
+      <Text style={styles.muted}>{label}</Text>
+      <Text style={[styles.statValue, color && { color }]} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
+    </Card>
+  )
+}
+
 export function EmptyState({ icon = 'inbox', title, message, action }) {
   return (
     <View style={styles.empty}>
@@ -177,5 +225,15 @@ export const styles = StyleSheet.create({
   muted: { color: colors.textMuted, fontSize: 13 },
   empty: { alignItems: 'center', gap: 8, paddingVertical: 40 },
   emptyTitle: { color: colors.text, fontSize: 16, fontWeight: '600' },
+  listRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
+  listRowBorder: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+  listTitle: { color: colors.text, fontSize: 15, fontWeight: '500' },
+  listDetail: { color: colors.textFaint, fontSize: 12, marginTop: 2 },
+  listValue: { color: colors.text, fontSize: 15, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  dot: { width: 10, height: 10, borderRadius: 5 },
+  progressTrack: { height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.08)', overflow: 'hidden', marginTop: 10 },
+  progressFill: { height: 6, borderRadius: 3 },
+  statValue: { color: colors.text, fontSize: 20, fontWeight: '700', marginTop: 6, fontVariant: ['tabular-nums'] },
+  row: { flexDirection: 'row', gap: 10 },
   errorBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: radius.md, backgroundColor: colors.dangerBg, padding: 12, marginBottom: 12 },
 })
