@@ -2,7 +2,8 @@
 // numbers. Add a file here only if it imports nothing but other pure lib files — no React DOM,
 // Next.js, Supabase or browser APIs. Resolved by metro.config.js.
 export * from '@/lib/amortization'
-export { monthLabel, planTotals, categoryBreakdown, monthTotalSpent } from '@/lib/budgets'
+export { monthLabel, planTotals, categoryBreakdown, monthTotalSpent, budgetInsights } from '@/lib/budgets'
+export { buildBudgetsExportCsv } from '@/lib/exportBudgets'
 export { utilisationSeverity, nextBillDue, currentSpendingCycle, isBillPaidThisCycle, cardsDueSoon } from '@/lib/creditCards'
 export { PROFILE_TYPES, ENTRY_TYPES, profileTotals, categoriesFor, roleFor as moneyProfileRole, canWriteEntries } from '@/lib/moneyProfiles'
 export { nextChitFundDueDate } from '@/lib/chitFunds'

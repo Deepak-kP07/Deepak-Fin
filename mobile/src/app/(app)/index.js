@@ -24,6 +24,7 @@ import { ManageAccessSheet } from '../../views/forms/ManageAccessSheet'
 import { usePrompt } from '../../ui/PromptDialog'
 import { ChitFundsView } from '../../views/ChitFundsView'
 import { BucketForm, BucketListView } from '../../views/BucketListView'
+import { BudgetForm, BudgetMonthForm, BudgetsView } from '../../views/BudgetsView'
 import { ScholarshipForm, ScholarshipPayForm, ScholarshipsView } from '../../views/ScholarshipsView'
 import { ChitFundForm, ChitFundPaymentForm, ChitFundPayoutForm } from '../../views/forms/ChitFundForms'
 import { AccountForm } from '../../views/forms/AccountForm'
@@ -40,7 +41,7 @@ import { enablePush, pushPermissionStatus } from '../../lib/push'
 // the Dashboard header, the configurable 3-slot bottom nav + "More" sheet, and the floating
 // quick-add button. Modules not yet ported open their interim native screens.
 const INTERIM_ROUTES = {
-  family_company: '/family', budgets: '/budgets',
+  family_company: '/family',
   investments: '/investments', insights: '/insights',
 }
 const PUSH_PROMPTED_KEY = 'push_prompted'
@@ -97,6 +98,8 @@ export default function Shell() {
   const [bucketForm, setBucketForm] = useState({ open: false, editing: null })
   const [scholarshipForm, setScholarshipForm] = useState({ open: false, editing: null })
   const [scholarshipPay, setScholarshipPay] = useState(null)
+  const [budgetMonthForm, setBudgetMonthForm] = useState(null) // { year, month }
+  const [budgetForm, setBudgetForm] = useState({ open: false, editing: null })
   useEffect(() => { setActiveDetailId(null) }, [view])
 
   useEffect(() => { const t = setTimeout(() => setHasGreetedOnce(true), 2200); return () => clearTimeout(t) }, [])
@@ -134,6 +137,7 @@ export default function Shell() {
     if (view === 'cards') return activeDetailId ? openTxForm({ source: `cc:${activeDetailId}` }) : setCardForm({ open: true, editing: null })
     if (view === 'lend') { const r = data.lend_borrow.find((l) => l.id === activeDetailId); return r ? logLendRepayment(r) : setLendForm({ open: true, editing: null }) }
     if (view === 'chitfunds') { const f = data.chit_funds.find((c) => c.id === activeDetailId); return f ? setChitPayment({ fund: f, editing: null }) : setChitForm({ open: true, editing: null }) }
+    if (view === 'budgets') { const n = new Date(); const next = new Date(n.getFullYear(), n.getMonth() + 1, 1); return setBudgetMonthForm({ year: next.getFullYear(), month: next.getMonth() }) }
     if (view === 'scholarships') { const sc = data.scholarships.find((x) => x.id === activeDetailId); return sc ? setScholarshipPay(sc) : setScholarshipForm({ open: true, editing: null }) }
     if (view === 'bucket') return setBucketForm({ open: true, editing: null })
     if (view === 'loans') { const loan = data.loans.find((l) => l.id === activeDetailId); return loan ? setLoanPay(loan) : setLoanForm({ open: true, editing: null }) }
@@ -208,6 +212,12 @@ export default function Shell() {
     if (silent) { const ok = await deleteChitPaymentNow(id); await refresh(); if (!ok) toast.push('Delete failed', 'error'); return }
     confirmDelete('Delete this payment?', 'Its linked transaction (if any) will be removed too.', async () => { const ok = await deleteChitPaymentNow(id); toast.push(ok ? 'Payment deleted' : 'Delete failed', ok ? undefined : 'error'); await refresh() })
   }
+  // Budgets — close/reopen are dedicated endpoints so they can't race a /budget_months/save.
+  const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+  const closeBudgetMonth = (plan) => Alert.alert(`Close ${MONTHS[plan.month]} ${plan.year}'s budget?`, 'It moves into your history log — you can still reopen it later.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Close month', onPress: async () => { try { await api(`/finance/budget_months/${plan.id}/close`, { method: 'POST' }); toast.push('Month closed'); await refresh() } catch { toast.push('Could not close', 'error') } } }])
+  const reopenBudgetMonth = async (plan) => { try { await api(`/finance/budget_months/${plan.id}/reopen`, { method: 'POST' }); toast.push('Month reopened'); await refresh() } catch { toast.push('Could not reopen', 'error') } }
+  const deleteBudgetMonth = (plan, after) => confirmDelete(`Delete ${MONTHS[plan.month]} ${plan.year}'s budget?`, "This can't be undone.", async () => { try { await api(`/finance/budget_months/${plan.id}`, { method: 'DELETE' }); after?.(); toast.push('Budget deleted'); await refresh() } catch (e) { toast.push(e.message, 'error') } })
+  const deleteYearlyBudget = (b) => confirmDelete('Delete this yearly budget?', '', async () => { try { await api(`/finance/budgets/${b.id}`, { method: 'DELETE' }); toast.push('Budget deleted'); await refresh() } catch (e) { toast.push(e.message, 'error') } })
   const dropdownAccounts = data.accounts.filter((a) => a.is_active !== false)
   const toggleIncludeInNetWorth = async (table, row) => { try { await api(`/finance/${table}/${row.id}`, { method: 'PATCH', body: { include_in_net_worth: row.include_in_net_worth === false } }); await refresh() } catch { Alert.alert('Update failed') } }
   const toggleIncludeInNetWorthGroup = async (table, rows, next) => { try { await Promise.all(rows.map((r) => api(`/finance/${table}/${r.id}`, { method: 'PATCH', body: { include_in_net_worth: next } }))); await refresh() } catch { Alert.alert('Update failed') } }
@@ -294,6 +304,11 @@ export default function Shell() {
           onUndoPayout={(fund) => Alert.alert('Undo this payout?', 'Its linked transaction (if any) will be removed.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Undo payout', style: 'destructive', onPress: () => chitAction(fund, 'undo_payout', 'Payout undone') }])}
           onComplete={(fund) => chitAction(fund, 'complete', 'Marked completed')} onReopen={(fund) => chitAction(fund, 'reopen', 'Reopened')} onDeletePayment={deleteChitFundPayment} />,
       )}
+      {view === 'budgets' && page(
+        <BudgetsView data={data} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onSetMonth={(year, month) => setBudgetMonthForm({ year, month })}
+          onCloseMonth={closeBudgetMonth} onReopenMonth={reopenBudgetMonth} onDeleteMonth={deleteBudgetMonth}
+          onAddYearly={() => setBudgetForm({ open: true, editing: null })} onEditYearly={(b) => setBudgetForm({ open: true, editing: b })} onDeleteYearly={deleteYearlyBudget} />,
+      )}
       {view === 'scholarships' && page(
         <ScholarshipsView data={data} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onDetailChange={setActiveDetailId} onRefresh={refresh}
           onAdd={() => setScholarshipForm({ open: true, editing: null })} onEdit={(x) => setScholarshipForm({ open: true, editing: x })} onPay={setScholarshipPay}
@@ -358,6 +373,8 @@ export default function Shell() {
       <LendAddMoreForm open={!!lendAddRecord} record={lendAddRecord} accounts={dropdownAccounts} creditCards={data.credit_cards} onClose={() => setLendAddRecord(null)} onSaved={async () => { setLendAddRecord(null); await refresh() }} />
       <ManageAccessSheet open={!!shareSheet} kind={shareSheet?.kind || 'lend'} target={shareSheet?.target} onClose={() => setShareSheet(null)} />
       {prompt.node}
+      <BudgetMonthForm open={!!budgetMonthForm} initialYear={budgetMonthForm?.year ?? new Date().getFullYear()} initialMonth={budgetMonthForm?.month ?? new Date().getMonth()} budgetMonths={data.budget_months} budgetMonthCategories={data.budget_month_categories} categories={data.categories} onClose={() => setBudgetMonthForm(null)} onSaved={async () => { setBudgetMonthForm(null); await refresh() }} />
+      <BudgetForm open={budgetForm.open} editing={budgetForm.editing} categories={data.categories} onClose={() => setBudgetForm({ open: false, editing: null })} onSaved={async () => { setBudgetForm({ open: false, editing: null }); await refresh() }} />
       <ScholarshipForm open={scholarshipForm.open} editing={scholarshipForm.editing} accounts={dropdownAccounts} onClose={() => setScholarshipForm({ open: false, editing: null })} onSaved={async () => { setScholarshipForm({ open: false, editing: null }); await refresh() }} />
       <ScholarshipPayForm open={!!scholarshipPay} scholarship={scholarshipPay} accounts={dropdownAccounts} onClose={() => setScholarshipPay(null)} onSaved={async () => { setScholarshipPay(null); await refresh() }} />
       <BucketForm open={bucketForm.open} editing={bucketForm.editing} onClose={() => setBucketForm({ open: false, editing: null })} onSaved={async () => { setBucketForm({ open: false, editing: null }); await refresh() }} />
