@@ -17,7 +17,8 @@ export function BarChart({ rows, valueKey, colorFor, height = 160, showMoney = t
   const y = (v) => top + ((max - v) / ((max - min) || 1)) * plotH
   const ticks = Array.from({ length: 5 }, (_, i) => min + ((max - min) * i) / 4)
   const slot = rows.length ? plotW / rows.length : 0
-  const fmt = (v) => (showMoney ? `₹${(v / 1000).toFixed(0)}k` : '••••')
+  // ₹Nk like the web; one decimal when the step is under ₹1k so ticks never repeat.
+  const fmt = (v) => (!showMoney ? '••••' : `₹${(v / 1000).toFixed(Math.abs(ticks[1] - ticks[0]) < 1000 && v % 1000 !== 0 ? 1 : 0)}k`)
   return (
     <View style={{ height }} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
       {width > 0 && (

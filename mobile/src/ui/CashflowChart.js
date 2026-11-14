@@ -10,7 +10,7 @@ const EXPENSE = '#fb7185'
 const TICK = '#94a3b8'
 
 function niceMax(v) {
-  if (v <= 0) return 1000
+  if (v <= 0) return 4000 // empty chart: 0, 1k, 2k, 3k, 4k
   const mag = Math.pow(10, Math.floor(Math.log10(v)))
   return Math.ceil(v / mag) * mag
 }
@@ -23,7 +23,8 @@ export function CashflowChart({ months, showMoney, glass, height = 160 }) {
   const y = (v) => top + plotH - (v / max) * plotH
   const ticks = [0, max / 4, max / 2, (3 * max) / 4, max]
   const slot = months.length ? plotW / months.length : 0
-  const fmt = (v) => (showMoney ? `₹${(v / 1000).toFixed(0)}k` : '••••')
+  // ₹Nk like the web; one decimal when the step is under ₹1k so ticks never repeat.
+  const fmt = (v) => (!showMoney ? '••••' : `₹${(v / 1000).toFixed(Math.abs(ticks[1] - ticks[0]) < 1000 && v % 1000 !== 0 ? 1 : 0)}k`)
 
   const areaPath = (key, closed) => {
     const pts = months.map((m, i) => [left + slot * i + slot / 2, y(m[key])])

@@ -1,4 +1,5 @@
 import '../../global.css'
+import { LogBox } from 'react-native'
 import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
@@ -8,6 +9,9 @@ import { ThemeProvider } from '../state/ThemeProvider'
 import { HiddenTxProvider } from '../state/HiddenTx'
 import { Loading } from '../components/ui'
 import { colors } from '../lib/theme'
+
+// A library still uses RN's deprecated ImageBackground; dev-only warning, not actionable here.
+LogBox.ignoreLogs(['ImageBackground is deprecated'])
 
 function RootStack() {
   const { user, loading } = useAuth()
