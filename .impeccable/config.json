@@ -341,6 +341,15 @@
         ],
         "createdAt": "2026-11-14T09:06:41.935Z",
         "reason": "Claude: label sits on a 3% emerald tint (bg-emerald-500/[.03]) copied verbatim from the PWA's LoanDetailView; effectively the neutral card surface"
+      },
+      {
+        "rule": "gray-on-color",
+        "value": "*",
+        "files": [
+          "mobile/src/views/LendBorrowView.js"
+        ],
+        "createdAt": "2026-11-14T09:11:11.486Z",
+        "reason": "Claude: slate pills on slate-500/15 and labels on 3% emerald/rose card tints copied verbatim from the PWA's LendBorrowView"
       }
     ]
   }

@@ -18,6 +18,10 @@ import { VaultView } from '../../views/VaultView'
 import { LoansView } from '../../views/LoansView'
 import { LoanForm, LoanPaymentForm } from '../../views/forms/LoanForms'
 import { toast } from '../../lib/toast'
+import { LendBorrowView } from '../../views/LendBorrowView'
+import { LendAddMoreForm, LendForm } from '../../views/forms/LendForms'
+import { ManageAccessSheet } from '../../views/forms/ManageAccessSheet'
+import { usePrompt } from '../../ui/PromptDialog'
 import { AccountForm } from '../../views/forms/AccountForm'
 import { CreditCardForm, CsvImport, RecurringManager } from '../../views/forms/MiscForms'
 import { tw } from '../../lib/tw'
@@ -32,7 +36,7 @@ import { enablePush, pushPermissionStatus } from '../../lib/push'
 // the Dashboard header, the configurable 3-slot bottom nav + "More" sheet, and the floating
 // quick-add button. Modules not yet ported open their interim native screens.
 const INTERIM_ROUTES = {
-  lend: '/lend', chitfunds: '/chits', family_company: '/family', budgets: '/budgets',
+  chitfunds: '/chits', family_company: '/family', budgets: '/budgets',
   investments: '/investments', scholarships: '/scholarships', bucket: '/bucket', insights: '/insights',
 }
 const PUSH_PROMPTED_KEY = 'push_prompted'
@@ -79,6 +83,10 @@ export default function Shell() {
   const [typeConfirm, setTypeConfirm] = useState(null)
   const [loanForm, setLoanForm] = useState({ open: false, editing: null })
   const [loanPay, setLoanPay] = useState(null)
+  const [lendForm, setLendForm] = useState({ open: false, editing: null })
+  const [lendAddRecord, setLendAddRecord] = useState(null)
+  const [shareSheet, setShareSheet] = useState(null) // { kind: 'lend' | 'profile', target }
+  const prompt = usePrompt()
   useEffect(() => { setActiveDetailId(null) }, [view])
 
   useEffect(() => { const t = setTimeout(() => setHasGreetedOnce(true), 2200); return () => clearTimeout(t) }, [])
@@ -114,6 +122,7 @@ export default function Shell() {
   const runFabAction = () => {
     if (view === 'accounts') return activeDetailId ? openTxForm({ source: activeDetailId }) : setAccountForm({ open: true, editing: null })
     if (view === 'cards') return activeDetailId ? openTxForm({ source: `cc:${activeDetailId}` }) : setCardForm({ open: true, editing: null })
+    if (view === 'lend') { const r = data.lend_borrow.find((l) => l.id === activeDetailId); return r ? logLendRepayment(r) : setLendForm({ open: true, editing: null }) }
     if (view === 'loans') { const loan = data.loans.find((l) => l.id === activeDetailId); return loan ? setLoanPay(loan) : setLoanForm({ open: true, editing: null }) }
     return openTxForm()
   }
@@ -169,6 +178,15 @@ export default function Shell() {
     ])
   })
   const syncLoanOutstanding = async (loan, target) => { try { await api('/finance/loan_payments', { method: 'POST', body: { loan_id: loan.id, type: 'adjustment', target_outstanding: target } }); toast.push('Outstanding synced'); await refresh() } catch (e) { toast.push(e.message || 'Sync failed', 'error') } }
+  // Lend & borrow
+  const logLendRepayment = (record) => openTxForm({ repay: `lend:${record.id}`, repayType: record.type === 'lent' ? 'income' : 'expense' })
+  const deleteLend = (l, after) => confirmDelete(`Delete record for ${l.person_name}?`, 'Linked transaction (if any) will be removed too.', async () => { try { await api(`/finance/lend_borrow/${l.id}`, { method: 'DELETE' }); after?.(); toast.push('Deleted'); await refresh() } catch { toast.push('Delete failed', 'error') } })
+  const deleteTx = (t) => confirmDelete('Delete this transaction?', 'Balances will be recomputed.', async () => { try { await api(`/finance/transactions/${t.id}`, { method: 'DELETE' }); toast.push('Transaction deleted'); await refresh() } catch (e) { toast.push(e.message, 'error') } })
+  const editAdditionNote = async (a) => {
+    const value = await prompt.ask('Note for this top-up', { defaultValue: a.notes || '', placeholder: 'e.g. Diwali advance' })
+    if (value === null) return
+    try { await api(`/finance/lend_borrow_additions/${a.id}`, { method: 'PATCH', body: { notes: value.trim() } }); toast.push('Note updated'); await refresh() } catch { toast.push('Could not update', 'error') }
+  }
   const dropdownAccounts = data.accounts.filter((a) => a.is_active !== false)
   const toggleIncludeInNetWorth = async (table, row) => { try { await api(`/finance/${table}/${row.id}`, { method: 'PATCH', body: { include_in_net_worth: row.include_in_net_worth === false } }); await refresh() } catch { Alert.alert('Update failed') } }
   const toggleIncludeInNetWorthGroup = async (table, rows, next) => { try { await Promise.all(rows.map((r) => api(`/finance/${table}/${r.id}`, { method: 'PATCH', body: { include_in_net_worth: next } }))); await refresh() } catch { Alert.alert('Update failed') } }
@@ -243,6 +261,11 @@ export default function Shell() {
           onAdd={() => setLoanForm({ open: true, editing: null })} onEdit={(l) => setLoanForm({ open: true, editing: l })} onDelete={deleteLoan}
           onPay={setLoanPay} onDeletePayment={deleteLoanPayment} onDeletePaymentBulk={deleteLoanPaymentBulk} onSync={syncLoanOutstanding} />,
       )}
+      {view === 'lend' && page(
+        <LendBorrowView data={data} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onDetailChange={setActiveDetailId}
+          onAdd={() => setLendForm({ open: true, editing: null })} onEdit={(l) => setLendForm({ open: true, editing: l })} onDelete={deleteLend} onDeleteTx={deleteTx} onDeleteTxBulk={deleteTxBulk}
+          onLogRepayment={logLendRepayment} onAddMore={setLendAddRecord} onEditAdditionNote={editAdditionNote} onManageAccess={(r) => setShareSheet({ kind: 'lend', target: r })} />,
+      )}
       {view === 'profile' && page(
         <SettingsView data={data} user={user} refresh={refresh} section={settingsSection} onSectionChange={setSettingsSection} onSaveProfile={saveProfile}
           onDeleteAccount={deleteUserAccount} onClearAllData={clearAllData} onSignOut={() => Alert.alert('Sign out?', '', [{ text: 'Cancel', style: 'cancel' }, { text: 'Sign out', onPress: signOut }])}
@@ -294,6 +317,10 @@ export default function Shell() {
       <CsvImport open={csvOpen} onClose={() => setCsvOpen(false)} data={data} refresh={refresh} />
       <LoanForm open={loanForm.open} editing={loanForm.editing} accounts={dropdownAccounts} onClose={() => setLoanForm({ open: false, editing: null })} onSaved={async () => { setLoanForm({ open: false, editing: null }); await refresh() }} />
       <LoanPaymentForm open={!!loanPay} loan={loanPay} accounts={dropdownAccounts} creditCards={data.credit_cards || []} payments={(data.loan_payments || []).filter((p) => p.loan_id === loanPay?.id)} onClose={() => setLoanPay(null)} onSaved={async () => { setLoanPay(null); await refresh() }} />
+      <LendForm open={lendForm.open} editing={lendForm.editing} accounts={dropdownAccounts} creditCards={data.credit_cards} onClose={() => setLendForm({ open: false, editing: null })} onSaved={async () => { setLendForm({ open: false, editing: null }); await refresh() }} />
+      <LendAddMoreForm open={!!lendAddRecord} record={lendAddRecord} accounts={dropdownAccounts} creditCards={data.credit_cards} onClose={() => setLendAddRecord(null)} onSaved={async () => { setLendAddRecord(null); await refresh() }} />
+      <ManageAccessSheet open={!!shareSheet} kind={shareSheet?.kind || 'lend'} target={shareSheet?.target} onClose={() => setShareSheet(null)} />
+      {prompt.node}
       <TypeToConfirm state={typeConfirm} onClose={async (ok) => { const s = typeConfirm; setTypeConfirm(null); if (ok) await s.run() }} />
     </View>
   )
