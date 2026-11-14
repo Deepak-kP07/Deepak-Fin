@@ -359,6 +359,15 @@
         ],
         "createdAt": "2026-11-14T09:13:42.693Z",
         "reason": "Claude: slate 'Completed' pill on slate-500/15 and labels on 3% amber/accent card tints, copied verbatim from the PWA's ChitFundsView"
+      },
+      {
+        "rule": "gray-on-color",
+        "value": "*",
+        "files": [
+          "mobile/src/views/ScholarshipsView.js"
+        ],
+        "createdAt": "2026-11-14T11:27:08.909Z",
+        "reason": "Claude: 'pending' status pill is slate on slate-500/15, copied verbatim from the PWA's ScholarshipsView"
       }
     ]
   }

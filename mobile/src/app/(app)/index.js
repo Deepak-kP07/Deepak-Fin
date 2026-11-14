@@ -24,6 +24,7 @@ import { ManageAccessSheet } from '../../views/forms/ManageAccessSheet'
 import { usePrompt } from '../../ui/PromptDialog'
 import { ChitFundsView } from '../../views/ChitFundsView'
 import { BucketForm, BucketListView } from '../../views/BucketListView'
+import { ScholarshipForm, ScholarshipPayForm, ScholarshipsView } from '../../views/ScholarshipsView'
 import { ChitFundForm, ChitFundPaymentForm, ChitFundPayoutForm } from '../../views/forms/ChitFundForms'
 import { AccountForm } from '../../views/forms/AccountForm'
 import { CreditCardForm, CsvImport, RecurringManager } from '../../views/forms/MiscForms'
@@ -40,7 +41,7 @@ import { enablePush, pushPermissionStatus } from '../../lib/push'
 // quick-add button. Modules not yet ported open their interim native screens.
 const INTERIM_ROUTES = {
   family_company: '/family', budgets: '/budgets',
-  investments: '/investments', scholarships: '/scholarships', insights: '/insights',
+  investments: '/investments', insights: '/insights',
 }
 const PUSH_PROMPTED_KEY = 'push_prompted'
 
@@ -94,6 +95,8 @@ export default function Shell() {
   const [chitPayment, setChitPayment] = useState(null) // { fund, editing }
   const [chitPayout, setChitPayout] = useState(null)
   const [bucketForm, setBucketForm] = useState({ open: false, editing: null })
+  const [scholarshipForm, setScholarshipForm] = useState({ open: false, editing: null })
+  const [scholarshipPay, setScholarshipPay] = useState(null)
   useEffect(() => { setActiveDetailId(null) }, [view])
 
   useEffect(() => { const t = setTimeout(() => setHasGreetedOnce(true), 2200); return () => clearTimeout(t) }, [])
@@ -131,6 +134,7 @@ export default function Shell() {
     if (view === 'cards') return activeDetailId ? openTxForm({ source: `cc:${activeDetailId}` }) : setCardForm({ open: true, editing: null })
     if (view === 'lend') { const r = data.lend_borrow.find((l) => l.id === activeDetailId); return r ? logLendRepayment(r) : setLendForm({ open: true, editing: null }) }
     if (view === 'chitfunds') { const f = data.chit_funds.find((c) => c.id === activeDetailId); return f ? setChitPayment({ fund: f, editing: null }) : setChitForm({ open: true, editing: null }) }
+    if (view === 'scholarships') { const sc = data.scholarships.find((x) => x.id === activeDetailId); return sc ? setScholarshipPay(sc) : setScholarshipForm({ open: true, editing: null }) }
     if (view === 'bucket') return setBucketForm({ open: true, editing: null })
     if (view === 'loans') { const loan = data.loans.find((l) => l.id === activeDetailId); return loan ? setLoanPay(loan) : setLoanForm({ open: true, editing: null }) }
     return openTxForm()
@@ -290,6 +294,11 @@ export default function Shell() {
           onUndoPayout={(fund) => Alert.alert('Undo this payout?', 'Its linked transaction (if any) will be removed.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Undo payout', style: 'destructive', onPress: () => chitAction(fund, 'undo_payout', 'Payout undone') }])}
           onComplete={(fund) => chitAction(fund, 'complete', 'Marked completed')} onReopen={(fund) => chitAction(fund, 'reopen', 'Reopened')} onDeletePayment={deleteChitFundPayment} />,
       )}
+      {view === 'scholarships' && page(
+        <ScholarshipsView data={data} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onDetailChange={setActiveDetailId} onRefresh={refresh}
+          onAdd={() => setScholarshipForm({ open: true, editing: null })} onEdit={(x) => setScholarshipForm({ open: true, editing: x })} onPay={setScholarshipPay}
+          onDelete={(x, after) => confirmDelete(`Delete "${x.name}"?`, 'Linked payments will be removed.', async () => { try { await api(`/finance/scholarships/${x.id}`, { method: 'DELETE' }); after?.(); toast.push('Deleted'); await refresh() } catch { toast.push('Delete failed', 'error') } })} />,
+      )}
       {view === 'bucket' && page(
         <BucketListView data={data} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onAdd={() => setBucketForm({ open: true, editing: null })} onEdit={(b) => setBucketForm({ open: true, editing: b })}
           onDelete={(b) => confirmDelete(`Remove "${b.title}" from bucket list?`, '', async () => { try { await api(`/finance/bucket_list/${b.id}`, { method: 'DELETE' }); toast.push('Removed'); await refresh() } catch (e) { toast.push(e.message, 'error') } })} />,
@@ -349,6 +358,8 @@ export default function Shell() {
       <LendAddMoreForm open={!!lendAddRecord} record={lendAddRecord} accounts={dropdownAccounts} creditCards={data.credit_cards} onClose={() => setLendAddRecord(null)} onSaved={async () => { setLendAddRecord(null); await refresh() }} />
       <ManageAccessSheet open={!!shareSheet} kind={shareSheet?.kind || 'lend'} target={shareSheet?.target} onClose={() => setShareSheet(null)} />
       {prompt.node}
+      <ScholarshipForm open={scholarshipForm.open} editing={scholarshipForm.editing} accounts={dropdownAccounts} onClose={() => setScholarshipForm({ open: false, editing: null })} onSaved={async () => { setScholarshipForm({ open: false, editing: null }); await refresh() }} />
+      <ScholarshipPayForm open={!!scholarshipPay} scholarship={scholarshipPay} accounts={dropdownAccounts} onClose={() => setScholarshipPay(null)} onSaved={async () => { setScholarshipPay(null); await refresh() }} />
       <BucketForm open={bucketForm.open} editing={bucketForm.editing} onClose={() => setBucketForm({ open: false, editing: null })} onSaved={async () => { setBucketForm({ open: false, editing: null }); await refresh() }} />
       <ChitFundForm open={chitForm.open} editing={chitForm.editing} accounts={dropdownAccounts} onClose={() => setChitForm({ open: false, editing: null })} onSaved={async () => { setChitForm({ open: false, editing: null }); await refresh() }} />
       <ChitFundPaymentForm open={!!chitPayment} fund={chitPayment?.fund} editing={chitPayment?.editing} accounts={dropdownAccounts} onClose={() => setChitPayment(null)} onSaved={async () => { setChitPayment(null); await refresh() }} />
