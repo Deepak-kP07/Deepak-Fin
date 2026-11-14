@@ -350,6 +350,15 @@
         ],
         "createdAt": "2026-11-14T09:11:11.486Z",
         "reason": "Claude: slate pills on slate-500/15 and labels on 3% emerald/rose card tints copied verbatim from the PWA's LendBorrowView"
+      },
+      {
+        "rule": "gray-on-color",
+        "value": "*",
+        "files": [
+          "mobile/src/views/ChitFundsView.js"
+        ],
+        "createdAt": "2026-11-14T09:13:42.693Z",
+        "reason": "Claude: slate 'Completed' pill on slate-500/15 and labels on 3% amber/accent card tints, copied verbatim from the PWA's ChitFundsView"
       }
     ]
   }

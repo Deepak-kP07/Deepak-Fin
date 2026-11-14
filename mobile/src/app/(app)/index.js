@@ -22,6 +22,9 @@ import { LendBorrowView } from '../../views/LendBorrowView'
 import { LendAddMoreForm, LendForm } from '../../views/forms/LendForms'
 import { ManageAccessSheet } from '../../views/forms/ManageAccessSheet'
 import { usePrompt } from '../../ui/PromptDialog'
+import { ChitFundsView } from '../../views/ChitFundsView'
+import { BucketForm, BucketListView } from '../../views/BucketListView'
+import { ChitFundForm, ChitFundPaymentForm, ChitFundPayoutForm } from '../../views/forms/ChitFundForms'
 import { AccountForm } from '../../views/forms/AccountForm'
 import { CreditCardForm, CsvImport, RecurringManager } from '../../views/forms/MiscForms'
 import { tw } from '../../lib/tw'
@@ -36,8 +39,8 @@ import { enablePush, pushPermissionStatus } from '../../lib/push'
 // the Dashboard header, the configurable 3-slot bottom nav + "More" sheet, and the floating
 // quick-add button. Modules not yet ported open their interim native screens.
 const INTERIM_ROUTES = {
-  chitfunds: '/chits', family_company: '/family', budgets: '/budgets',
-  investments: '/investments', scholarships: '/scholarships', bucket: '/bucket', insights: '/insights',
+  family_company: '/family', budgets: '/budgets',
+  investments: '/investments', scholarships: '/scholarships', insights: '/insights',
 }
 const PUSH_PROMPTED_KEY = 'push_prompted'
 
@@ -87,6 +90,10 @@ export default function Shell() {
   const [lendAddRecord, setLendAddRecord] = useState(null)
   const [shareSheet, setShareSheet] = useState(null) // { kind: 'lend' | 'profile', target }
   const prompt = usePrompt()
+  const [chitForm, setChitForm] = useState({ open: false, editing: null })
+  const [chitPayment, setChitPayment] = useState(null) // { fund, editing }
+  const [chitPayout, setChitPayout] = useState(null)
+  const [bucketForm, setBucketForm] = useState({ open: false, editing: null })
   useEffect(() => { setActiveDetailId(null) }, [view])
 
   useEffect(() => { const t = setTimeout(() => setHasGreetedOnce(true), 2200); return () => clearTimeout(t) }, [])
@@ -123,6 +130,8 @@ export default function Shell() {
     if (view === 'accounts') return activeDetailId ? openTxForm({ source: activeDetailId }) : setAccountForm({ open: true, editing: null })
     if (view === 'cards') return activeDetailId ? openTxForm({ source: `cc:${activeDetailId}` }) : setCardForm({ open: true, editing: null })
     if (view === 'lend') { const r = data.lend_borrow.find((l) => l.id === activeDetailId); return r ? logLendRepayment(r) : setLendForm({ open: true, editing: null }) }
+    if (view === 'chitfunds') { const f = data.chit_funds.find((c) => c.id === activeDetailId); return f ? setChitPayment({ fund: f, editing: null }) : setChitForm({ open: true, editing: null }) }
+    if (view === 'bucket') return setBucketForm({ open: true, editing: null })
     if (view === 'loans') { const loan = data.loans.find((l) => l.id === activeDetailId); return loan ? setLoanPay(loan) : setLoanForm({ open: true, editing: null }) }
     return openTxForm()
   }
@@ -186,6 +195,14 @@ export default function Shell() {
     const value = await prompt.ask('Note for this top-up', { defaultValue: a.notes || '', placeholder: 'e.g. Diwali advance' })
     if (value === null) return
     try { await api(`/finance/lend_borrow_additions/${a.id}`, { method: 'PATCH', body: { notes: value.trim() } }); toast.push('Note updated'); await refresh() } catch { toast.push('Could not update', 'error') }
+  }
+  // Chit funds — take_payout/undo_payout/complete/reopen are dedicated action endpoints.
+  const chitAction = async (fund, action, done) => { try { await api(`/finance/chit_funds/${fund.id}/${action}`, { method: 'POST' }); toast.push(done); await refresh() } catch (e) { toast.push(e.message, 'error') } }
+  const deleteChitFund = (c, after) => confirmDelete(`Delete chit fund "${c.name}"?`, 'All payment records and any linked transactions will be removed.', async () => { try { await api(`/finance/chit_funds/${c.id}`, { method: 'DELETE' }); after?.(); toast.push('Chit fund deleted'); await refresh() } catch { toast.push('Delete failed', 'error') } })
+  const deleteChitPaymentNow = async (id) => { try { await api(`/finance/chit_fund_payments/${id}`, { method: 'DELETE' }); return true } catch { return false } }
+  const deleteChitFundPayment = async (id, silent) => {
+    if (silent) { const ok = await deleteChitPaymentNow(id); await refresh(); if (!ok) toast.push('Delete failed', 'error'); return }
+    confirmDelete('Delete this payment?', 'Its linked transaction (if any) will be removed too.', async () => { const ok = await deleteChitPaymentNow(id); toast.push(ok ? 'Payment deleted' : 'Delete failed', ok ? undefined : 'error'); await refresh() })
   }
   const dropdownAccounts = data.accounts.filter((a) => a.is_active !== false)
   const toggleIncludeInNetWorth = async (table, row) => { try { await api(`/finance/${table}/${row.id}`, { method: 'PATCH', body: { include_in_net_worth: row.include_in_net_worth === false } }); await refresh() } catch { Alert.alert('Update failed') } }
@@ -266,6 +283,17 @@ export default function Shell() {
           onAdd={() => setLendForm({ open: true, editing: null })} onEdit={(l) => setLendForm({ open: true, editing: l })} onDelete={deleteLend} onDeleteTx={deleteTx} onDeleteTxBulk={deleteTxBulk}
           onLogRepayment={logLendRepayment} onAddMore={setLendAddRecord} onEditAdditionNote={editAdditionNote} onManageAccess={(r) => setShareSheet({ kind: 'lend', target: r })} />,
       )}
+      {view === 'chitfunds' && page(
+        <ChitFundsView data={data} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onDetailChange={setActiveDetailId}
+          onAdd={() => setChitForm({ open: true, editing: null })} onEdit={(c) => setChitForm({ open: true, editing: c })} onDelete={deleteChitFund}
+          onLogPayment={(fund) => setChitPayment({ fund, editing: null })} onEditPayment={(fund, editing) => setChitPayment({ fund, editing })} onTakePayout={setChitPayout}
+          onUndoPayout={(fund) => Alert.alert('Undo this payout?', 'Its linked transaction (if any) will be removed.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Undo payout', style: 'destructive', onPress: () => chitAction(fund, 'undo_payout', 'Payout undone') }])}
+          onComplete={(fund) => chitAction(fund, 'complete', 'Marked completed')} onReopen={(fund) => chitAction(fund, 'reopen', 'Reopened')} onDeletePayment={deleteChitFundPayment} />,
+      )}
+      {view === 'bucket' && page(
+        <BucketListView data={data} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onAdd={() => setBucketForm({ open: true, editing: null })} onEdit={(b) => setBucketForm({ open: true, editing: b })}
+          onDelete={(b) => confirmDelete(`Remove "${b.title}" from bucket list?`, '', async () => { try { await api(`/finance/bucket_list/${b.id}`, { method: 'DELETE' }); toast.push('Removed'); await refresh() } catch (e) { toast.push(e.message, 'error') } })} />,
+      )}
       {view === 'profile' && page(
         <SettingsView data={data} user={user} refresh={refresh} section={settingsSection} onSectionChange={setSettingsSection} onSaveProfile={saveProfile}
           onDeleteAccount={deleteUserAccount} onClearAllData={clearAllData} onSignOut={() => Alert.alert('Sign out?', '', [{ text: 'Cancel', style: 'cancel' }, { text: 'Sign out', onPress: signOut }])}
@@ -321,6 +349,10 @@ export default function Shell() {
       <LendAddMoreForm open={!!lendAddRecord} record={lendAddRecord} accounts={dropdownAccounts} creditCards={data.credit_cards} onClose={() => setLendAddRecord(null)} onSaved={async () => { setLendAddRecord(null); await refresh() }} />
       <ManageAccessSheet open={!!shareSheet} kind={shareSheet?.kind || 'lend'} target={shareSheet?.target} onClose={() => setShareSheet(null)} />
       {prompt.node}
+      <BucketForm open={bucketForm.open} editing={bucketForm.editing} onClose={() => setBucketForm({ open: false, editing: null })} onSaved={async () => { setBucketForm({ open: false, editing: null }); await refresh() }} />
+      <ChitFundForm open={chitForm.open} editing={chitForm.editing} accounts={dropdownAccounts} onClose={() => setChitForm({ open: false, editing: null })} onSaved={async () => { setChitForm({ open: false, editing: null }); await refresh() }} />
+      <ChitFundPaymentForm open={!!chitPayment} fund={chitPayment?.fund} editing={chitPayment?.editing} accounts={dropdownAccounts} onClose={() => setChitPayment(null)} onSaved={async () => { setChitPayment(null); await refresh() }} />
+      <ChitFundPayoutForm open={!!chitPayout} fund={chitPayout} accounts={dropdownAccounts} onClose={() => setChitPayout(null)} onSaved={async () => { setChitPayout(null); await refresh() }} />
       <TypeToConfirm state={typeConfirm} onClose={async (ok) => { const s = typeConfirm; setTypeConfirm(null); if (ok) await s.run() }} />
     </View>
   )
