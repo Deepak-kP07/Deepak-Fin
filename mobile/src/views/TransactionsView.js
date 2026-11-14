@@ -16,7 +16,7 @@ import { EmptyState } from '../ui/EmptyState'
 import { DonutChart } from '../ui/DonutChart'
 import { CreditCardBillAlert } from '../ui/CreditCardBillAlert'
 import { usePinDialog } from '../ui/PinDialog'
-import { DateField } from '../components/forms'
+import { DateInput, Field } from '../ui/FormKit'
 import { tw } from '../lib/tw'
 import { api } from '../lib/api'
 import { MONTH_NAMES, capitalizeFirst, money } from '../lib/format'
@@ -243,8 +243,8 @@ export function TransactionsView({ data, showMoney, onToggleMoney, onOpenTxForm,
 
       <BottomSheet open={rangeOpen} onOpenChange={setRangeOpen} title="Custom range">
         <View className="pb-4">
-          <DateField label="Start date" value={rangeDraft.start} onChange={(v) => setRangeDraft((d) => ({ ...d, start: v }))} allowFuture />
-          <DateField label="End date" value={rangeDraft.end} onChange={(v) => setRangeDraft((d) => ({ ...d, end: v }))} allowFuture />
+          <Field label="Start date"><DateInput value={rangeDraft.start} onChange={(v) => setRangeDraft((d) => ({ ...d, start: v }))} /></Field>
+          <Field label="End date"><DateInput value={rangeDraft.end} onChange={(v) => setRangeDraft((d) => ({ ...d, end: v }))} /></Field>
           <View className="flex-row gap-2">
             {customRange && (
               <Pressable onPress={() => { setCustomRange(null); setRangeDraft({ start: '', end: '' }); setRangeOpen(false) }} className={tw('flex-1 items-center rounded-xl border border-white/10 light:border-black/10 px-3 py-2.5')}><Text className={tw('text-sm text-slate-300 light:text-slate-700')}>Clear</Text></Pressable>

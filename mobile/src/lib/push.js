@@ -67,16 +67,14 @@ export async function disablePush({ optOut = false } = {}) {
 }
 
 // Server notification links are web paths like "/?view=cards" — map them to native screens.
-const VIEW_ROUTES = {
-  dashboard: '/', transactions: '/transactions', accounts: '/accounts', cards: '/cards', credit_cards: '/cards',
-  loans: '/loans', lend: '/lend', lend_borrow: '/lend', budgets: '/budgets', investments: '/investments',
-  family_company: '/family', chitfunds: '/chits', chit_funds: '/chits', scholarships: '/scholarships', bucket: '/bucket', insights: '/insights',
-}
+// Every module lives inside the Shell now, so a web-style view name becomes "/?view=<shell key>".
+const VIEW_ALIASES = { credit_cards: 'cards', lend_borrow: 'lend', chit_funds: 'chitfunds', settings: 'profile' }
 export function routeForView(view) {
-  return VIEW_ROUTES[view] || '/'
+  if (!view || view === 'dashboard') return '/'
+  return { pathname: '/', params: { view: VIEW_ALIASES[view] || view } }
 }
 export function routeForUrl(url) {
   if (!url) return null
   const view = (String(url).match(/[?&]view=([a-z_]+)/) || [])[1]
-  return view ? routeForView(view) : '/'
+  return routeForView(view)
 }
