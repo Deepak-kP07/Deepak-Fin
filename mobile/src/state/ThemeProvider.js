@@ -11,7 +11,9 @@ const BG = { dark: '#080b12', light: '#eef1f6', glass: '#080b12' }
 
 export function ThemeProvider({ children }) {
   const { data } = useData()
-  const theme = ['dark', 'light', 'glass'].includes(data.profile?.theme) ? data.profile.theme : 'dark'
+  const raw = data.profile?.theme
+  // The web stores the Glass theme as 'glassy'.
+  const theme = raw === 'glassy' || raw === 'glass' ? 'glass' : raw === 'light' ? 'light' : 'dark'
   const accent = data.profile?.accent_color || DEFAULT_ACCENT
   setTwTheme(theme)
   const value = useMemo(() => ({ theme, accent, bg: BG[theme], accentColor: (step, alpha) => accentColor(accent, step, alpha) }), [theme, accent])

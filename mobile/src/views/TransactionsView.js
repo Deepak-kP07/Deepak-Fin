@@ -1,5 +1,8 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
-import { Pressable, Share, Text, TextInput, View } from 'react-native'
+import { Alert, Pressable, Text, TextInput, View } from 'react-native'
+import * as Print from 'expo-print'
+import * as Sharing from 'expo-sharing'
+import { File, Paths } from 'expo-file-system'
 import * as WebBrowser from 'expo-web-browser'
 import {
   ArrowDownRight, ArrowLeftRight, ArrowUpRight, CheckCircle2, ChevronLeft, ChevronRight, Eye, EyeOff, ListChecks, Lock,
@@ -44,7 +47,7 @@ function rotateHue(hex, deg) {
   return `#${[f(0), f(8), f(4)].map((v) => v.toString(16).padStart(2, '0')).join('')}`
 }
 
-export function TransactionsView({ data, showMoney, onToggleMoney, onOpenTxForm, onEditTx, onDeleteTxBulk, onPayCardBill }) {
+export function TransactionsView({ data, showMoney, onToggleMoney, onOpenTxForm, onEditTx, onDeleteTxBulk, onPayCardBill, onImport, onOpenRecurring }) {
   const { accentColor } = useTheme()
   const { transactions, accounts, categories, credit_cards: creditCards = [] } = data
   const [query, setQuery] = useState('')
@@ -133,10 +136,33 @@ export function TransactionsView({ data, showMoney, onToggleMoney, onOpenTxForm,
     return rows.map((e) => { let color = e.color, n = 0; while (used.has(color) && n < 8) { color = rotateHue(color, 40); n++ } used.add(color); return { ...e, color } })
   }, [chartSource, categories, catView])
 
+  // Same columns as the web export; written to a real file and handed to the share sheet (save to
+  // Files/Drive, mail, WhatsApp…).
+  const shareFile = async (name, write, mimeType) => {
+    try {
+      const file = new File(Paths.cache, name)
+      if (file.exists) file.delete()
+      await write(file)
+      await Sharing.shareAsync(file.uri, { mimeType, dialogTitle: name })
+    } catch (e) { Alert.alert('Export failed', e.message) }
+  }
   const exportCsv = async () => {
     const csv = ['Date,Description,Type,Amount,Category,Account,Notes', ...sorted.map((r) => [r.date, JSON.stringify(r.description || ''), r.type, r.amount, JSON.stringify(categories.find((c) => c.id === r.category_id)?.name || ''), JSON.stringify(resolveSource(r)?.name || ''), JSON.stringify(r.notes || '')].join(','))].join('\n')
     setMobileFiltersOpen(false)
-    await Share.share({ title: 'personal-finance-transactions.csv', message: csv })
+    await shareFile('personal-finance-transactions.csv', (f) => f.write(csv), 'text/csv')
+  }
+  // Same statement layout as the web's jsPDF export (title, period, Date/Description/Type/
+  // Category/Account/Amount table), rendered by the system print engine.
+  const exportPdf = async () => {
+    setMobileFiltersOpen(false)
+    const esc = (v) => String(v ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))
+    const amt = (v) => new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Math.abs(Number(v || 0)))
+    const body = sorted.map((r) => `<tr><td>${formatDate(r.date)}</td><td>${esc(r.description)}</td><td>${r.type}</td><td>${esc(categories.find((c) => c.id === r.category_id)?.name || 'Uncategorised')}</td><td>${esc(resolveSource(r)?.name || '')}</td><td class="r">${amt(r.amount)}</td></tr>`).join('')
+    const html = `<html><head><meta charset="utf-8"><style>body{font-family:Helvetica,Arial;padding:24px}h1{font-size:18px;margin:0}p{font-size:12px;color:#555}table{width:100%;border-collapse:collapse;font-size:10px;margin-top:12px}th{background:#1e293b;color:#fff;text-align:left;padding:6px}td{padding:5px 6px;border-bottom:1px solid #e2e8f0}.r{text-align:right}</style></head><body><h1>Personal Fin - Transaction Statement</h1><p>${esc(rangeLabel)}</p><table><thead><tr><th>Date</th><th>Description</th><th>Type</th><th>Category</th><th>Account</th><th class="r">Amount</th></tr></thead><tbody>${body}</tbody></table></body></html>`
+    try {
+      const { uri } = await Print.printToFileAsync({ html })
+      await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'personal-finance-transactions.pdf' })
+    } catch (e) { Alert.alert('Export failed', e.message) }
   }
   const openAttachment = async (t) => {
     try { const { url } = await api(`/finance/transactions/${t.id}/attachment`); if (url) await WebBrowser.openBrowserAsync(url) } catch { /* the row stays as-is */ }
@@ -207,7 +233,10 @@ export function TransactionsView({ data, showMoney, onToggleMoney, onOpenTxForm,
             <ToggleSwitch checked={chartView} onChange={() => setChartView((v) => !v)} />
           </Pressable>
           <View className={tw('border-t border-white/10 light:border-black/10 pt-2')}>
+            <Pressable onPress={() => { setMobileFiltersOpen(false); onImport() }} className="rounded-lg px-1 py-2.5"><Text className={tw('text-sm text-slate-300 light:text-slate-700')}>Import CSV</Text></Pressable>
             <Pressable onPress={exportCsv} className="rounded-lg px-1 py-2.5"><Text className={tw('text-sm text-slate-300 light:text-slate-700')}>Export as CSV</Text></Pressable>
+            <Pressable onPress={exportPdf} className="rounded-lg px-1 py-2.5"><Text className={tw('text-sm text-slate-300 light:text-slate-700')}>Export as PDF</Text></Pressable>
+            <Pressable onPress={() => { setMobileFiltersOpen(false); onOpenRecurring() }} className="flex-row items-center gap-2 rounded-lg px-1 py-2.5"><Icon as={Repeat} size={14} className="text-slate-300 light:text-slate-700" /><Text className={tw('text-sm text-slate-300 light:text-slate-700')}>Recurring transactions</Text></Pressable>
           </View>
         </View>
       </BottomSheet>

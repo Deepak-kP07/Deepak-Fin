@@ -72,7 +72,8 @@
         }
       ],
       "@react-native-google-signin/google-signin",
-      "expo-image"
+      "expo-image",
+      "expo-sharing"
     ],
     "experiments": {
       "typedRoutes": false

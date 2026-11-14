@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, Animated, Pressable, Text, TextInput, View } from 'react-native'
 import {
   ArrowDownRight, ArrowRight, ArrowUpRight, CheckCircle2, ChevronLeft, ChevronRight, CreditCard, Eye, EyeOff, Landmark, Lock,
-  MoreVertical, RefreshCw, RotateCcw, Target, Trash2, X,
+  MoreVertical, Pencil, RefreshCw, RotateCcw, Target, Trash2, X,
 } from 'lucide-react-native'
 import { Icon } from '../ui/Icon'
 import { BankCardFace } from '../ui/BankCardFace'
@@ -81,7 +81,7 @@ function CreditCardFlip({ card, showMoney, onSpend, onPay, onViewDetails }) {
   )
 }
 
-function CreditCardDetailView({ card, cardTransactions, allTransactions, categories, onBack, onSpend, onPay, onEditTx, onDeleteActivityBulk, onDeleteTxBulk, onSyncOutstanding, onDelete, showMoney, onToggleMoney }) {
+function CreditCardDetailView({ card, cardTransactions, allTransactions, categories, onBack, onSpend, onPay, onEditTx, onDeleteActivityBulk, onDeleteTxBulk, onSyncOutstanding, onDelete, onEdit, showMoney, onToggleMoney }) {
   const [syncOpen, setSyncOpen] = useState(false)
   const [syncValue, setSyncValue] = useState('')
   const [syncBusy, setSyncBusy] = useState(false)
@@ -151,6 +151,7 @@ function CreditCardDetailView({ card, cardTransactions, allTransactions, categor
             {moreOpen && (
               <View className={tw('absolute right-0 top-12 z-30 w-48 rounded-xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-1')}>
                 <Pressable onPress={() => { setMoreOpen(false); setSyncOpen((o) => !o) }} className="flex-row items-center gap-2 rounded-lg px-3 py-2"><Icon as={RefreshCw} size={14} className="text-slate-300 light:text-slate-700" /><Text className={tw('text-sm text-slate-300 light:text-slate-700')}>Sync outstanding</Text></Pressable>
+                <Pressable onPress={() => { setMoreOpen(false); onEdit(card) }} className="flex-row items-center gap-2 rounded-lg px-3 py-2"><Icon as={Pencil} size={14} className="text-slate-300 light:text-slate-700" /><Text className={tw('text-sm text-slate-300 light:text-slate-700')}>Edit card</Text></Pressable>
                 <Pressable onPress={() => { setMoreOpen(false); onDelete(card) }} className="flex-row items-center gap-2 rounded-lg px-3 py-2"><Icon as={Trash2} size={14} className="text-rose-300/70 light:text-rose-700" /><Text className={tw('text-sm text-rose-300/70 light:text-rose-700')}>Delete card</Text></Pressable>
               </View>
             )}
@@ -263,7 +264,7 @@ function CreditCardDetailView({ card, cardTransactions, allTransactions, categor
   )
 }
 
-export function CreditCardsView({ data, onSpend, onPay, onEditTx, onDeleteActivityBulk, onDeleteTxBulk, onSyncOutstanding, onDelete, showMoney, onToggleMoney, onDetailChange }) {
+export function CreditCardsView({ data, onSpend, onPay, onEditTx, onDeleteActivityBulk, onDeleteTxBulk, onSyncOutstanding, onDelete, onEdit, showMoney, onToggleMoney, onDetailChange }) {
   const { credit_cards = [], credit_card_transactions = [], categories, transactions } = data
   const [selectedCardId, setSelectedCardId] = useState(null)
   const selectedCard = credit_cards.find((c) => c.id === selectedCardId)
@@ -274,7 +275,7 @@ export function CreditCardsView({ data, onSpend, onPay, onEditTx, onDeleteActivi
       <CreditCardDetailView
         card={selectedCard} cardTransactions={credit_card_transactions.filter((t) => t.credit_card_id === selectedCard.id)} allTransactions={transactions} categories={categories}
         onBack={() => setSelectedCardId(null)} onSpend={onSpend} onPay={onPay} onEditTx={onEditTx} onDeleteActivityBulk={onDeleteActivityBulk} onDeleteTxBulk={onDeleteTxBulk}
-        onSyncOutstanding={onSyncOutstanding} onDelete={(c) => { onDelete(c, () => setSelectedCardId(null)) }} showMoney={showMoney} onToggleMoney={onToggleMoney}
+        onSyncOutstanding={onSyncOutstanding} onDelete={(c) => { onDelete(c, () => setSelectedCardId(null)) }} onEdit={onEdit} showMoney={showMoney} onToggleMoney={onToggleMoney}
       />
     )
   }
@@ -308,7 +309,7 @@ export function CreditCardsView({ data, onSpend, onPay, onEditTx, onDeleteActivi
 
       {credit_cards.length === 0 ? (
         <View className={tw('rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card')}>
-          <EmptyState icon={CreditCard} title="No credit cards yet" message="Track credit card spends, utilisation and pay bills without leaving the app." />
+          <EmptyState icon={CreditCard} title="No credit cards yet" message="Track credit card spends, utilisation and pay bills without leaving the app." cta="Add first card" onCta={() => onEdit(null)} />
         </View>
       ) : (
         <View className="gap-6">

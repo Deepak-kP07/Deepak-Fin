@@ -305,6 +305,33 @@
         ],
         "createdAt": "2026-09-24T16:01:52.926Z",
         "reason": "Bill-due banner className is a ternary between an amber-warning state (amber text on amber bg) and a default state (slate-300 text on a dark neutral bg, not colored). Only one branch ever renders; the regex scanner conflates both branches into one string and cross-matches slate text from the default branch against the amber bg from the warning branch, a combo that never co-occurs in the DOM. Same false-positive class already ignored for LendBorrowView.jsx and LoanPaymentForm.jsx."
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#64748b",
+        "createdAt": "2026-11-14T06:21:48.433Z",
+        "reason": "port fidelity: the same literal is used for net worth item swatches in app/page.js DashboardView, which the native view copies verbatim"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#38bdf8",
+        "createdAt": "2026-11-14T06:21:48.463Z",
+        "reason": "port fidelity: the same literal is used for net worth item swatches in app/page.js DashboardView, which the native view copies verbatim"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#fb923c",
+        "createdAt": "2026-11-14T06:21:48.489Z",
+        "reason": "port fidelity: the same literal is used for net worth item swatches in app/page.js DashboardView, which the native view copies verbatim"
+      },
+      {
+        "rule": "gray-on-color",
+        "value": "*",
+        "files": [
+          "mobile/src/views/forms/MiscForms.js"
+        ],
+        "createdAt": "2026-11-14T06:27:42.790Z",
+        "reason": "false positive: the Paused chip is slate-400 text on a 6% white wash (not a coloured background), copied from features/recurring/RecurringManager.jsx"
       }
     ]
   }
