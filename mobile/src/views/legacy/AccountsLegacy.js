@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import { Card, EmptyState, ErrorBanner, Loading, Screen, SectionLabel, styles as ui } from '../../../components/ui'
-import { useData } from '../../../state/DataProvider'
-import { money } from '../../../lib/format'
-import { colors } from '../../../lib/theme'
+import { Card, EmptyState, ErrorBanner, Loading, Screen, SectionLabel, styles as ui } from '../../components/ui'
+import { useData } from '../../state/DataProvider'
+import { money } from '../../lib/format'
+import { colors } from '../../lib/theme'
 
 const TYPE_LABEL = { bank: 'Bank', cash: 'Cash', wallet: 'Wallet', debit_card: 'Debit card' }
 

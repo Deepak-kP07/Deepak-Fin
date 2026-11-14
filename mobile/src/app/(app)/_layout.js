@@ -26,7 +26,7 @@ export default function AppLayout() {
   useNotificationTaps()
   return (
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
-      <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="index" />
       {MODALS.map((name) => <Stack.Screen key={name} name={name} options={{ presentation: 'modal' }} />)}
     </Stack>
   )

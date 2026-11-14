@@ -1,14 +1,14 @@
 import { useState } from 'react'
 import { useRouter } from 'expo-router'
-import { orderedEnabledKeys, resolveModuleSettings } from '../../../lib/shared'
+import { orderedEnabledKeys, resolveModuleSettings } from '../../lib/shared'
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import * as WebBrowser from 'expo-web-browser'
 import { Feather } from '@expo/vector-icons'
-import { Button, Card, Screen, SectionLabel, styles as ui } from '../../../components/ui'
-import { useAuth } from '../../../state/AuthProvider'
-import { useData } from '../../../state/DataProvider'
-import { API_URL, api } from '../../../lib/api'
-import { colors } from '../../../lib/theme'
+import { Button, Card, Screen, SectionLabel, styles as ui } from '../../components/ui'
+import { useAuth } from '../../state/AuthProvider'
+import { useData } from '../../state/DataProvider'
+import { API_URL, api } from '../../lib/api'
+import { colors } from '../../lib/theme'
 
 // Module key (profiles.module_settings, same as the web app) → native screen. Only modules the
 // user has turned on are listed, in their chosen order.

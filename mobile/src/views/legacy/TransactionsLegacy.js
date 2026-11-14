@@ -3,12 +3,12 @@ import { Pressable, SectionList, StyleSheet, Text, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Feather } from '@expo/vector-icons'
-import { EmptyState, ErrorBanner, Loading, styles as ui } from '../../../components/ui'
-import { TransactionRow } from '../../../components/TransactionRow'
-import { useData } from '../../../state/DataProvider'
-import { MONTH_NAMES, dayLabel, money, todayISO } from '../../../lib/format'
-import { dedupeTransfers, listableTransactions, monthTotals, sortNewestFirst } from '../../../lib/transactions'
-import { colors } from '../../../lib/theme'
+import { EmptyState, ErrorBanner, Loading, styles as ui } from '../../components/ui'
+import { TransactionRow } from '../../components/TransactionRow'
+import { useData } from '../../state/DataProvider'
+import { MONTH_NAMES, dayLabel, money, todayISO } from '../../lib/format'
+import { dedupeTransfers, listableTransactions, monthTotals, sortNewestFirst } from '../../lib/transactions'
+import { colors } from '../../lib/theme'
 
 const shiftMonth = (ym, n) => {
   const [y, m] = ym.split('-').map(Number)

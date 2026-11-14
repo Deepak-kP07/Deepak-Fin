@@ -1,5 +1,6 @@
 const path = require('path')
 const { getDefaultConfig } = require('expo/metro-config')
+const { withNativeWind } = require('nativewind/metro')
 
 // The app reuses the web project's pure calculation modules (../lib — loan maths, budgets, credit
 // card cycles, Family/Company totals…) so both apps always agree on the numbers. `@/lib/...` is
@@ -18,4 +19,5 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
   return (defaultResolve || context.resolveRequest)(context, moduleName, platform)
 }
 
-module.exports = config
+// NativeWind wraps last so it sees (and keeps) the shared-lib resolver above.
+module.exports = withNativeWind(config, { input: './global.css' })

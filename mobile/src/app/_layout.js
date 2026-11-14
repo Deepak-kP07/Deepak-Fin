@@ -1,8 +1,10 @@
+import '../../global.css'
 import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { AuthProvider, useAuth } from '../state/AuthProvider'
 import { DataProvider } from '../state/DataProvider'
+import { ThemeProvider } from '../state/ThemeProvider'
 import { Loading } from '../components/ui'
 import { colors } from '../lib/theme'
 
@@ -27,8 +29,10 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <AuthProvider>
         <DataProvider>
-          <StatusBar style="light" />
-          <RootStack />
+          <ThemeProvider>
+            <StatusBar style="light" />
+            <RootStack />
+          </ThemeProvider>
         </DataProvider>
       </AuthProvider>
     </SafeAreaProvider>
