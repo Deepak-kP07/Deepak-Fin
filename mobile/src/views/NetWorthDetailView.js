@@ -32,7 +32,7 @@ function ItemSection({ title, subtotal, items, showMoney, caption, emptyIcon, em
                   <Text numberOfLines={1} className={tw('text-[11px] capitalize text-slate-400 light:text-slate-500')}>{it.sub}</Text>
                 </View>
               </View>
-              <Text className={tw('text-sm font-semibold', it.debt ? 'text-rose-300 light:text-rose-700' : 'text-white light:text-slate-900')}>{showMoney ? `${it.debt ? '−' : ''}${money(it.amount).replace('-', '')}` : '••••'}</Text>
+              <Text className={tw('text-sm font-semibold', it.debt || it.amount < 0 ? 'text-rose-300 light:text-rose-700' : 'text-white light:text-slate-900')}>{showMoney ? `${it.debt || it.amount < 0 ? '−' : ''}${money(it.amount).replace('-', '')}` : '••••'}</Text>
             </View>
           ))}
         </View>

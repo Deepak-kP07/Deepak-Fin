@@ -30,7 +30,7 @@ function ItemSection({ title, subtotal, items, showMoney, caption, emptyIcon: Em
                   <div className="truncate text-[11px] capitalize text-slate-400 light:text-slate-500">{it.sub}</div>
                 </div>
               </div>
-              <div className={`shrink-0 text-sm font-semibold ${it.debt ? 'text-rose-300 light:text-rose-700' : 'text-white light:text-slate-900'}`}>{showMoney ? `${it.debt ? '−' : ''}${money(it.amount).replace('-', '')}` : '••••'}</div>
+              <div className={`shrink-0 text-sm font-semibold ${it.debt || it.amount < 0 ? 'text-rose-300 light:text-rose-700' : 'text-white light:text-slate-900'}`}>{showMoney ? `${it.debt || it.amount < 0 ? '−' : ''}${money(it.amount).replace('-', '')}` : '••••'}</div>
             </div>
           ))}
         </div>

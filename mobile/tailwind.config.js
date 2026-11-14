@@ -55,5 +55,13 @@ module.exports = {
       '.glass-hero': { backgroundColor: 'rgb(var(--accent-500) / 0.14)', borderColor: 'rgb(var(--accent-300) / 0.22)' },
       '.glass-btn-primary': {},
     }),
+    // Phones with a custom system font (Xiaomi/MIUI and others) mis-measure weighted text when no
+    // font family is named, so labels get clipped or wrap mid-word. Naming the system family
+    // alongside the weight fixes the measurement and still renders the phone's own font.
+    ({ addUtilities }) => addUtilities({
+      '.font-medium': { fontFamily: 'sans-serif', fontWeight: '500' },
+      '.font-semibold': { fontFamily: 'sans-serif', fontWeight: '600' },
+      '.font-bold': { fontFamily: 'sans-serif', fontWeight: '700' },
+    }),
   ],
 }
