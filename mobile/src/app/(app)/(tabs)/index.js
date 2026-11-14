@@ -6,7 +6,7 @@ import { Card, EmptyState, ErrorBanner, Loading, Screen, SectionLabel, styles as
 import { TransactionRow } from '../../../components/TransactionRow'
 import { useData } from '../../../state/DataProvider'
 import { useAuth } from '../../../state/AuthProvider'
-import { MONTH_NAMES, money, todayISO } from '../../../lib/format'
+import { MONTH_NAMES, capitalizeFirst, money, todayISO } from '../../../lib/format'
 import { dedupeTransfers, listableTransactions, monthTotals, sortNewestFirst } from '../../../lib/transactions'
 import { colors } from '../../../lib/theme'
 
@@ -32,7 +32,7 @@ export default function Home() {
 
   return (
     <Screen
-      title={firstName ? `Hi, ${firstName}` : 'Home'}
+      title={firstName ? `Hi, ${capitalizeFirst(firstName)}` : 'Home'}
       right={<Pressable hitSlop={12} onPress={() => setShowMoney((v) => !v)}><Feather name={showMoney ? 'eye' : 'eye-off'} size={20} color={colors.textMuted} /></Pressable>}
       refreshing={refreshing}
       onRefresh={onRefresh}
