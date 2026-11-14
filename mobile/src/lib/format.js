@@ -40,3 +40,6 @@ export function formatDate(d) {
   if (Number.isNaN(dt.getTime())) return ''
   return `${String(dt.getDate()).padStart(2, '0')}-${MONTH_NAMES[dt.getMonth()].slice(0, 3)}-${dt.getFullYear()}`
 }
+
+// "05-Jan-2026 (3:40 PM)" — the web's formatDateTime.
+export const formatDateTime = (d, t) => (t ? `${formatDate(d)} (${timeLabel(t)})` : formatDate(d))

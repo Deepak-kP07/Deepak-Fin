@@ -24,6 +24,7 @@ import { ManageAccessSheet } from '../../views/forms/ManageAccessSheet'
 import { usePrompt } from '../../ui/PromptDialog'
 import { ChitFundsView } from '../../views/ChitFundsView'
 import { BucketForm, BucketListView } from '../../views/BucketListView'
+import { InsightsView } from '../../views/InsightsView'
 import { FamilyCompanyView } from '../../views/FamilyCompanyView'
 import { MoneyProfileBulkImport, MoneyProfileEntryForm, MoneyProfileForm, RecurringEntryManager } from '../../views/forms/FamilyForms'
 import { BudgetForm, BudgetMonthForm, BudgetsView } from '../../views/BudgetsView'
@@ -43,7 +44,7 @@ import { enablePush, pushPermissionStatus } from '../../lib/push'
 // the Dashboard header, the configurable 3-slot bottom nav + "More" sheet, and the floating
 // quick-add button. Modules not yet ported open their interim native screens.
 const INTERIM_ROUTES = {
-  investments: '/investments', insights: '/insights',
+  investments: '/investments',
 }
 const PUSH_PROMPTED_KEY = 'push_prompted'
 
@@ -332,6 +333,7 @@ export default function Shell() {
           onUndoPayout={(fund) => Alert.alert('Undo this payout?', 'Its linked transaction (if any) will be removed.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Undo payout', style: 'destructive', onPress: () => chitAction(fund, 'undo_payout', 'Payout undone') }])}
           onComplete={(fund) => chitAction(fund, 'complete', 'Marked completed')} onReopen={(fund) => chitAction(fund, 'reopen', 'Reopened')} onDeletePayment={deleteChitFundPayment} />,
       )}
+      {view === 'insights' && page(<InsightsView data={data} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} />)}
       {view === 'family_company' && page(
         <FamilyCompanyView data={data} showMoney={showMoney} onToggleMoney={() => setShowMoney((v) => !v)} onDetailChange={setActiveDetailId}
           onAddProfile={() => setProfileForm({ open: true, editing: null })} onEditProfile={(p) => setProfileForm({ open: true, editing: p })} onDeleteProfile={deleteMoneyProfile}
