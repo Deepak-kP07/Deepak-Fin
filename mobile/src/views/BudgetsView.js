@@ -10,8 +10,8 @@ import { HeroStatTile } from '../ui/HeroStatTile'
 import { DonutChart } from '../ui/DonutChart'
 import { BackLink, CARD, EyeButton, HERO, MoreMenu, PageTitle, ProgressBar, SectionHeader } from '../ui/DetailKit'
 import { Field, FormSheet, Input, SubmitButton } from '../ui/FormKit'
-import { Select } from '../ui/Select'
 import { tw } from '../lib/tw'
+import { CategorySelect } from '../ui/CategorySelect'
 import { api } from '../lib/api'
 import { toast } from '../lib/toast'
 import { money, todayISO } from '../lib/format'
@@ -347,14 +347,16 @@ export function BudgetMonthForm({ open, onClose, onSaved, initialYear, initialMo
     if (overAllocated) { toast.push("You've planned more across categories than your overall budget — raise the overall total or trim a category first.", 'error'); return }
     setBusy(true)
     try {
-      const rows = form.rows.filter((r) => r.category_id && Number(r.amount) >= 0)
+      // One line per category — two rows for the same category are added together.
+      const byCat = new Map()
+      for (const r of form.rows) if (r.category_id && Number(r.amount) >= 0) byCat.set(r.category_id, (byCat.get(r.category_id) || 0) + (Number(r.amount) || 0))
+      const rows = [...byCat].map(([category_id, amount]) => ({ category_id, amount }))
       await api('/finance/budget_months/save', { method: 'POST', body: { year: cursor.year, month: cursor.month, total_amount: total, categories: rows.map((r) => ({ category_id: r.category_id, amount: Number(r.amount) })) } })
       toast.push(existingPlan ? 'Budget updated' : 'Budget set')
       onSaved()
     } catch (e) { toast.push(e.message, 'error') } finally { setBusy(false) }
   }
 
-  const catOptions = [{ value: '', label: 'Choose category…' }, ...expenseCats.map((c) => ({ value: c.id, label: c.name }))]
   return (
     <FormSheet open={open} onClose={onClose} title={existingPlan ? 'Edit budget' : 'Set a budget'}>
       <View className="flex-row items-center justify-center gap-3">
@@ -386,7 +388,8 @@ export function BudgetMonthForm({ open, onClose, onSaved, initialYear, initialMo
         <View className="mt-3 gap-2.5">
           {form.rows.map((row, i) => (
             <View key={i} className="gap-2">
-              <Select value={row.category_id} onChange={(v) => setRow(i, { category_id: v })} options={catOptions} title="Category" />
+              <CategorySelect value={row.category_id} onChange={(v) => setRow(i, { category_id: v })} placeholder="Choose category…"
+                categories={expenseCats.filter((c) => c.id === row.category_id || !form.rows.some((r, k) => k !== i && r.category_id === c.id))} />
               <View className="flex-row items-center gap-2">
                 <TextInput keyboardType="decimal-pad" value={row.amount} onChangeText={(v) => setRow(i, { amount: v.replace(/[^0-9.]/g, '') })} placeholder="10000" placeholderTextColor="#64748b"
                   className={tw('flex-1 rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-2.5 text-sm text-white light:text-slate-900')} />
@@ -420,7 +423,7 @@ export function BudgetForm({ open, onClose, onSaved, editing, categories }) {
 
   return (
     <FormSheet open={open} onClose={onClose} title={editing ? 'Edit yearly budget' : 'Set a yearly budget'} onSubmit={save} busy={busy} submitLabel={busy ? 'Saving…' : editing ? 'Update budget' : 'Save budget'}>
-      <Field label="Category"><View className="mt-2"><Select value={form.category_id} onChange={(v) => setForm((f) => ({ ...f, category_id: v }))} options={[{ value: '', label: 'Choose category…' }, ...expenseCats.map((c) => ({ value: c.id, label: c.name }))]} title="Category" /></View></Field>
+      <Field label="Category"><View className="mt-2"><CategorySelect value={form.category_id} onChange={(v) => setForm((f) => ({ ...f, category_id: v }))} categories={expenseCats} placeholder="Choose category…" /></View></Field>
       <Field label="Limit amount"><Input keyboardType="decimal-pad" value={form.amount} onChangeText={(v) => setForm((f) => ({ ...f, amount: v.replace(/[^0-9.]/g, '') }))} placeholder="10000" /></Field>
     </FormSheet>
   )

@@ -1,7 +1,8 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../lib/api'
 import { DEFAULT_ACCENT } from '../lib/theme'
 import { useAuth } from './AuthProvider'
+import { clearCachedSummary, readCachedSummary, writeCachedSummary } from '../lib/dataCache'
 
 // Same shape as the PWA's initial state, so every module can read its arrays before the first load.
 const EMPTY = {
@@ -25,12 +26,22 @@ export function DataProvider({ children }) {
   // show at all (full-screen retry); after it, the last good data stays up with a banner.
   const [loaded, setLoaded] = useState(false)
 
+  // When the data on screen came from the on-phone cache (offline, or the first moments of a
+  // launch) rather than the server — the Shell shows a small "offline" bar while it's stale.
+  const [fromCache, setFromCache] = useState(false)
+  const userRef = useRef(userId)
+  userRef.current = userId
+
   const refresh = useCallback(async () => {
+    const forUser = userRef.current
     try {
       const summary = await api('/finance/summary')
+      if (userRef.current !== forUser) return
       setData({ ...EMPTY, ...summary })
       setError(null)
       setLoaded(true)
+      setFromCache(false)
+      if (forUser) writeCachedSummary(forUser, summary)
     } catch (e) {
       setError(e.message || 'Could not load your data')
     } finally {
@@ -39,13 +50,25 @@ export function DataProvider({ children }) {
   }, [])
 
   // Load for whoever is signed in; wipe it the moment they sign out so the next person never sees it.
+  // A cached copy (if any) goes on screen immediately; the server load then replaces it.
+  const lastUser = useRef(userId)
   useEffect(() => {
+    if (lastUser.current && lastUser.current !== userId) clearCachedSummary(lastUser.current)
+    lastUser.current = userId
     setData(EMPTY)
     setError(null)
     setLoaded(false)
+    setFromCache(false)
     if (!userId) { setLoading(false); return }
     setLoading(true)
+    let alive = true
+    readCachedSummary(userId).then((cached) => {
+      if (!alive || !cached) return
+      setData((d) => (d === EMPTY ? { ...EMPTY, ...cached } : d))
+      setLoaded((l) => { if (!l) setFromCache(true); return true })
+    })
     refresh()
+    return () => { alive = false }
   }, [userId, refresh])
 
   // Optimistic local change — the UI updates on the tap, and the caller's background refresh()
@@ -53,9 +76,9 @@ export function DataProvider({ children }) {
   const patch = useCallback((fn) => setData((d) => ({ ...d, ...fn(d) })), [])
 
   const value = useMemo(() => ({
-    data, loading, error, loaded, refresh, patch,
+    data, loading, error, loaded, refresh, patch, fromCache,
     accent: data.profile?.accent_color || DEFAULT_ACCENT,
-  }), [data, loading, error, loaded, refresh, patch])
+  }), [data, loading, error, loaded, refresh, patch, fromCache])
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>
 }

@@ -13,10 +13,16 @@ export async function biometricReady() {
   } catch { return false }
 }
 
-// Shows the system prompt. Resolves true on success; false on cancel/failure.
-export async function authenticate(promptMessage = 'Unlock Personal Fin') {
+// Shows Android's fingerprint sheet (BiometricPrompt — the same one Google Pay uses, with the
+// sensor icon). Biometric-only on purpose: allowing the device PIN in the same prompt makes many
+// phones (Xiaomi included) jump straight to the PIN/pattern screen with no fingerprint icon at all.
+// `usePin` is the explicit fallback, a separate prompt for the phone's own PIN/pattern.
+// Resolves true on success; false on cancel/failure.
+export async function authenticate(promptMessage = 'Unlock Personal Fin', { usePin = false, subtitle } = {}) {
   try {
-    const r = await LocalAuthentication.authenticateAsync({ promptMessage, cancelLabel: 'Cancel', disableDeviceFallback: false })
+    const r = await LocalAuthentication.authenticateAsync(usePin
+      ? { promptMessage, disableDeviceFallback: false }
+      : { promptMessage, promptSubtitle: subtitle || 'Touch the fingerprint sensor', cancelLabel: 'Cancel', disableDeviceFallback: true, requireConfirmation: false })
     return !!r.success
   } catch { return false }
 }

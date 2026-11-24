@@ -1,9 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Pressable, Text, TextInput, View } from 'react-native'
-import {
-  ArrowDownRight, ArrowUpRight, CheckCircle2, ChevronDown, ChevronLeft, Clock, Eye, EyeOff,
-  Landmark, MoreVertical, Pencil, RefreshCw, Sparkles, Target, Trash2, X,
-} from 'lucide-react-native'
+import { ArrowDownRight, ArrowUpRight, CheckCircle2, ChevronDown, ChevronLeft, Clock, Eye, EyeOff, Landmark, MoreVertical, Pencil, RefreshCw, Sparkles, Target, Trash2 } from 'lucide-react-native'
 import { Icon } from '../ui/Icon'
 import { AccentGradient } from '../ui/Gradient'
 import { StatCard } from '../ui/StatCard'
@@ -11,6 +8,7 @@ import { HeroStatTile } from '../ui/HeroStatTile'
 import { EmptyState } from '../ui/EmptyState'
 import { DismissibleBanner } from '../ui/DismissibleBanner'
 import { tw } from '../lib/tw'
+import { SelectBar } from '../ui/DetailKit'
 import { dateToLocalISO, formatDate, money, todayISO } from '../lib/format'
 import { liveOutstanding, monthAbbr, nextLoanDueDate, paymentTypeLabel, projectSchedule } from '../lib/shared'
 
@@ -290,11 +288,7 @@ function LoanDetailView({ loan, payments, accounts, onBack, onPay, onDeletePayme
 
       <View className={tw(CARD)}>
         {selectMode ? (
-          <View className={tw('flex-row items-center gap-2 border-b border-white/10 light:border-black/10 px-5 py-3')}>
-            <Pressable onPress={exitSelectMode} className={tw('rounded-xl border border-white/10 light:border-black/10 p-2')}><Icon as={X} size={15} className={tw('text-slate-400 light:text-slate-500')} /></Pressable>
-            <Text className={tw('flex-1 text-sm font-medium text-white light:text-slate-900')}>{selectedIds.size} selected</Text>
-            <Pressable disabled={selectedIds.size === 0} onPress={handleBulkDelete} className={tw('rounded-xl border border-rose-300/30 bg-rose-300/10 p-2', selectedIds.size === 0 && 'opacity-40')}><Icon as={Trash2} size={15} className={tw('text-rose-300 light:text-rose-700')} /></Pressable>
-          </View>
+          <SelectBar count={selectedIds.size} onCancel={exitSelectMode} onDelete={handleBulkDelete} />
         ) : (
           <View className={tw('border-b border-white/10 light:border-black/10 px-5 py-3')}><Text className="text-xs uppercase tracking-widest text-slate-500">Payment history · {payments.length}</Text></View>
         )}

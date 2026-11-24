@@ -7,6 +7,8 @@ import { AppLockProvider } from '../../ui/AppLock'
 
 // Everything behind sign-in. Forms open as modals; module screens push on top of the tabs.
 const MODALS = ['transaction']
+// A shortcut/link straight to a form still has the app's main screen underneath it to go back to.
+export const unstable_settings = { initialRouteName: 'index' }
 
 // Tapping a push notification opens the screen it's about (the server sends a web-style
 // "/?view=…" link, mapped to a native route).

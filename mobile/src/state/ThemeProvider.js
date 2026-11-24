@@ -1,5 +1,6 @@
-import { createContext, useContext, useMemo } from 'react'
-import { View } from 'react-native'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { useColorScheme, View } from 'react-native'
+import * as SecureStore from 'expo-secure-store'
 import { StatusBar } from 'expo-status-bar'
 import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg'
 import { useData } from './DataProvider'
@@ -11,15 +12,26 @@ import { setTwTheme } from '../lib/tw'
 const ThemeContext = createContext({ theme: 'dark', accent: DEFAULT_ACCENT })
 const BG = { dark: '#080b12', light: '#eef1f6', glass: '#080b12' }
 
+// "System" (follow the phone's light/dark setting) is a per-phone choice kept on the device, so the
+// profile's theme — shared with the website — is left as it is.
+const FOLLOW_SYSTEM_KEY = 'theme_follow_system'
+
 export function ThemeProvider({ children }) {
   const { data } = useData()
+  const scheme = useColorScheme()
+  const [followSystem, setFollowSystemState] = useState(false)
+  useEffect(() => { SecureStore.getItemAsync(FOLLOW_SYSTEM_KEY).then((v) => setFollowSystemState(v === '1'), () => {}) }, [])
+  const setFollowSystem = useCallback((on) => {
+    setFollowSystemState(on)
+    SecureStore.setItemAsync(FOLLOW_SYSTEM_KEY, on ? '1' : '0').catch(() => {})
+  }, [])
   // EXPO_PUBLIC_FORCE_THEME (dev only, .env.local) previews a theme without changing the profile.
-  const raw = process.env.EXPO_PUBLIC_FORCE_THEME || data.profile?.theme
+  const raw = process.env.EXPO_PUBLIC_FORCE_THEME || (followSystem ? (scheme === 'light' ? 'light' : 'dark') : data.profile?.theme)
   // The web stores the Glass theme as 'glassy'.
   const theme = raw === 'glassy' || raw === 'glass' ? 'glass' : raw === 'light' ? 'light' : 'dark'
   const accent = data.profile?.accent_color || DEFAULT_ACCENT
   setTwTheme(theme)
-  const value = useMemo(() => ({ theme, accent, bg: BG[theme], accentColor: (step, alpha) => accentColor(accent, step, alpha) }), [theme, accent])
+  const value = useMemo(() => ({ theme, accent, followSystem, setFollowSystem, bg: BG[theme], accentColor: (step, alpha) => accentColor(accent, step, alpha) }), [theme, accent, followSystem, setFollowSystem])
   const style = useMemo(() => [{ flex: 1, backgroundColor: BG[theme] }, accentVars(accent)], [theme, accent])
   return (
     <ThemeContext.Provider value={value}>

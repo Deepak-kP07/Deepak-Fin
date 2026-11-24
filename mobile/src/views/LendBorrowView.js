@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { ArrowDownRight, ArrowUpRight, CheckCircle2, ChevronLeft, Eye, EyeOff, Heart, History, MoreVertical, Pencil, Plus, Trash2, User, UserPlus, X } from 'lucide-react-native'
+import { ArrowDownRight, ArrowUpRight, CheckCircle2, ChevronLeft, Eye, EyeOff, Heart, History, MoreVertical, Pencil, Plus, Trash2, User, UserPlus } from 'lucide-react-native'
 import { Icon } from '../ui/Icon'
 import { EmptyState } from '../ui/EmptyState'
 import { HeroStatTile } from '../ui/HeroStatTile'
 import { tw } from '../lib/tw'
+import { SelectBar } from '../ui/DetailKit'
 import { capitalizeFirst, formatDate, money } from '../lib/format'
 import { canDeleteRecord, canEditRecord, canLogRepayment, canManageShares, lendRole, perspectiveType } from '../lib/shared'
 
@@ -142,11 +143,7 @@ function LendBorrowDetailView({ record, repayments, additions, accounts, transac
   const hasMenu = canManageShares(role) || canEditRecord(role) || canDeleteRecord(role)
 
   const selectHeader = (section, label, count) => (selectSection === section ? (
-    <View className={tw('flex-row items-center gap-2 border-b border-white/10 light:border-black/10 px-5 py-3')}>
-      <Pressable onPress={exitSelectMode} className={tw('rounded-xl border border-white/10 light:border-black/10 p-2')}><Icon as={X} size={15} className={tw('text-slate-400 light:text-slate-500')} /></Pressable>
-      <Text className={tw('flex-1 text-sm font-medium text-white light:text-slate-900')}>{selectedIds.size} selected</Text>
-      <Pressable disabled={selectedIds.size === 0} onPress={() => handleBulkDelete(section)} className={tw('rounded-xl border border-rose-300/30 bg-rose-300/10 p-2', selectedIds.size === 0 && 'opacity-40')}><Icon as={Trash2} size={15} className={tw('text-rose-300 light:text-rose-700')} /></Pressable>
-    </View>
+    <SelectBar count={selectedIds.size} onCancel={exitSelectMode} onDelete={() => handleBulkDelete(section)} />
   ) : (
     <View className={tw('border-b border-white/10 light:border-black/10 px-5 py-3')}><Text className="text-xs uppercase tracking-widest text-slate-500">{label} · {count}</Text></View>
   ))

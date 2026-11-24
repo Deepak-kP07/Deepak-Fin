@@ -6,7 +6,7 @@
     "scheme": "personalfin",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "automatic",
     "backgroundColor": "#080b12",
     "ios": {
       "supportsTablet": false,
@@ -40,7 +40,29 @@
         "android.permission.RECORD_AUDIO",
         "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
       ],
-      "googleServicesFile": "./google-services.json"
+      "googleServicesFile": "./google-services.json",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "www.personalfin.site",
+              "pathPrefix": "/invite"
+            },
+            {
+              "scheme": "https",
+              "host": "personalfin.site",
+              "pathPrefix": "/invite"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ]
     },
     "plugins": [
       "expo-router",
@@ -97,7 +119,9 @@
         {
           "faceIDPermission": "Unlock Personal Fin with Face ID."
         }
-      ]
+      ],
+      "expo-audio",
+      "./plugins/withAppShortcuts"
     ],
     "experiments": {
       "typedRoutes": false

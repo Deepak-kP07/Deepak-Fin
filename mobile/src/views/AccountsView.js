@@ -1,9 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Pressable, Text, TextInput, View } from 'react-native'
-import {
-  ArrowDownRight, ArrowLeftRight, ArrowUpRight, CheckCircle2, ChevronLeft, Eye, EyeOff, Landmark, Lock, MoreVertical, Pencil,
-  RefreshCw, Trash2, Wallet, X,
-} from 'lucide-react-native'
+import { ArrowDownRight, ArrowLeftRight, ArrowUpRight, CheckCircle2, ChevronLeft, Eye, EyeOff, Landmark, Lock, MoreVertical, Pencil, RefreshCw, Trash2, Wallet } from 'lucide-react-native'
 import { Icon } from '../ui/Icon'
 import { BankCardFace } from '../ui/BankCardFace'
 import { HeroStatTile } from '../ui/HeroStatTile'
@@ -12,6 +9,8 @@ import { MonthCursor } from '../ui/MonthCursor'
 import { BarChart } from '../ui/BarChart'
 import { AccentGradient } from '../ui/Gradient'
 import { tw } from '../lib/tw'
+import { SelectBar } from '../ui/DetailKit'
+import { SwipeRow } from '../ui/SwipeRow'
 import { MONTH_NAMES, capitalizeFirst, money, timeLabel } from '../lib/format'
 import { getTransactionIcon } from '../lib/categoryIcons'
 import { hiddenTransferGroups, isHiddenTx, useHiddenTx } from '../state/HiddenTx'
@@ -119,11 +118,7 @@ function AccountDetailView({ account, debitCard, transactions, categories, onBac
 
       <View className={tw('rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card')}>
         {selectMode ? (
-          <View className={tw('flex-row items-center gap-2 border-b border-white/10 light:border-black/10 px-5 py-3')}>
-            <Pressable onPress={exitSelectMode} className={tw('rounded-xl border border-white/10 light:border-black/10 p-2')}><Icon as={X} size={15} className={tw('text-slate-400 light:text-slate-500')} /></Pressable>
-            <Text className={tw('flex-1 text-sm font-medium text-white light:text-slate-900')}>{selectedIds.size} selected</Text>
-            <Pressable disabled={selectedIds.size === 0} onPress={async () => { if (await onDeleteTxBulk([...selectedIds])) exitSelectMode() }} className={tw('rounded-xl border border-rose-300/30 bg-rose-300/10 p-2', selectedIds.size === 0 && 'opacity-40')}><Icon as={Trash2} size={15} className={tw('text-rose-300 light:text-rose-700')} /></Pressable>
-          </View>
+          <SelectBar count={selectedIds.size} onCancel={exitSelectMode} onDelete={async () => { if (await onDeleteTxBulk([...selectedIds])) exitSelectMode() }} />
         ) : (
           <View className={tw('flex-row items-center justify-between gap-3 border-b border-white/10 light:border-black/10 px-5 py-3')}>
             <Text className="text-xs uppercase tracking-widest text-slate-500">Account activity · {monthActivity.length}</Text>
@@ -138,7 +133,8 @@ function AccountDetailView({ account, debitCard, transactions, categories, onBac
           const CatIcon = getTransactionIcon(t.description, cat?.name)
           const I = isTransfer ? ArrowLeftRight : CatIcon || (isIn ? ArrowUpRight : ArrowDownRight)
           return (
-            <Pressable key={t.id} onPress={() => (selectMode ? toggleSelect(t.id) : onEditTx(t))} onLongPress={() => { if (!selectMode) { setSelectMode(true); toggleSelect(t.id) } }} delayLongPress={500}
+            <SwipeRow key={t.id} disabled={selectMode} onEdit={() => onEditTx(t)} onDelete={() => onDeleteTxBulk([t.id])}>
+            <Pressable onPress={() => { if (selectMode) toggleSelect(t.id) }} onLongPress={() => { if (!selectMode) { setSelectMode(true); toggleSelect(t.id) } }} delayLongPress={450}
               className={tw('flex-row items-center gap-3 px-5 py-3', i > 0 && 'border-t border-white/5 light:border-black/5')}>
               {selectMode ? (selectedIds.has(t.id) ? <Icon as={CheckCircle2} size={22} className="text-accent-400" /> : <View className={tw('h-[22px] w-[22px] rounded-full border-2 border-white/20 light:border-black/20')} />)
                 : <View className={tw('h-9 w-9 items-center justify-center rounded-xl bg-white/[.05] light:bg-black/[.035]')}><I size={16} color={cat?.color || (isTransfer ? '#22d3ee' : '#94a3b8')} /></View>}
@@ -148,6 +144,7 @@ function AccountDetailView({ account, debitCard, transactions, categories, onBac
               </View>
               <Text className={tw('text-sm font-semibold', isIn ? 'text-emerald-300 light:text-emerald-700' : isTransfer ? 'text-accent-300 light:text-accent-700' : 'text-rose-300 light:text-rose-700')}>{isIn ? '+' : '-'}{showMoney ? money(t.amount) : '••••'}</Text>
             </Pressable>
+            </SwipeRow>
           )
         })}
       </View>

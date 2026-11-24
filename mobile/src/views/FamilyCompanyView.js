@@ -12,6 +12,7 @@ import { AccentGradient } from '../ui/Gradient'
 import { BackLink, CARD, EyeButton, HERO, MoreMenu, PageTitle, SelectBar, SelectMark, useSelection } from '../ui/DetailKit'
 import { tw } from '../lib/tw'
 import { getTransactionIcon } from '../lib/categoryIcons'
+import { SwipeRow } from '../ui/SwipeRow'
 import { MONTH_NAMES, capitalizeFirst, formatDate, money, todayISO } from '../lib/format'
 import { ENTRY_TYPE_STYLE, buildFamilyCompanyExportCsv, canDeleteEntries, canDeleteProfile, canEditProfile, canManageProfileShares, canWriteEntries, categoriesFor, moneyProfileRole, profileTotals } from '../lib/shared'
 import { dialog } from '../ui/Dialogs'
@@ -256,7 +257,8 @@ function MoneyProfileDetailView({ profile, entries, accounts, creditCards, categ
           const cat = categoryById(e.category_id)
           const isExpense = e.entry_type === 'expense'
           return (
-            <Pressable key={e.id} onPress={() => (sel.selectMode ? sel.toggle(e.id) : writable && onEditEntry(e))} onLongPress={() => canDeleteEntries(role) && sel.start(e.id)} delayLongPress={500}
+            <SwipeRow key={e.id} disabled={sel.selectMode} onEdit={writable ? () => onEditEntry(e) : undefined} onDelete={canDeleteEntries(role) ? () => onDeleteEntryBulk([e.id]) : undefined}>
+            <Pressable onPress={() => { if (sel.selectMode) sel.toggle(e.id) }} onLongPress={() => canDeleteEntries(role) && sel.start(e.id)} delayLongPress={450}
               className={tw('flex-row items-center gap-3 px-5 py-3', i > 0 && 'border-t border-white/5 light:border-black/5')}>
               {sel.selectMode ? <SelectMark selected={sel.selectedIds.has(e.id)} /> : (
                 <View className={tw('h-10 w-10 items-center justify-center rounded-xl bg-white/[.05] light:bg-black/[.035]')}>{(() => { const I = getTransactionIcon(e.description, cat?.name) || (isExpense ? ArrowDownRight : ArrowUpRight); return <I size={16} color={cat?.color || '#94a3b8'} /> })()}</View>
@@ -267,6 +269,7 @@ function MoneyProfileDetailView({ profile, entries, accounts, creditCards, categ
               </View>
               <Text className={tw('text-sm font-semibold', isExpense ? 'text-rose-300 light:text-rose-700' : 'text-emerald-300 light:text-emerald-700')}>{showMoney ? `${isExpense ? '−' : '+'}${money(e.amount)}` : '••••'}</Text>
             </Pressable>
+            </SwipeRow>
           )
         })}
       </View>
