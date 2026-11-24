@@ -38,17 +38,16 @@ export function BudgetMonthForm({ open, onClose, onSaved, initialYear, initialMo
         rows: existingLines.length ? existingLines.map((l) => ({ category_id: l.category_id, amount: String(l.amount) })) : [{ category_id: '', amount: '' }],
       }
     }
-    // Nothing set for this month yet — seed from whichever month was most recently saved, as a
-    // starting point. Freely editable before saving, never auto-saved as-is.
-    const mostRecent = [...budgetMonths].sort((a, b) => (b.year - a.year) || (b.month - a.month))[0]
-    if (mostRecent) {
-      const lines = budgetMonthCategories.filter((l) => l.budget_month_id === mostRecent.id)
-      return {
-        total_amount: String(mostRecent.total_amount),
-        rows: lines.length ? lines.map((l) => ({ category_id: l.category_id, amount: String(l.amount) })) : [{ category_id: '', amount: '' }],
-      }
-    }
-    return { total_amount: '', rows: [{ category_id: '', amount: '' }] }
+    // Nothing set for this month yet: start empty with just Food and Entertainment rows to fill
+    // in (the user adds the rest); "Copy last month" brings the previous plan back in one click.
+    const pick = (re) => expenseCats.find((c) => re.test(c.name))?.id
+    const ids = [pick(/food|dining|grocer/i), pick(/entertain|movie|fun/i)].filter(Boolean)
+    return { total_amount: '', rows: ids.length ? ids.map((category_id) => ({ category_id, amount: '' })) : [{ category_id: '', amount: '' }] }
+  }
+  const lastPlan = [...budgetMonths].filter((p) => p.id !== existingPlan?.id).sort((a, b) => (b.year - a.year) || (b.month - a.month))[0]
+  const copyLastPlan = () => {
+    const lines = budgetMonthCategories.filter((l) => l.budget_month_id === lastPlan.id)
+    setForm({ total_amount: String(lastPlan.total_amount), rows: lines.length ? lines.map((l) => ({ category_id: l.category_id, amount: String(l.amount) })) : [{ category_id: '', amount: '' }] })
   }
   const [form, setForm] = useState(buildInitial)
   const [busy, setBusy] = useState(false)
@@ -106,6 +105,9 @@ export function BudgetMonthForm({ open, onClose, onSaved, initialYear, initialMo
       )}
 
       <fieldset disabled={isClosed} className="disabled:opacity-50">
+        {!existingPlan && lastPlan && (
+          <button type="button" onClick={copyLastPlan} className="mx-auto mt-4 block text-xs font-medium text-accent-300 light:text-accent-700 hover:underline">Copy {monthLabel(lastPlan.year, lastPlan.month)}'s plan</button>
+        )}
         <label className="mt-5 block text-sm text-slate-300 light:text-slate-700">Overall monthly budget
           <input required type="number" step="0.01" min="0" value={form.total_amount} onChange={(e) => setForm({ ...form, total_amount: e.target.value })} className="mt-2 w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-3 text-white light:text-slate-900 outline-none focus:border-accent-300/50" placeholder="50000" />
         </label>

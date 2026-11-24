@@ -77,6 +77,7 @@ function VaultCard({ item, onEdit, onDelete }) {
   // Same as the PWA: a PNG of the card's front exactly as it looks here, with the details as the
   // caption. If the snapshot fails, the caption still goes out on its own.
   const frontFaceRef = useRef(null)
+  const [cardW, setCardW] = useState(0)
   const [sharing, setSharing] = useState(false)
   const share = async () => {
     if (sharing) return
@@ -102,13 +103,15 @@ function VaultCard({ item, onEdit, onDelete }) {
   const color = item.color || (isCard ? '#a78bfa' : '#22d3ee')
 
   return (
-    <Pressable onPress={() => flipTo(!flipped)} className="self-center" style={{ width: '100%', maxWidth: 340, aspectRatio: 85 / 54 }}>
+    <Pressable onPress={() => flipTo(!flipped)} onLayout={(e) => setCardW(e.nativeEvent.layout.width)} className="self-center" style={{ width: '100%', maxWidth: 340, aspectRatio: 85 / 54 }}>
       <Animated.View pointerEvents={flipped ? 'none' : 'auto'} style={[face, { transform: [{ perspective: 4000 }, { rotateY: frontRotate }] }]}>
-        <View ref={frontFaceRef} collapsable={false} style={{ flex: 1 }}>
+        {/* The shared PNG is exactly this box: pinned to the card's own 85:54 size (not "fill the
+            parent"), so the snapshot has no strip of empty space under the card. */}
+        <View ref={frontFaceRef} collapsable={false} style={cardW ? { width: cardW, height: cardW * 54 / 85, borderRadius: 16, overflow: 'hidden' } : { flex: 1 }}>
         {isCard ? (
-          <BankCardFace name={item.label} subtitle={item.bank_name || TYPE_LABEL[item.item_type]} last4={item.last4} color={color} holderName={preview?.holder_name || undefined} />
+          <BankCardFace name={item.label} subtitle={item.bank_name || TYPE_LABEL[item.item_type]} last4={item.last4} color={color} holderName={preview?.holder_name || undefined} style={{ height: '100%', aspectRatio: undefined, elevation: 0 }} />
         ) : (
-          <LinearGradient colors={[color, `${color}cc`, '#0b0f18']} locations={[0, 0.45, 1]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ flex: 1, borderRadius: 16, overflow: 'hidden', padding: 16, justifyContent: 'space-between', elevation: 6 }}>
+          <LinearGradient colors={[color, `${color}cc`, '#0b0f18']} locations={[0, 0.45, 1]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ flex: 1, borderRadius: 16, overflow: 'hidden', padding: 16, justifyContent: 'space-between' }}>
             <LinearGradient colors={['rgba(255,255,255,0.06)', 'transparent', 'rgba(0,0,0,0.25)']} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} />
             <Landmark size={18} color="rgba(255,255,255,0.8)" />
             <View>
