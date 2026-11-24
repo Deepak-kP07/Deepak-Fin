@@ -72,11 +72,22 @@ export function Button({ label, onPress, variant = 'primary', disabled, busy, ic
   )
 }
 
-export function Field({ label, style, ...inputProps }) {
+// Password fields get an eye button to show what was typed — the usual way to catch a typo.
+export function Field({ label, style, secureTextEntry, ...inputProps }) {
+  const [shown, setShown] = useState(false)
   return (
     <View style={[styles.field, style]}>
       {label ? <Text style={styles.fieldLabel}>{label}</Text> : null}
-      <TextInput placeholderTextColor={colors.textFaint} style={styles.input} {...inputProps} />
+      {secureTextEntry ? (
+        <View style={{ justifyContent: 'center' }}>
+          <TextInput placeholderTextColor={colors.textFaint} style={[styles.input, { paddingRight: 48 }]} secureTextEntry={!shown} autoCapitalize="none" autoCorrect={false} {...inputProps} />
+          <Pressable onPress={() => setShown((v) => !v)} hitSlop={8} accessibilityLabel={shown ? 'Hide password' : 'Show password'} style={{ position: 'absolute', right: 4, height: 44, width: 44, alignItems: 'center', justifyContent: 'center' }}>
+            <Feather name={shown ? 'eye-off' : 'eye'} size={18} color={colors.textMuted} />
+          </Pressable>
+        </View>
+      ) : (
+        <TextInput placeholderTextColor={colors.textFaint} style={styles.input} {...inputProps} />
+      )}
     </View>
   )
 }

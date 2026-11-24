@@ -11,6 +11,7 @@ import {
   ArrowLeft, Banknote, ChevronRight, CreditCard, Eye, EyeOff, Landmark, LayoutDashboard,
   LineChart, Repeat, ShieldCheck, Sparkle, Wifi,
 } from 'lucide-react'
+import { PasswordInput } from '@/components/shared/PasswordInput'
 
 // SHA-256 hex digest of the nonce we hand to Google — Google puts this hash in the ID token's
 // `nonce` claim, and Supabase's signInWithIdToken is handed the original (unhashed) value to
@@ -558,7 +559,7 @@ export function AuthScreen({ onAuth, initialError, initialMode = 'landing', init
                 </label>
                 {mode !== 'forgot' && (
                   <label className="block text-sm text-slate-300">Password
-                    <input required minLength={6} type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-4 py-3.5 text-white outline-none transition focus:border-accent-300/60 focus:ring-2 focus:ring-accent-300/30" placeholder="••••••••" />
+                    <PasswordInput required minLength={6} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} value={password} onChange={(e) => setPassword(e.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-4 py-3.5 text-white outline-none transition focus:border-accent-300/60 focus:ring-2 focus:ring-accent-300/30" placeholder="••••••••" />
                   </label>
                 )}
                 {mode === 'login' && (

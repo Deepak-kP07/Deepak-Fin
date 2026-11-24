@@ -2,7 +2,7 @@ import { GoogleSignin, isErrorWithCode, isSuccessResponse, statusCodes } from '@
 import { supabase } from './supabase'
 
 // Native Google sign-in: Google returns an ID token for the web OAuth client, and Supabase turns
-// it into a session (signInWithIdToken). Needs an Android OAuth client for com.personalfin.app with
+// it into a session (signInWithIdToken). Needs an Android OAuth client for site.personalfin.app with
 // the app's SHA-1 fingerprints in Google Cloud — see mobile/README.md.
 export const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || ''
 let configured = false

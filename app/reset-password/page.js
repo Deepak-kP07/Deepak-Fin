@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import { Check, KeyRound, ShieldAlert } from 'lucide-react'
+import { PasswordInput } from '@/components/shared/PasswordInput'
 
 // Where the password-reset email lands (POST /api/auth/forgot_password). Supabase puts a short-lived
 // recovery session in the URL fragment (#access_token=…&type=recovery); this page uses it — in
@@ -100,10 +101,10 @@ export default function ResetPasswordPage() {
       <p className="mt-2 text-center text-sm text-slate-400">You'll use it to sign in on the website and in the app.</p>
       <form onSubmit={submit} className="mt-6 space-y-4">
         <label className="block text-sm text-slate-300">New password
-          <input required autoFocus minLength={6} type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} className={INPUT} placeholder="••••••••" />
+          <PasswordInput required autoFocus minLength={6} autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} className={INPUT} placeholder="••••••••" />
         </label>
         <label className="block text-sm text-slate-300">Confirm new password
-          <input required minLength={6} type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} className={INPUT} placeholder="••••••••" />
+          <PasswordInput required minLength={6} autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} className={INPUT} placeholder="••••••••" />
         </label>
         {error && <div className="rounded-xl border border-rose-300/20 bg-rose-300/10 px-4 py-3 text-sm text-rose-200">{error}</div>}
         <button disabled={busy} className="w-full rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-4 py-3.5 text-sm font-semibold text-[#07101c] disabled:opacity-60">{busy ? 'Saving…' : 'Save new password'}</button>

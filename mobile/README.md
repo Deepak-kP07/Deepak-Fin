@@ -5,8 +5,9 @@ React Native + Expo (SDK 58, Expo Router), plain JavaScript. It talks to the sam
 on native, so every request sends the Supabase access token as `Authorization: Bearer …`. The
 server accepts that in `lib/supabase/server.js` (web project), and RLS still applies.
 
-Package name: `com.personalfin.app`, the same as the old Capacitor wrapper, so it updates the same
-Play listing. `versionCode` starts at 2 in `app.json`; bump it for every Play upload.
+Package name: `site.personalfin.app` (`com.personalfin.app` was already taken on Google Play).
+Builds run on EAS (`eas build -p android --profile production`); the versionCode is kept on EAS and
+bumps itself on every production build.
 
 ## Run it
 
@@ -65,7 +66,7 @@ a dev build; release builds always block it.
 
 1. **Deploy the web app** (bearer-token auth, push payload and Lend/Borrow delete fix are server-side).
 2. **Google sign-in:**
-   - Google Cloud Console → Credentials: create an **Android** OAuth client for `com.personalfin.app`
+   - Google Cloud Console → Credentials: create an **Android** OAuth client for `site.personalfin.app`
      with the SHA-1 of your upload key *and* the Play App Signing key (Play Console → App integrity).
    - Supabase → Authentication → Providers → Google → *Client IDs*: add the web client ID first,
      then the Android one (comma-separated). If sign-in fails with a nonce error, turn on *Skip nonce check*.
