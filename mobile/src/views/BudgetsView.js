@@ -3,7 +3,7 @@ import { Pressable, Text, TextInput, View } from 'react-native'
 import * as SecureStore from 'expo-secure-store'
 import * as Sharing from 'expo-sharing'
 import { File, Paths } from 'expo-file-system'
-import { AlertTriangle, ArrowDownRight, Calendar, ChevronLeft, ChevronRight, Lock, Pencil, Plus, Target, Trash2, TrendingUp, Unlock, Upload, X } from 'lucide-react-native'
+import { AlertTriangle, ArrowDownRight, Calendar, Copy, ChevronLeft, ChevronRight, Lock, Pencil, Plus, Target, Trash2, TrendingUp, Unlock, Upload, X } from 'lucide-react-native'
 import { Icon } from '../ui/Icon'
 import { EmptyState } from '../ui/EmptyState'
 import { HeroStatTile } from '../ui/HeroStatTile'
@@ -324,12 +324,19 @@ export function BudgetMonthForm({ open, onClose, onSaved, initialYear, initialMo
   const existingPlan = budgetMonths.find((p) => p.year === cursor.year && p.month === cursor.month)
   const isClosed = existingPlan?.status === 'closed'
   const expenseCats = expenseCatsOf(categories)
-  const buildInitial = () => {
-    const source = existingPlan || [...budgetMonths].sort((a, b) => (b.year - a.year) || (b.month - a.month))[0]
-    if (!source) return { total_amount: '', rows: [{ category_id: '', amount: '' }] }
-    const lines = budgetMonthCategories.filter((l) => l.budget_month_id === source.id)
-    return { total_amount: String(source.total_amount), rows: lines.length ? lines.map((l) => ({ category_id: l.category_id, amount: String(l.amount) })) : [{ category_id: '', amount: '' }] }
+  // An existing month opens with its own plan. A new month starts empty — just Food and
+  // Entertainment rows to fill in (the user adds the rest) — with "Copy last month" one tap away.
+  const lastPlan = [...budgetMonths].filter((p) => p.id !== existingPlan?.id).sort((a, b) => (b.year - a.year) || (b.month - a.month))[0]
+  const planToForm = (plan) => {
+    const lines = budgetMonthCategories.filter((l) => l.budget_month_id === plan.id)
+    return { total_amount: String(plan.total_amount), rows: lines.length ? lines.map((l) => ({ category_id: l.category_id, amount: String(l.amount) })) : [{ category_id: '', amount: '' }] }
   }
+  const starterRows = () => {
+    const pick = (re) => expenseCats.find((c) => re.test(c.name))?.id
+    const ids = [pick(/food|dining|grocer/i), pick(/entertain|movie|fun/i)].filter(Boolean)
+    return ids.length ? ids.map((category_id) => ({ category_id, amount: '' })) : [{ category_id: '', amount: '' }]
+  }
+  const buildInitial = () => (existingPlan ? planToForm(existingPlan) : { total_amount: '', rows: starterRows() })
   const [form, setForm] = useState(buildInitial)
   const [busy, setBusy] = useState(false)
   useEffect(() => { if (open) setForm(buildInitial()) }, [open, cursor.year, cursor.month, existingPlan?.id])
@@ -368,6 +375,12 @@ export function BudgetMonthForm({ open, onClose, onSaved, initialYear, initialMo
         <View className="mt-4 rounded-xl border border-slate-500/25 bg-slate-500/5 px-4 py-2.5"><Text className={tw('text-xs text-slate-300 light:text-slate-700')}>This month is closed — reopen it from its card in your history log before editing.</Text></View>
       )}
       <View pointerEvents={isClosed ? 'none' : 'auto'} className={tw(isClosed && 'opacity-50')}>
+        {!existingPlan && lastPlan ? (
+          <Pressable onPress={() => setForm(planToForm(lastPlan))} className="mt-4 flex-row items-center justify-center gap-1.5 self-center rounded-lg px-3 py-1.5 active:opacity-60">
+            <Icon as={Copy} size={13} className={tw('text-accent-300 light:text-accent-700')} />
+            <Text className={tw('text-xs font-medium text-accent-300 light:text-accent-700')}>Copy {monthLabel(lastPlan.year, lastPlan.month)}'s plan</Text>
+          </Pressable>
+        ) : null}
         <View className="mt-5"><Field label="Overall monthly budget"><Input keyboardType="decimal-pad" value={form.total_amount} onChangeText={(v) => setForm((f) => ({ ...f, total_amount: v.replace(/[^0-9.]/g, '') }))} placeholder="50000" /></Field></View>
         <View className="mt-2 flex-row items-center justify-between">
           <Text className={tw('text-sm text-slate-300 light:text-slate-700')}>Category breakdown <Text className="text-xs text-slate-500">(optional)</Text></Text>

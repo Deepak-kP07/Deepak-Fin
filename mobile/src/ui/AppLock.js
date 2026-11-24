@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
-import { Animated, AppState, Easing, Image, Modal, Pressable, StatusBar, Text, View } from 'react-native'
+import { AppState, Image, Modal, Pressable, StatusBar, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Fingerprint } from 'lucide-react-native'
+import { AccentGradient } from './Gradient'
 import { useTheme } from '../state/ThemeProvider'
 import { useAuth } from '../state/AuthProvider'
 import { authenticate, biometricReady, isAppLockEnabled, setAppLockEnabled } from '../lib/biometric'
@@ -61,70 +61,57 @@ export function AppLockProvider({ children }) {
   )
 }
 
+// A plain cover (logo + who's signed in) behind Android's own fingerprint sheet — the system sheet
+// is the fingerprint UI, so there's no second fingerprint drawn here. It asks once on show; the
+// button is only for a retry after a cancel.
 function LockScreen({ visible, onUnlocked }) {
   const insets = useSafeAreaInsets()
-  const { accentColor, theme } = useTheme()
+  const { theme } = useTheme()
   const { user, signOut } = useAuth()
   const [busy, setBusy] = useState(false)
   const [failed, setFailed] = useState(false)
-  const pulse = useRef(new Animated.Value(0)).current
-
-  useEffect(() => {
-    if (!visible) return
-    const loop = Animated.loop(Animated.timing(pulse, { toValue: 1, duration: 1800, easing: Easing.out(Easing.quad), useNativeDriver: true }))
-    loop.start()
-    return () => loop.stop()
-  }, [visible, pulse])
+  const inFlight = useRef(false) // one system prompt at a time, however many triggers fire
 
   const unlock = async (usePin = false) => {
-    if (busy) return
+    if (inFlight.current) return
+    inFlight.current = true
     setBusy(true); setFailed(false)
     const ok = await authenticate('Unlock Personal Fin', { usePin })
+    inFlight.current = false
     setBusy(false)
     if (ok) { haptic('success'); onUnlocked() }
-    else { haptic('error'); setFailed(true) }
+    else setFailed(true)
   }
-  // Ask straight away, like a banking app — the button is there for a retry after a cancel.
   useEffect(() => {
     if (!visible) return
-    const t = setTimeout(() => unlock(), 350)
+    const t = setTimeout(() => unlock(), 300)
     return () => clearTimeout(t)
   }, [visible])
 
   const light = theme === 'light'
-  const ring = accentColor(300)
   return (
     <Modal visible={visible} animationType="fade" statusBarTranslucent onRequestClose={() => {}}>
       <StatusBar barStyle={light ? 'dark-content' : 'light-content'} />
-      <View className={tw('flex-1 items-center justify-between bg-[#080b12] light:bg-slate-50 px-8')} style={{ paddingTop: insets.top + 72, paddingBottom: insets.bottom + 32 }}>
+      <View className={tw('flex-1 items-center justify-between bg-[#080b12] light:bg-slate-50 px-8')} style={{ paddingTop: insets.top + 96, paddingBottom: insets.bottom + 32 }}>
         <View className="items-center">
           <Image source={require('../../assets/splash-icon.png')} style={{ width: 76, height: 76, borderRadius: 20 }} />
           <Text className={tw('mt-5 text-xl font-semibold text-white light:text-slate-900')}>Personal Fin is locked</Text>
           {user?.email ? <Text className={tw('mt-1 text-sm text-slate-400 light:text-slate-500')}>{user.email}</Text> : null}
         </View>
 
-        <View className="items-center">
-          <Pressable onPress={() => unlock()} accessibilityLabel="Unlock with fingerprint" className="items-center justify-center" style={{ width: 132, height: 132 }}>
-            <Animated.View pointerEvents="none" style={{
-              position: 'absolute', width: 96, height: 96, borderRadius: 48, borderWidth: 2, borderColor: ring,
-              opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.55, 0] }),
-              transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.38] }) }],
-            }} />
-            <View style={{ width: 96, height: 96, borderRadius: 48, alignItems: 'center', justifyContent: 'center', backgroundColor: accentColor(400, 0.13), borderWidth: 1.5, borderColor: accentColor(300, 0.55) }}>
-              <Fingerprint size={50} color={ring} strokeWidth={1.6} />
-            </View>
-          </Pressable>
-          <Text className={tw('mt-4 text-sm font-medium', failed ? 'text-rose-300 light:text-rose-700' : 'text-slate-300 light:text-slate-600')}>
-            {busy ? 'Touch the fingerprint sensor' : failed ? 'Tap the fingerprint to try again' : 'Tap to unlock with your fingerprint'}
-          </Text>
-          {failed ? (
-            <Pressable onPress={() => unlock(true)} hitSlop={8} className="mt-5 rounded-xl border border-white/10 light:border-black/10 px-4 py-2.5 active:opacity-60">
-              <Text className={tw('text-sm font-medium text-slate-200 light:text-slate-700')}>Use phone PIN instead</Text>
+        <View className="w-full items-center gap-3">
+          {!busy ? (
+            <Pressable onPress={() => unlock()} className="w-full active:opacity-80">
+              <AccentGradient dir="r" style={{ borderRadius: 14, paddingVertical: 15, alignItems: 'center' }}><Text className="text-[15px] font-semibold text-[#07101c]">Unlock</Text></AccentGradient>
             </Pressable>
           ) : null}
+          {failed ? (
+            <Pressable onPress={() => unlock(true)} hitSlop={8} className="py-2 active:opacity-60">
+              <Text className={tw('text-sm font-medium text-slate-300 light:text-slate-600')}>Use phone PIN instead</Text>
+            </Pressable>
+          ) : null}
+          <Pressable onPress={signOut} hitSlop={10} className="mt-2 active:opacity-60"><Text className="text-xs text-slate-500">Not you? Sign out</Text></Pressable>
         </View>
-
-        <Pressable onPress={signOut} hitSlop={10} className="active:opacity-60"><Text className="text-xs text-slate-500">Not you? Sign out</Text></Pressable>
       </View>
     </Modal>
   )
