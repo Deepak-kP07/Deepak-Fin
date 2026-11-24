@@ -6,6 +6,7 @@ import { useTheme } from '../state/ThemeProvider'
 import { useAuth } from '../state/AuthProvider'
 import { authenticate, biometricReady, isAppLockEnabled, setAppLockEnabled } from '../lib/biometric'
 import { tw } from '../lib/tw'
+import { haptic } from '../lib/feedback'
 
 // Fingerprint app lock. When it's on, the app opens behind this screen and locks again after it's
 // been in the background for RELOCK_AFTER_MS — long enough that the photo picker, share sheet or
@@ -80,8 +81,8 @@ function LockScreen({ visible, onUnlocked }) {
     setBusy(true); setFailed(false)
     const ok = await authenticate('Unlock Personal Fin', { usePin })
     setBusy(false)
-    if (ok) onUnlocked()
-    else setFailed(true)
+    if (ok) { haptic('success'); onUnlocked() }
+    else { haptic('error'); setFailed(true) }
   }
   // Ask straight away, like a banking app — the button is there for a retry after a cancel.
   useEffect(() => {

@@ -1,9 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Animated, Pressable, Text, TextInput, View } from 'react-native'
-import {
-  ArrowDownRight, ArrowUpRight, CheckCircle2, ChevronLeft, ChevronRight, CreditCard, Eye, EyeOff, Landmark, Lock,
-  MoreVertical, Pencil, RefreshCw, RotateCcw, Target, Trash2, X,
-} from 'lucide-react-native'
+import { ArrowDownRight, ArrowUpRight, CheckCircle2, ChevronLeft, ChevronRight, CreditCard, Eye, EyeOff, Landmark, Lock, MoreVertical, Pencil, RefreshCw, RotateCcw, Target, Trash2 } from 'lucide-react-native'
 import { Icon } from '../ui/Icon'
 import { BankCardFace } from '../ui/BankCardFace'
 import { HeroStatTile } from '../ui/HeroStatTile'
@@ -12,6 +9,8 @@ import { MonthCursor } from '../ui/MonthCursor'
 import { BarChart } from '../ui/BarChart'
 import { AccentGradient } from '../ui/Gradient'
 import { tw } from '../lib/tw'
+import { SelectBar } from '../ui/DetailKit'
+import { SwipeRow } from '../ui/SwipeRow'
 import { getTransactionIcon } from '../lib/categoryIcons'
 import { MONTH_NAMES, capitalizeFirst, dateToLocalISO, money, timeLabel } from '../lib/format'
 import { currentSpendingCycle, nextBillDue, utilisationSeverity } from '../lib/shared'
@@ -51,7 +50,7 @@ function CreditCardFlip({ card, showMoney, onSpend, onPay, onViewDetails }) {
         <BankCardFace name={card.name} subtitle={card.bank || 'Credit card'} last4={card.last4} color={card.color || '#a78bfa'} style={{ height: '100%', aspectRatio: undefined }} />
       </Animated.View>
       <Animated.View pointerEvents={flipped ? 'auto' : 'none'} style={[faceStyle, { elevation: 6, transform: [{ perspective: 4000 }, { rotateY: back }] }]}
-        className={tw('overflow-hidden border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white px-4 pb-3.5 pt-3')}>
+        className={tw('overflow-hidden border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white px-4 pb-3 pt-2.5')}>
         <View className="flex-row items-start justify-between gap-2">
           <View className="min-w-0 flex-1">
             <Text numberOfLines={1} className={tw('text-sm font-semibold text-white light:text-slate-900')}>{card.name}</Text>
@@ -59,8 +58,8 @@ function CreditCardFlip({ card, showMoney, onSpend, onPay, onViewDetails }) {
           </View>
           <Pressable onPress={() => setFlipped(false)} hitSlop={10} accessibilityLabel="Flip back" className="rounded-lg p-1.5 active:bg-white/10"><Icon as={RotateCcw} size={14} className="text-slate-500" /></Pressable>
         </View>
-        <View className="mt-2.5 flex-row items-end justify-between">
-          <View><Text className="text-[10px] uppercase tracking-wider text-slate-500">Outstanding</Text><Text className={tw('text-lg font-semibold text-white light:text-slate-900')}>{showMoney ? money(card.current_outstanding) : '••••'}</Text></View>
+        <View className="mt-1.5 flex-row items-end justify-between">
+          <View><Text className="text-[10px] uppercase tracking-wider text-slate-500">Outstanding</Text><Text className={tw('text-base font-semibold text-white light:text-slate-900')}>{showMoney ? money(card.current_outstanding) : '••••'}</Text></View>
           <View className="items-end"><Text className="text-[10px] uppercase tracking-wider text-slate-500">Limit</Text><Text className={tw('text-xs text-slate-300 light:text-slate-700')}>{showMoney ? money(card.credit_limit) : '••••'}</Text></View>
         </View>
         <View className="mt-1.5 flex-row items-center gap-2">
@@ -68,15 +67,17 @@ function CreditCardFlip({ card, showMoney, onSpend, onPay, onViewDetails }) {
           <Text className={tw('text-[10px] font-medium', SEVERITY_TONE[sev.label])}>{util}%</Text>
         </View>
         <View className="flex-1" />
-        <View className="flex-row gap-2">
-          <Pressable onPress={() => onSpend(card)} className={tw('flex-1 items-center justify-center rounded-xl bg-white/[.08] light:bg-black/[.05] py-2.5 active:opacity-70')}>
-            <Text className={tw('text-xs font-semibold text-white light:text-slate-900')}>+ Log spend</Text>
-          </Pressable>
-          <Pressable disabled={!owes} onPress={() => onPay(card)} className={tw('flex-1 active:opacity-80', !owes && 'opacity-50')}>
-            <AccentGradient dir="r" style={{ borderRadius: 12, paddingVertical: 10, alignItems: 'center' }}><Text className="text-xs font-semibold text-[#07101c]">Pay bill</Text></AccentGradient>
-          </Pressable>
-          <Pressable onPress={() => onViewDetails(card)} className={tw('flex-1 flex-row items-center justify-center gap-1 rounded-xl border border-white/10 light:border-black/10 py-2.5 active:opacity-70')}>
-            <Text numberOfLines={1} className={tw('text-xs font-semibold text-accent-200 light:text-accent-700')}>View details</Text>
+        <View className="gap-1.5">
+          <View className="flex-row gap-2">
+            <Pressable onPress={() => onSpend(card)} className={tw('flex-1 items-center justify-center rounded-xl bg-white/[.08] light:bg-black/[.05] py-2 active:opacity-70')}>
+              <Text className={tw('text-xs font-semibold text-white light:text-slate-900')}>+ Log spend</Text>
+            </Pressable>
+            <Pressable disabled={!owes} onPress={() => onPay(card)} className={tw('flex-1 active:opacity-80', !owes && 'opacity-50')}>
+              <AccentGradient dir="r" style={{ borderRadius: 12, paddingVertical: 8, alignItems: 'center' }}><Text className="text-xs font-semibold text-[#07101c]">Pay bill</Text></AccentGradient>
+            </Pressable>
+          </View>
+          <Pressable onPress={() => onViewDetails(card)} className={tw('items-center justify-center rounded-xl border border-white/10 light:border-black/10 py-2 active:opacity-70')}>
+            <Text className={tw('text-xs font-semibold text-accent-200 light:text-accent-700')}>View full details</Text>
           </Pressable>
         </View>
       </Animated.View>
@@ -128,15 +129,11 @@ function CreditCardDetailView({ card, cardTransactions, allTransactions, categor
   const toggleSelect = (id) => setSelectedIds((prev) => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next })
   const exitSelectMode = () => { setSelectSection(null); setSelectedIds(new Set()) }
   const longPress = (section, id) => { if (!selectSection) { setSelectSection(section); toggleSelect(id) } }
-  const activityTap = (a) => { if (selectSection === 'activity') return toggleSelect(a.id); if (a.source === 'linked') onEditTx(a.row) }
+  const activityTap = (a) => { if (selectSection === 'activity') toggleSelect(a.id) }
 
   const iconBtn = 'rounded-xl border border-white/10 light:border-black/10 p-2.5'
   const selectBar = (onDelete) => (
-    <View className={tw('flex-row items-center gap-2 border-b border-white/10 light:border-black/10 px-5 py-3')}>
-      <Pressable onPress={exitSelectMode} className={tw('rounded-xl border border-white/10 light:border-black/10 p-2')}><Icon as={X} size={15} className={tw('text-slate-400 light:text-slate-500')} /></Pressable>
-      <Text className={tw('flex-1 text-sm font-medium text-white light:text-slate-900')}>{selectedIds.size} selected</Text>
-      <Pressable disabled={selectedIds.size === 0} onPress={async () => { if (await onDelete()) exitSelectMode() }} className={tw('rounded-xl border border-rose-300/30 bg-rose-300/10 p-2', selectedIds.size === 0 && 'opacity-40')}><Icon as={Trash2} size={15} className={tw('text-rose-300 light:text-rose-700')} /></Pressable>
-    </View>
+    <SelectBar count={selectedIds.size} onCancel={exitSelectMode} onDelete={async () => { if (await onDelete()) exitSelectMode() }} />
   )
   const check = (on, size = 22) => (on ? <Icon as={CheckCircle2} size={size} className="text-accent-400" /> : <View className={tw('rounded-full border-2 border-white/20 light:border-black/20')} style={{ width: size, height: size }} />)
 
@@ -221,7 +218,8 @@ function CreditCardDetailView({ card, cardTransactions, allTransactions, categor
           const cat = categories.find((c) => c.id === a.categoryId)
           const isDebit = a.direction === 'debit'
           return (
-            <Pressable key={`${a.source}-${a.id}`} onPress={() => activityTap(a)} onLongPress={() => longPress('activity', a.id)} delayLongPress={500} className={tw('flex-row items-center gap-3 px-5 py-3', i > 0 && 'border-t border-white/5 light:border-black/5')}>
+            <SwipeRow key={`${a.source}-${a.id}`} disabled={!!selectSection} onEdit={a.source === 'linked' ? () => onEditTx(a.row) : undefined} onDelete={() => onDeleteActivityBulk([a])}>
+            <Pressable onPress={() => activityTap(a)} onLongPress={() => longPress('activity', a.id)} delayLongPress={450} className={tw('flex-row items-center gap-3 px-5 py-3', i > 0 && 'border-t border-white/5 light:border-black/5')}>
               {selectSection === 'activity' ? check(selectedIds.has(a.id)) : (
                 <View className={tw('h-10 w-10 items-center justify-center rounded-xl bg-white/[.05] light:bg-black/[.035]')}>{(() => { const I = getTransactionIcon(a.description, cat?.name) || (isDebit ? ArrowDownRight : ArrowUpRight); return <I size={16} color={cat?.color || '#94a3b8'} /> })()}</View>
               )}
@@ -231,6 +229,7 @@ function CreditCardDetailView({ card, cardTransactions, allTransactions, categor
               </View>
               <Text className={tw('text-sm font-semibold', isDebit ? 'text-rose-300 light:text-rose-700' : 'text-emerald-300 light:text-emerald-700')}>{isDebit ? '-' : '+'}{showMoney ? money(a.amount) : '••••'}</Text>
             </Pressable>
+            </SwipeRow>
           )
         })}
         {displayedRows.length > 0 && (

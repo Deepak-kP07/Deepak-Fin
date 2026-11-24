@@ -70,7 +70,12 @@ a dev build; release builds always block it.
    - Supabase → Authentication → Providers → Google → *Client IDs*: add the web client ID first,
      then the Android one (comma-separated). If sign-in fails with a nonce error, turn on *Skip nonce check*.
    - `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` in `mobile/.env` is the web client (`NEXT_PUBLIC_GOOGLE_CLIENT_ID`).
-3. **Push notifications:** set `FIREBASE_SERVICE_ACCOUNT_JSON` on Vercel (Firebase Console →
+3. **Invite links open the app (Android App Links):** `public/.well-known/assetlinks.json` on the
+   website lists which signing keys may open `personalfin.site/invite/…` links in the app. It
+   currently has only the local debug key. Before the Play release, replace its fingerprint list with
+   the one from Play Console → App integrity → App signing → *Digital Asset Links JSON* (the Play App
+   Signing key, plus your upload key), then redeploy the website. Until then links open the browser.
+4. **Push notifications:** set `FIREBASE_SERVICE_ACCOUNT_JSON` on Vercel (Firebase Console →
    Project settings → Service accounts → Generate new private key, project `personal-fin-f5fce`).
    Until then the server skips FCM sends. `google-services.json` here is the same Firebase app as the old wrapper.
 

@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { CheckCircle2, ChevronDown, ChevronLeft, Eye, EyeOff, MoreVertical, Trash2, X } from 'lucide-react-native'
 import { Icon } from './Icon'
 import { AccentGradient } from './Gradient'
 import { tw } from '../lib/tw'
+import { haptic } from '../lib/feedback'
 
 // The pieces every PWA module/detail screen repeats on mobile, ported once.
 export const CARD = 'rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] glassy:glass-card'
@@ -98,12 +99,31 @@ export function SectionHeader({ children, right }) {
 }
 
 // The long-press multi-select header bar (× · "N selected" · trash).
+// While rows are selected (long-press), the module's section header turns into "N selected" and a
+// floating Delete bar sits above the bottom nav — Gmail-style, so the action stays in reach however
+// far down the list the rows are. The Shell draws the floating bar (<SelectionDock/>).
+const dockListeners = new Set()
+let dockState = null
+const setDock = (next) => { dockState = next; dockListeners.forEach((l) => l(next)) }
+export function useSelectionDock() {
+  const [s, setS] = useState(dockState)
+  useEffect(() => { dockListeners.add(setS); return () => { dockListeners.delete(setS) } }, [])
+  return s
+}
+
 export function SelectBar({ count, onCancel, onDelete }) {
+  const latest = useRef({ onCancel, onDelete })
+  latest.current = { onCancel, onDelete }
+  const token = useRef({})
+  useEffect(() => {
+    setDock({ token: token.current, count, onCancel: () => latest.current.onCancel(), onDelete: () => latest.current.onDelete() })
+  }, [count])
+  useEffect(() => { haptic('long'); return () => { if (dockState?.token === token.current) setDock(null) } }, [])
   return (
     <View className={tw('flex-row items-center gap-2 border-b border-white/10 light:border-black/10 px-5 py-3')}>
-      <Pressable onPress={onCancel} className={tw('rounded-xl border border-white/10 light:border-black/10 p-2')}><Icon as={X} size={15} className={tw('text-slate-400 light:text-slate-500')} /></Pressable>
+      <Pressable onPress={onCancel} hitSlop={6} className={tw('rounded-xl border border-white/10 light:border-black/10 p-2')}><Icon as={X} size={15} className={tw('text-slate-400 light:text-slate-500')} /></Pressable>
       <Text className={tw('flex-1 text-sm font-medium text-white light:text-slate-900')}>{count} selected</Text>
-      <Pressable disabled={count === 0} onPress={onDelete} className={tw('rounded-xl border border-rose-300/30 bg-rose-300/10 p-2', count === 0 && 'opacity-40')}><Icon as={Trash2} size={15} className={tw('text-rose-300 light:text-rose-700')} /></Pressable>
+      <Text className="text-[11px] text-slate-500">Tap rows to add more</Text>
     </View>
   )
 }
@@ -132,6 +152,25 @@ export function CollapsibleCard({ title, children }) {
         <View style={{ transform: [{ rotate: open ? '180deg' : '0deg' }] }}><Icon as={ChevronDown} size={14} className="text-slate-500" /></View>
       </Pressable>
       {open ? <View className={tw('border-t border-white/10 light:border-black/10')}>{children}</View> : null}
+    </View>
+  )
+}
+
+// The floating bar for SelectBar above — mounted once by the Shell, just above the bottom nav.
+export function SelectionDock({ bottom }) {
+  const dock = useSelectionDock()
+  if (!dock) return null
+  const n = dock.count
+  return (
+    <View pointerEvents="box-none" style={{ position: 'absolute', left: 16, right: 16, bottom, zIndex: 40, elevation: 40 }}>
+      <View className={tw('flex-row items-center gap-3 rounded-2xl border border-white/10 light:border-black/10 bg-[#1a2133] light:bg-white px-3 py-2.5')}
+        style={{ elevation: 12, shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 16, shadowOffset: { width: 0, height: 6 } }}>
+        <Pressable onPress={dock.onCancel} hitSlop={6} className="rounded-xl p-2 active:opacity-60"><Icon as={X} size={18} className={tw('text-slate-300 light:text-slate-600')} /></Pressable>
+        <Text className={tw('flex-1 text-sm font-semibold text-white light:text-slate-900')}>{n} selected</Text>
+        <Pressable disabled={n === 0} onPress={() => { haptic('medium'); dock.onDelete() }} className={tw('flex-row items-center gap-2 rounded-xl bg-rose-500 px-4 py-2.5 active:opacity-80', n === 0 && 'opacity-40')}>
+          <Trash2 size={16} color="#fff" /><Text className="text-sm font-semibold text-white">Delete</Text>
+        </Pressable>
+      </View>
     </View>
   )
 }

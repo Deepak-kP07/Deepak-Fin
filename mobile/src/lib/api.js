@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { loggedFeedback } from './feedback'
 
 // The native app uses the same /api routes as the web app. It has no cookies, so it sends the
 // Supabase access token instead (see lib/supabase/server.js in the web project).
@@ -17,6 +18,18 @@ export class ApiError extends Error {
 // No request should spin forever on a dead connection: every call gives up after `timeoutMs`
 // (30s by default; screens that want a snappier answer pass less) with a clear message.
 const DEFAULT_TIMEOUT_MS = 30000
+
+// Creating one of these is "logging" something — a transaction, card spend, EMI, repayment, chit
+// payment, Family/Company entry… — and gets the little done-chime + buzz (lib/feedback). Rate
+// limited so a bulk import of 200 rows chimes once, not 200 times.
+const LOGGED_ROUTE = /^\/finance\/(transactions|credit_card_transactions|loan_payments|lend_repayments|lend_borrow|money_profile_entries|scholarship_payments|scheduled_transactions)(\?|$)|^\/finance\/(credit_cards\/[^/]+\/pay_bill|chit_funds\/[^/]+\/(log_payment|take_payout)|lend_borrow\/[^/]+\/add_more)(\?|$)/
+let lastLoggedAt = 0
+function onLogged() {
+  const now = Date.now()
+  const quiet = now - lastLoggedAt < 2500
+  lastLoggedAt = now
+  if (!quiet) loggedFeedback()
+}
 
 export async function api(path, { method = 'GET', body, timeoutMs = DEFAULT_TIMEOUT_MS } = {}, retried = false) {
   const { data } = await supabase.auth.getSession()
@@ -48,6 +61,7 @@ export async function api(path, { method = 'GET', body, timeoutMs = DEFAULT_TIME
     if (refreshed.session) return api(path, { method, body, timeoutMs }, true)
   }
   const json = await res.json().catch(() => null)
+  if (res.ok && method === 'POST' && LOGGED_ROUTE.test(path)) onLogged()
   if (!res.ok) throw new ApiError(json?.error || json?.message || `Request failed (${res.status})`, res.status)
   return json
 }

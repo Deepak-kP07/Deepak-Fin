@@ -42,7 +42,7 @@ export default function TransactionScreen() {
   const now = todayISO()
   const initial = useMemo(() => (editing
     ? { ...editing, amount: String(editing.amount), time: editing.time?.slice(0, 5) || nowTime(), to_account_id: '', account_id: editing.linked_module === 'credit_card' ? `cc:${editing.linked_module_id}` : (editing.account_id || ''), repay_value: editing.linked_module === 'lend' ? `lend:${editing.linked_module_id}` : '', notes: editing.notes || '', description: editing.description || '' }
-    : { type: defaultRepayment?.type || 'expense', amount: '', description: '', date: now, time: nowTime(), account_id: params.source || '', to_account_id: '', category_id: '', notes: '', is_reimbursable: false, is_hidden: false, owe_link: false, owe_person: '', repay_value: defaultRepayment?.value || '' }), [params.id])
+    : { type: defaultRepayment?.type || (params.type === 'income' ? 'income' : 'expense'), amount: '', description: '', date: now, time: nowTime(), account_id: params.source || '', to_account_id: '', category_id: '', notes: '', is_reimbursable: false, is_hidden: false, owe_link: false, owe_person: '', repay_value: defaultRepayment?.value || '' }), [params.id])
   const [form, setForm] = useState(initial)
   const set = (p) => setForm((f) => ({ ...f, ...p }))
   const [purposeMode, setPurposeMode] = useState(initial.repay_value ? 'repayment' : 'category')

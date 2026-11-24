@@ -6,7 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient'
 import * as Lucide from 'lucide-react-native'
 import {
   ArrowDown, ArrowUp, Bell, BookOpen, Camera, CheckCircle2, ChevronDown, Circle, ExternalLink, Eye, EyeOff, KeyRound, Landmark, LayoutDashboard,
-  Fingerprint, LayoutGrid, Link2, Lock, LogOut, Menu, Moon, Palette, Pencil, Play, Plus, RefreshCw, ShieldAlert, Smartphone, Sparkles, Star, Sun, Tag, Trash2, User,
+  Fingerprint, LayoutGrid, Link2, Lock, LogOut, Menu, Moon, Palette, Pencil, Play, Plus, RefreshCw, ShieldAlert, Smartphone, Sparkles, Star, Sun, Tag, Trash2, User, Volume2,
 } from 'lucide-react-native'
 import { Icon } from '../ui/Icon'
 import { Avatar } from '../ui/Avatar'
@@ -24,7 +24,9 @@ import { toast } from '../lib/toast'
 import { getCategoryIcon } from '../lib/categoryIcons'
 import { disablePush, enablePush, pushPermissionStatus } from '../lib/push'
 import { biometricReady } from '../lib/biometric'
+import { isLoggedSoundOn, loggedFeedback, setLoggedSoundOn } from '../lib/feedback'
 import { useAppLock } from '../ui/AppLock'
+import { useTheme } from '../state/ThemeProvider'
 import { orderedEnabledKeys, resolveDashboardWidgets, resolveMobileNavSlots, resolveModuleSettings, resolveQuickActionSlots } from '../lib/shared'
 import { ADD_ACTION_META, MOBILE_MANDATORY_META, NAV_META } from '../lib/navMeta'
 import { CHANGELOG } from '@/lib/changelog'
@@ -79,6 +81,22 @@ function FingerprintLockRow() {
   )
 }
 
+// The soft chime + buzz when something is logged (lib/feedback). Vibration always stays on.
+function LoggedSoundRow() {
+  const [on, setOn] = useState(isLoggedSoundOn())
+  const toggle = async () => { const next = !on; setOn(next); await setLoggedSoundOn(next); if (next) loggedFeedback() }
+  return (
+    <Pressable onPress={toggle} className={tw('mt-3 flex-row items-center gap-3 rounded-xl border border-white/10 light:border-black/10 bg-white/[.02] light:bg-black/[.02] px-4 py-3.5')}>
+      <Icon as={Volume2} size={20} className={tw('text-accent-300 light:text-accent-700')} />
+      <View className="flex-1">
+        <Text className={tw('text-sm font-medium text-white light:text-slate-900')}>Sound when you log</Text>
+        <Text className="text-[11px] text-slate-500">A soft chime after a transaction or payment is saved</Text>
+      </View>
+      <ToggleSwitch checked={on} onChange={toggle} />
+    </Pressable>
+  )
+}
+
 function ProfilePanel({ data, user, onSaveProfile, onDeleteAccount, onSignOut }) {
   const { profile } = data
   const [form, setForm] = useState({ full_name: '', age: '' })
@@ -122,6 +140,7 @@ function ProfilePanel({ data, user, onSaveProfile, onDeleteAccount, onSignOut })
       </View>
       <SubmitButton className="mt-2" label={busy ? 'Saving…' : 'Save profile'} busy={busy} onPress={async () => { setBusy(true); try { await onSaveProfile({ full_name: form.full_name, age: form.age === '' ? null : Number(form.age) }) } finally { setBusy(false) } }} />
       <FingerprintLockRow />
+      <LoggedSoundRow />
       <Pressable onPress={onSignOut} className={tw('mt-6 flex-row items-center justify-center gap-2 rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] py-3.5 active:opacity-70')}>
         <Icon as={LogOut} size={16} className={tw('text-slate-200 light:text-slate-700')} />
         <Text className={tw('text-sm font-semibold text-slate-100 light:text-slate-800')}>Sign out</Text>
@@ -171,6 +190,7 @@ function CustomAccentSheet({ open, initial, onClose, onSave }) {
 function AppearancePanel({ data, onSaveProfile }) {
   const current = (data.profile?.accent_color || '#d4af37').toLowerCase()
   const theme = data.profile?.theme || 'dark'
+  const { followSystem, setFollowSystem } = useTheme()
   const isPreset = ACCENT_PRESETS.some((p) => p.hex.toLowerCase() === current)
   const [customOpen, setCustomOpen] = useState(false)
   return (
@@ -195,13 +215,16 @@ function AppearancePanel({ data, onSaveProfile }) {
       <View className={tw(CARD)}>
         <Text className={tw(T.title)}>Theme</Text>
         <View className="mt-3 flex-row gap-3">
-          {[{ v: 'dark', l: 'Dark', I: Moon, bg: '#1e293b' }, { v: 'light', l: 'Light', I: Sun, bg: '#f1f5f9' }, { v: 'glassy', l: 'Glass', I: Sparkles, bg: '#0f172a' }].map((t) => (
-            <Pressable key={t.v} onPress={() => onSaveProfile({ theme: t.v })} className={tw('flex-1 rounded-xl border p-3', theme === t.v ? 'border-accent-300/50 bg-accent-400/10' : 'border-white/10 light:border-black/10')}>
-              <View className="h-10 items-center justify-center rounded-lg border border-white/10" style={{ backgroundColor: t.bg }}><t.I size={16} color={t.v === 'light' ? '#64748b' : '#cbd5e1'} /></View>
-              <Text className={tw('mt-2 text-sm font-medium text-white light:text-slate-900')}>{t.l}</Text>
-              {theme === t.v ? <Text className={tw('text-[11px] text-accent-300 light:text-accent-600')}>Active</Text> : null}
-            </Pressable>
-          ))}
+          {[{ v: 'system', l: 'System', I: Smartphone, bg: '#334155' }, { v: 'dark', l: 'Dark', I: Moon, bg: '#1e293b' }, { v: 'light', l: 'Light', I: Sun, bg: '#f1f5f9' }, { v: 'glassy', l: 'Glass', I: Sparkles, bg: '#0f172a' }].map((t) => {
+            const active = t.v === 'system' ? followSystem : !followSystem && theme === t.v
+            return (
+              <Pressable key={t.v} onPress={() => { if (t.v === 'system') setFollowSystem(true); else { setFollowSystem(false); onSaveProfile({ theme: t.v }) } }} className={tw('flex-1 rounded-xl border p-2.5', active ? 'border-accent-300/50 bg-accent-400/10' : 'border-white/10 light:border-black/10')}>
+                <View className="h-10 items-center justify-center rounded-lg border border-white/10" style={{ backgroundColor: t.bg }}><t.I size={16} color={t.v === 'light' ? '#64748b' : '#cbd5e1'} /></View>
+                <Text numberOfLines={1} className={tw('mt-2 text-[13px] font-medium text-white light:text-slate-900')}>{t.l}</Text>
+                {active ? <Text className={tw('text-[11px] text-accent-300 light:text-accent-600')}>Active</Text> : null}
+              </Pressable>
+            )
+          })}
         </View>
       </View>
     </View>

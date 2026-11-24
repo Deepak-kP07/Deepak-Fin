@@ -43,11 +43,15 @@ export function LoadError({ message, onRetry, retrying }) {
 }
 
 // A later refresh failed — the last good data is still on screen, so a slim banner is enough.
-export function RefreshErrorBanner({ onRetry, retrying }) {
+export function RefreshErrorBanner({ onRetry, retrying, offline, savedAt }) {
+  const when = savedAt ? new Date(savedAt) : null
+  const label = offline
+    ? `You're offline — showing your saved data${when ? ` from ${when.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}, ${when.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}` : ''}.`
+    : "Couldn't refresh — showing what was last loaded."
   return (
     <View className={tw('mb-4 flex-row items-center gap-3 rounded-xl border border-rose-400/25 bg-rose-400/[.06] px-4 py-2.5')}>
       <Icon as={CloudOff} size={14} className="text-rose-300 light:text-rose-600" />
-      <Text className={tw('min-w-0 flex-1 text-xs leading-5 text-rose-200 light:text-rose-700')}>Couldn't refresh — showing what was last loaded.</Text>
+      <Text className={tw('min-w-0 flex-1 text-xs leading-5 text-rose-200 light:text-rose-700')}>{label}</Text>
       <Pressable disabled={retrying} onPress={onRetry} hitSlop={8}><Text className={tw('text-xs font-semibold text-rose-200 light:text-rose-700', retrying && 'opacity-60')}>{retrying ? 'Retrying…' : 'Retry'}</Text></Pressable>
     </View>
   )

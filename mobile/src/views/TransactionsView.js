@@ -4,10 +4,7 @@ import * as Print from 'expo-print'
 import * as Sharing from 'expo-sharing'
 import { File, Paths } from 'expo-file-system'
 import * as WebBrowser from 'expo-web-browser'
-import {
-  ArrowDownRight, ArrowLeftRight, ArrowUpRight, CheckCircle2, ChevronLeft, ChevronRight, Eye, EyeOff, ListChecks, Lock,
-  Clock, LockOpen, Paperclip, PieChart, Repeat, Search, Tag, Trash2, Wallet, X,
-} from 'lucide-react-native'
+import { ArrowDownRight, ArrowLeftRight, ArrowUpRight, CheckCircle2, ChevronLeft, ChevronRight, Eye, EyeOff, ListChecks, Lock, Clock, LockOpen, Paperclip, PieChart, Repeat, Search, Tag, Wallet } from 'lucide-react-native'
 import { Icon } from '../ui/Icon'
 import { Select } from '../ui/Select'
 import { ToggleSwitch } from '../ui/ToggleSwitch'
@@ -18,6 +15,8 @@ import { CreditCardBillAlert } from '../ui/CreditCardBillAlert'
 import { usePinDialog } from '../ui/PinDialog'
 import { DateInput, Field } from '../ui/FormKit'
 import { tw } from '../lib/tw'
+import { SelectBar } from '../ui/DetailKit'
+import { closeOpenRow, SwipeRow } from '../ui/SwipeRow'
 import { api } from '../lib/api'
 import { MONTH_NAMES, capitalizeFirst, money } from '../lib/format'
 import { getTransactionIcon } from '../lib/categoryIcons'
@@ -69,7 +68,7 @@ export function TransactionsView({ data, scheduledDueCount = 0, onOpenScheduledP
       Animated.timing(swipeAnim, { toValue: 0, duration: 130, easing: Easing.out(Easing.quad), useNativeDriver: true }).start()
     })
   }
-  // A real pan responder rather than raw touch start/end: Android's ScrollView cancels a child's
+  // Rows claim right-to-left swipes first (Edit/Delete); everything else flips list ⇄ chart. A real pan responder rather than raw touch start/end: Android's ScrollView cancels a child's
   // touches as soon as the finger drifts a few pixels vertically, which silently dropped most
   // swipes. Claiming the gesture once it's clearly horizontal also stops the page scrolling under it.
   const chartViewRef = useRef(chartView)
@@ -78,12 +77,14 @@ export function TransactionsView({ data, scheduledDueCount = 0, onOpenScheduledP
   switchViewRef.current = switchView
   const swipe = useRef(PanResponder.create({
     onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 14 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
-    onMoveShouldSetPanResponderCapture: (_, g) => Math.abs(g.dx) > 24 && Math.abs(g.dx) > Math.abs(g.dy) * 2,
     onPanResponderTerminationRequest: () => false,
     onPanResponderRelease: (_, g) => {
       if (Math.abs(g.dx) < 48 && Math.abs(g.vx) < 0.4) return
-      if (g.dx < 0 && !chartViewRef.current) switchViewRef.current(true)
-      else if (g.dx > 0 && chartViewRef.current) switchViewRef.current(false)
+      // Rows keep right-to-left for Edit/Delete, so from the list any swipe that reaches here —
+      // left-to-right anywhere (rows included), or right-to-left off the rows — opens the chart;
+      // from the chart, any swipe goes back to the list.
+      closeOpenRow() // a row left open elsewhere closes as the page flips
+      switchViewRef.current(!chartViewRef.current)
     },
   })).current
   const [catView, setCatView] = useState('all')
@@ -101,7 +102,8 @@ export function TransactionsView({ data, scheduledDueCount = 0, onOpenScheduledP
 
   const toggleSelect = (id) => setSelectedIds((prev) => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next })
   const exitSelectMode = () => { setSelectMode(false); setSelectedIds(new Set()) }
-  const handleRowTap = (t) => (selectMode ? toggleSelect(t.id) : onEditTx(t))
+  // App rows open by swiping (Edit/Delete), not tapping — a tap only adds to a selection.
+  const handleRowTap = (t) => { if (selectMode) toggleSelect(t.id) }
   const handleLongPress = (t) => { if (!selectMode) { setSelectMode(true); toggleSelect(t.id) } }
   const handleBulkDelete = async () => { if (await onDeleteTxBulk([...selectedIds])) exitSelectMode() }
   const shiftMonth = (delta) => { setCustomRange(null); setMonthCursor((c) => { const d = new Date(c.year, c.month + delta, 1); return { year: d.getFullYear(), month: d.getMonth() } }) }
@@ -238,11 +240,7 @@ export function TransactionsView({ data, scheduledDueCount = 0, onOpenScheduledP
       {pinDialog.view}
 
       {selectMode ? (
-        <View className="flex-row items-center gap-2">
-          <Pressable onPress={exitSelectMode} className={tw(iconBtn)}><Icon as={X} size={16} className={tw('text-slate-400 light:text-slate-500')} /></Pressable>
-          <Text className={tw('flex-1 text-sm font-medium text-white light:text-slate-900')}>{selectedIds.size} selected</Text>
-          <Pressable disabled={selectedIds.size === 0} onPress={handleBulkDelete} className={tw('rounded-xl border border-rose-300/30 bg-rose-300/10 p-2.5', selectedIds.size === 0 && 'opacity-40')}><Icon as={Trash2} size={16} className={tw('text-rose-300 light:text-rose-700')} /></Pressable>
-        </View>
+        <View className={tw('overflow-hidden rounded-xl border border-white/10 light:border-black/10')}><SelectBar count={selectedIds.size} onCancel={exitSelectMode} onDelete={handleBulkDelete} /></View>
       ) : (
         <View className="flex-row gap-2">
           <View className="relative flex-1 justify-center">
@@ -250,6 +248,9 @@ export function TransactionsView({ data, scheduledDueCount = 0, onOpenScheduledP
             <TextInput value={query} onChangeText={setQuery} placeholder="Search transactions" placeholderTextColor="#64748b"
               className={tw('w-full rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] py-2.5 pl-10 pr-4 text-sm text-white light:text-slate-900')} />
           </View>
+          <Pressable onPress={() => switchView(!chartView)} accessibilityLabel={chartView ? 'Show list' : 'Show chart'} className={tw('rounded-xl border p-2.5', chartView ? 'border-accent-300/40 bg-accent-400/10' : 'border-white/10 light:border-black/10')}>
+            <Icon as={chartView ? ListChecks : PieChart} size={16} className={chartView ? 'text-accent-200 light:text-accent-700' : 'text-slate-400 light:text-slate-500'} />
+          </Pressable>
           <Pressable onPress={() => setMobileFiltersOpen(true)} className={tw('relative rounded-xl border p-2.5', activeFilterCount > 0 ? 'border-accent-300/40 bg-accent-400/10' : 'border-white/10 light:border-black/10')}>
             <Icon as={ListChecks} size={16} className={activeFilterCount > 0 ? 'text-accent-200 light:text-accent-700' : 'text-slate-400 light:text-slate-500'} />
             {activeFilterCount > 0 && <View className="absolute -right-1 -top-1 h-4 w-4 items-center justify-center rounded-full bg-accent-400"><Text className="text-[9px] font-bold text-[#07101c]">{activeFilterCount}</Text></View>}
@@ -365,7 +366,8 @@ export function TransactionsView({ data, scheduledDueCount = 0, onOpenScheduledP
                     </View>
                   )
                 })()}
-                <Pressable onPress={() => handleRowTap(t)} onLongPress={() => handleLongPress(t)} delayLongPress={500}
+                <SwipeRow disabled={selectMode} onEdit={() => onEditTx(t)} onDelete={() => onDeleteTxBulk([t.id])}>
+                <Pressable onPress={() => handleRowTap(t)} onLongPress={() => handleLongPress(t)} delayLongPress={450}
                   className={tw('flex-row items-center gap-3 border-t border-white/5 light:border-black/5 px-5 py-3', t.status === 'scheduled' && 'opacity-70')}>
                   {selectMode ? (
                     selectedIds.has(t.id) ? <Icon as={CheckCircle2} size={22} className="text-accent-400" /> : <View className={tw('h-[22px] w-[22px] rounded-full border-2 border-white/20 light:border-black/20')} />
@@ -388,6 +390,7 @@ export function TransactionsView({ data, scheduledDueCount = 0, onOpenScheduledP
                   </View>
                   <Text className={tw('text-sm font-semibold', amountTone)}>{showMoney ? `${isIn ? '+' : '-'}${money(t.amount).replace('-', '')}` : '••••'}</Text>
                 </Pressable>
+                </SwipeRow>
               </Fragment>
             )
           })}

@@ -49,6 +49,7 @@ import { categoriesFor, orderedEnabledKeys, resolveDashboardWidgets, resolveMobi
 import { MOBILE_MANDATORY_META, NAV_META } from '../../lib/navMeta'
 import { api } from '../../lib/api'
 import { useAppLock } from '../../ui/AppLock'
+import { SelectionDock, useSelectionDock } from '../../ui/DetailKit'
 import { PermissionsOnboarding, permissionsOnboardingSteps } from '../../ui/PermissionsOnboarding'
 import { dialog } from '../../ui/Dialogs'
 
@@ -87,7 +88,7 @@ export default function Shell() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { user, signOut } = useAuth()
-  const { data, refresh, patch, loading, loaded, error: loadError } = useData()
+  const { data, refresh, patch, loading, loaded, error: loadError, fromCache } = useData()
   const { accentColor, theme } = useTheme()
   const [pulling, setPulling] = useState(false)
   // First-login tour (or a replay from Settings → User guide) — spotlights the bottom-nav item or
@@ -142,6 +143,7 @@ export default function Shell() {
   // First sign-in on this phone: the permissions screen (notifications, fingerprint lock) comes
   // first, then the tour — never stacked, and never over the lock screen.
   const { locked, ready: lockReady } = useAppLock()
+  const selectionDock = useSelectionDock()
   const [onboardSteps, setOnboardSteps] = useState(null) // null while checking
   useEffect(() => {
     if (!loaded || !data.profile) return
@@ -456,7 +458,7 @@ export default function Shell() {
     <ScrollView key={`${view}-${detailResetNonce}`} contentContainerStyle={{ paddingTop: Math.max(24, insets.top + 24), paddingBottom: 96 + insets.bottom }} className="px-5" keyboardShouldPersistTaps="handled"
       refreshControl={<RefreshControl refreshing={pulling} onRefresh={pullRefresh} colors={[accentColor(300)]} tintColor={accentColor(300)} progressBackgroundColor={theme === 'light' ? '#ffffff' : '#141a28'} />}>
       {header}
-      {loaded && loadError ? <RefreshErrorBanner onRetry={pullRefresh} retrying={pulling} /> : null}
+      {loaded && loadError ? <RefreshErrorBanner onRetry={pullRefresh} retrying={pulling} offline={fromCache} savedAt={data.cached_at} /> : null}
       {gate || children}
     </ScrollView>
   )
@@ -564,11 +566,13 @@ export default function Shell() {
           onHiddenPinChanged={() => refresh()} onReplayTour={() => setForceTour(1)} pickerRef={settingsPickerRef} renderVault={() => <VaultView data={data} refresh={refresh} />} />,
       )}
 
-      <Pressable onPress={runFabAction} className="absolute right-5 z-30 h-14 w-14 active:scale-95 active:opacity-80" style={{ bottom: 96 + insets.bottom }}>
-        <AccentGradient style={{ flex: 1, borderRadius: 28, alignItems: 'center', justifyContent: 'center', elevation: 10, shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 16 }}>
-          <Plus size={24} color="#07101c" />
-        </AccentGradient>
-      </Pressable>
+      {selectionDock ? <SelectionDock bottom={84 + insets.bottom} /> : (
+        <Pressable onPress={runFabAction} className="absolute right-5 z-30 h-14 w-14 active:scale-95 active:opacity-80" style={{ bottom: 96 + insets.bottom }}>
+          <AccentGradient style={{ flex: 1, borderRadius: 28, alignItems: 'center', justifyContent: 'center', elevation: 10, shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 16 }}>
+            <Plus size={24} color="#07101c" />
+          </AccentGradient>
+        </Pressable>
+      )}
 
       <View className={tw('absolute bottom-0 left-0 right-0 z-20 border-t border-white/10 light:border-black/10 bg-[#0b0f18]/95 light:bg-white/90 glassy:glass-nav')} style={{ paddingBottom: insets.bottom }}>
         <View className="flex-row">
