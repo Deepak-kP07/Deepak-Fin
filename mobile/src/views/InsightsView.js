@@ -50,7 +50,7 @@ export function InsightsView({ data, showMoney, onToggleMoney }) {
   return (
     <View className="gap-6 pb-8">
       <View className="flex-row items-end justify-between gap-3">
-        <PageTitle eyebrow="Smart spending" title={`Insights · ${MONTH_NAMES[now.getMonth()]}`} />
+        <PageTitle title={`Insights · ${MONTH_NAMES[now.getMonth()]}`} />
         <EyeButton showMoney={showMoney} onToggle={onToggleMoney} />
       </View>
 

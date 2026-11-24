@@ -1,13 +1,13 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Camera, Trash2 } from 'lucide-react'
+import { Camera, LogOut } from 'lucide-react'
 import { Avatar } from '@/components/shared/Avatar'
 import { uploadAvatar } from '@/lib/attachments'
 
 const MAX_AVATAR_BYTES = 5 * 1024 * 1024
 
-export function SettingsProfile({ data, user, onSaveProfile, onDeleteAccount, toast }) {
+export function SettingsProfile({ data, user, onSaveProfile, onDeleteAccount, onLogout, toast }) {
   const { profile } = data
   const [form, setForm] = useState({ full_name: '', age: '' })
   const [busy, setBusy] = useState(false)
@@ -68,23 +68,17 @@ export function SettingsProfile({ data, user, onSaveProfile, onDeleteAccount, to
         <button onClick={save} disabled={busy} className="w-full rounded-xl bg-gradient-to-r from-accent-300 to-accent-600 px-6 py-2.5 text-sm font-semibold text-[#07101c] disabled:opacity-60 sm:w-auto">{busy ? 'Saving…' : 'Save profile'}</button>
       </div>
 
-      {onDeleteAccount && (
-        <div className="mx-auto mt-10 max-w-lg border-t border-white/10 light:border-black/10 pt-6">
-          <div className="text-sm font-semibold text-white light:text-slate-900">Delete account</div>
-          <p className="mt-1 text-xs leading-5 text-slate-500">
-            Permanently deletes your login, every record across the app, and every file you uploaded. This can't be undone.
-          </p>
-          <button
-            onClick={onDeleteAccount}
-            className="mt-3 flex items-center gap-2 rounded-xl border border-rose-400/20 bg-rose-400/10 px-3.5 py-2.5 text-xs font-medium text-rose-300 light:text-rose-700 hover:bg-rose-400/15"
-          >
-            <Trash2 size={14} />Delete my account
-          </button>
-          <p className="mt-4 text-[11px] text-slate-500">
-            <a href="/privacy" target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-slate-300 light:hover:text-slate-700">Privacy policy</a>
-          </p>
+      {onLogout && (
+        <div className="mx-auto mt-8 max-w-lg">
+          <button onClick={onLogout} className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-4 py-3 text-sm font-semibold text-slate-100 light:text-slate-800 hover:bg-white/[.07] sm:w-auto"><LogOut size={16} />Sign out</button>
         </div>
       )}
+      {/* Deliberately quiet — a small text link behind the typed DELETE confirmation, so nobody
+          deletes their account by accident. */}
+      <div className="mx-auto mt-10 flex max-w-lg items-center justify-between text-[11px] text-slate-500">
+        <a href="/privacy" target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-slate-300 light:hover:text-slate-700">Privacy policy</a>
+        {onDeleteAccount && <button onClick={onDeleteAccount} className="hover:text-slate-300 light:hover:text-slate-700">Delete account…</button>}
+      </div>
     </div>
   )
 }

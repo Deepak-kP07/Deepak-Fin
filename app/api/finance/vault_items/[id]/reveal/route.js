@@ -13,7 +13,16 @@ export async function POST(request, { params }) {
   const { id } = await params
   const { supabase, user, cors, response } = await requireUser(request)
   if (response) return response
-  const secrets = await revealVaultItem(supabase, user, id)
+  let secrets
+  try {
+    secrets = await revealVaultItem(supabase, user, id)
+  } catch (e) {
+    // Decryption failing means the stored ciphertext was written with a different
+    // VAULT_ENCRYPTION_KEY than this server has (e.g. saved through a dev server) — say so plainly
+    // instead of a bare 500, so the app can tell the user to re-enter the item.
+    console.error('vault reveal failed', id, e?.message)
+    return cors(NextResponse.json({ error: "This item can't be decrypted on this server — edit it and re-enter its details, or delete and add it again.", code: 'undecryptable' }, { status: 422 }))
+  }
   if (!secrets) return cors(NextResponse.json({ error: 'Not found' }, { status: 404 }))
   const preview = new URL(request.url).searchParams.get('preview') === '1'
   const body = preview

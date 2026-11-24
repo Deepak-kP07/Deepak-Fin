@@ -11,23 +11,38 @@ export class ApiError extends Error {
   constructor(message, status) { super(message); this.status = status }
 }
 
-export async function api(path, { method = 'GET', body } = {}, retried = false) {
+// No request should spin forever on a dead connection: every call gives up after `timeoutMs`
+// (30s by default; screens that want a snappier answer pass less) with a clear message.
+const DEFAULT_TIMEOUT_MS = 30000
+
+export async function api(path, { method = 'GET', body, timeoutMs = DEFAULT_TIMEOUT_MS } = {}, retried = false) {
   const { data } = await supabase.auth.getSession()
   const token = data.session?.access_token
-  const res = await fetch(`${API_URL}/api${path}`, {
-    method,
-    headers: {
-      Accept: 'application/json',
-      ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  })
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  let res
+  try {
+    res = await fetch(`${API_URL}/api${path}`, {
+      method,
+      headers: {
+        Accept: 'application/json',
+        ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    })
+  } catch (e) {
+    if (controller.signal.aborted) throw new ApiError('The server took too long to respond. Check your connection and try again.', 0)
+    throw e
+  } finally {
+    clearTimeout(timer)
+  }
   // A 401 right after sign-in or after the phone slept is usually a token that just expired or
   // wasn't stored yet — refresh the session once and retry before treating it as signed out.
   if (res.status === 401 && token && !retried) {
     const { data: refreshed } = await supabase.auth.refreshSession()
-    if (refreshed.session) return api(path, { method, body }, true)
+    if (refreshed.session) return api(path, { method, body, timeoutMs }, true)
   }
   const json = await res.json().catch(() => null)
   if (!res.ok) throw new ApiError(json?.error || json?.message || `Request failed (${res.status})`, res.status)

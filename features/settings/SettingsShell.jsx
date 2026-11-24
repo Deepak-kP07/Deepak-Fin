@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { BookOpen, Bell, KeyRound, LayoutDashboard, LayoutGrid, Link2, Lock, LogOut, Menu, Palette, RefreshCw, ShieldAlert, Smartphone, Star, Tag, Landmark as LandmarkIcon, User } from 'lucide-react'
+import { BookOpen, Bell, KeyRound, LayoutDashboard, LayoutGrid, Link2, Lock, LogOut, Menu, Palette, RefreshCw, Smartphone, Star, Tag, Landmark as LandmarkIcon, User } from 'lucide-react'
 import { BottomSheet } from '@/components/shared/BottomSheet'
 import { SettingsProfile } from './SettingsProfile'
 import { SettingsAppearance } from './SettingsAppearance'
@@ -19,11 +19,21 @@ import { SettingsUserGuide } from './SettingsUserGuide'
 import { SettingsUpdates } from './SettingsUpdates'
 import { SettingsHiddenTransactions } from './SettingsHiddenTransactions'
 
+// Notifications and the guardrails (low-balance / overspend blocks and nudges) both decide when the
+// app speaks up, so they live together as one section.
+function NotificationsAndGuardrails(props) {
+  return (
+    <div className="space-y-4">
+      <SettingsNotifications {...props} />
+      <SettingsGuardrails {...props} />
+    </div>
+  )
+}
+
 const SECTIONS = [
   { key: 'profile', label: 'Profile', icon: User, Component: SettingsProfile },
   { key: 'appearance', label: 'Appearance', icon: Palette, Component: SettingsAppearance },
-  { key: 'guardrails', label: 'Guardrails', icon: ShieldAlert, Component: SettingsGuardrails },
-  { key: 'notifications', label: 'Notifications', icon: Bell, Component: SettingsNotifications },
+  { key: 'notifications', label: 'Notifications & guardrails', icon: Bell, Component: NotificationsAndGuardrails },
   { key: 'modules', label: 'Modules', icon: LayoutGrid, Component: SettingsModules },
   { key: 'mobile_nav', label: 'Mobile nav', icon: Smartphone, Component: SettingsMobileNav },
   { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, Component: SettingsDashboard },
@@ -39,13 +49,12 @@ const SECTIONS = [
 
 export function SettingsShell({ activeSection, onSectionChange, onLogout, ...rest }) {
   const [menuOpen, setMenuOpen] = useState(false)
-  const active = SECTIONS.find((s) => s.key === activeSection) || SECTIONS[0]
+  const active = SECTIONS.find((s) => s.key === (activeSection === 'guardrails' ? 'notifications' : activeSection)) || SECTIONS[0]
 
   return (
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <div className="mb-1 text-xs uppercase tracking-widest text-accent-200/70 light:text-accent-700">Your space</div>
           <h1 className="text-2xl font-semibold tracking-tight text-white light:text-slate-900">Settings</h1>
         </div>
         <button onClick={onLogout} className="flex shrink-0 items-center gap-2 rounded-xl border border-white/10 light:border-black/10 px-3 py-2 text-xs text-slate-400 light:text-slate-500 hover:bg-white/5"><LogOut size={13} />Sign out</button>
@@ -77,7 +86,7 @@ export function SettingsShell({ activeSection, onSectionChange, onLogout, ...res
         </div>
 
         <div className="min-w-0 flex-1 lg:max-w-3xl" data-tour={`settings-${active.key}`}>
-          <active.Component {...rest} />
+          <active.Component {...rest} onLogout={onLogout} />
         </div>
       </div>
 

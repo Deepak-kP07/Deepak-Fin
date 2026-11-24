@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Alert, Linking, Pressable, ScrollView, Text, View } from 'react-native'
+import { Linking, Pressable, ScrollView, Text, View } from 'react-native'
+import * as SecureStore from 'expo-secure-store'
 import * as Sharing from 'expo-sharing'
 import { File, Paths } from 'expo-file-system'
 import {
@@ -19,6 +20,7 @@ import { tw } from '../lib/tw'
 import { MONTH_NAMES, capitalizeFirst, formatDate, formatDateTime, money, todayISO } from '../lib/format'
 import { CATEGORY_BADGE_STYLE, buildInvestmentsExportCsv, currentValueOf, money2, relativeTime } from '../lib/shared'
 import { hiddenTransferGroups, isHiddenTx, useHiddenTx } from '../state/HiddenTx'
+import { dialog } from '../ui/Dialogs'
 
 // Port of features/investments/InvestmentsView.jsx + PortfolioDetailView.jsx (mobile layout).
 const ZERODHA_SIGNUP_URL = 'https://zerodha.com/open-account'
@@ -41,7 +43,7 @@ async function exportInvestments(payload) {
     if (file.exists) file.delete()
     await file.write(buildInvestmentsExportCsv(payload))
     await Sharing.shareAsync(file.uri, { mimeType: 'text/csv', dialogTitle: name })
-  } catch (e) { Alert.alert('Export failed', e.message) }
+  } catch (e) { dialog.alert('Export failed', e.message) }
 }
 
 // A wide table (the web's combined holdings/SIPs/other tables) — scrolls sideways on a phone.
@@ -117,7 +119,7 @@ export function InvestmentsView(props) {
     onAddOtherInvestment, onEditOtherInvestment, onDeleteOtherInvestment, showMoney, onToggleMoney, onDetailChange,
   } = props
   const { portfolios = [], holdings = [], sips = [], other_investments: otherInvestments = [], transactions = [], kite_orders = [], profile } = data
-  const [selectedPortfolioId, setSelectedPortfolioId] = useState(null)
+  const [selectedPortfolioId, setSelectedPortfolioId] = useState(props.initialSelectedId ?? null)
   const selectedPortfolio = portfolios.find((p) => p.id === selectedPortfolioId)
   useEffect(() => { onDetailChange?.(selectedPortfolio ? selectedPortfolioId : null) }, [selectedPortfolioId, !!selectedPortfolio])
   const [linkChoice, setLinkChoice] = useState('')
@@ -125,6 +127,17 @@ export function InvestmentsView(props) {
   const kiteBroken = !!profile?.kite_broken
   const anyPortfolioLinked = portfolios.some((p) => p.kite_linked)
   const emptyPortfolios = portfolios.filter((p) => !holdings.some((h) => h.portfolio_id === p.id))
+  const hasOwnKiteKey = !!profile?.kite_api_key
+  // Same as the PWA: the "add your own Kite API key" tip shows the first time this screen is seen
+  // without Kite, then is marked seen right away so it never comes back.
+  const [showOwnKeyTip, setShowOwnKeyTip] = useState(false)
+  useEffect(() => {
+    SecureStore.getItemAsync('seen_kite_own_key_tip').then((v) => {
+      if (v) return
+      setShowOwnKeyTip(true)
+      SecureStore.setItemAsync('seen_kite_own_key_tip', '1').catch(() => {})
+    }).catch(() => {})
+  }, [])
 
   if (selectedPortfolio) {
     return (
@@ -194,7 +207,7 @@ export function InvestmentsView(props) {
   return (
     <View className="gap-5 pb-8">
       <View className="z-20 flex-row items-end justify-between gap-3">
-        <PageTitle eyebrow="Wealth builders" title="Investments" />
+        <PageTitle title="Investments" />
         <View className="flex-row items-center gap-2">
           <EyeButton showMoney={showMoney} onToggle={onToggleMoney} />
           <MoreMenu width={224} items={[
@@ -243,6 +256,9 @@ export function InvestmentsView(props) {
             <Pressable onPress={onConnectKite} className={tw('self-start rounded-lg px-3 py-1', kiteBroken ? 'bg-amber-400/20' : 'bg-accent-300/20')}>
               <Text className={tw('text-[11px] font-semibold', kiteBroken ? 'text-amber-100 light:text-amber-800' : 'text-accent-100 light:text-accent-700')}>{kiteBroken ? 'Reconnect Kite' : 'Connect Kite'}</Text>
             </Pressable>
+          )}
+          {!kiteConnected && !hasOwnKiteKey && showOwnKeyTip && (
+            <Text className={tw('border-t border-accent-300/10 pt-2 text-xs text-accent-200/70 light:text-accent-700')}>For your own Zerodha account, add your Kite API key first in <Text className="font-bold">Settings → Kite Connect</Text>.</Text>
           )}
           {!kiteConnected && (
             <Pressable onPress={() => Linking.openURL(ZERODHA_SIGNUP_URL)} className="flex-row items-center gap-1.5 border-t border-accent-300/10 pt-2">

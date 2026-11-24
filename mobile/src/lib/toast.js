@@ -1,10 +1,9 @@
-import { Alert, Platform, ToastAndroid } from 'react-native'
+import { showToast } from '../ui/Dialogs'
 
-// The PWA's toast.push(message, 'error'?): a short system toast for confirmations, an alert for
-// errors so they can't be missed.
+// The PWA's toast.push(message, tone?) — tone: 'success' (default) | 'error' | 'warning' | 'info'.
+// Drawn by the app's own <ToastHost/>, not Android's system toast.
 export const toast = {
-  push(message, tone) {
-    if (tone === 'error') { Alert.alert('Something went wrong', String(message || 'Please try again')); return }
-    if (Platform.OS === 'android') ToastAndroid.show(String(message), ToastAndroid.SHORT)
+  push(message, tone = 'success') {
+    showToast(tone === 'error' && !message ? 'Something went wrong — please try again' : message, tone)
   },
 }

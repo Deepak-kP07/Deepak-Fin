@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Alert, Text, View } from 'react-native'
+import { Text, View } from 'react-native'
 import { ColorPicker, DateInput, Field, FormSheet, Input, Pills } from '../../ui/FormKit'
 import { Select } from '../../ui/Select'
 import { api } from '../../lib/api'
 import { todayISO } from '../../lib/format'
+import { toast } from '../../lib/toast'
 import { tw } from '../../lib/tw'
+import { dialog } from '../../ui/Dialogs'
 
 // Port of features/accounts/AccountForm.jsx.
 export function AccountForm({ open, onClose, onSaved, editing, accounts = [] }) {
@@ -20,16 +22,18 @@ export function AccountForm({ open, onClose, onSaved, editing, accounts = [] }) 
   const bankAccounts = accounts.filter((a) => a.type === 'bank' && a.id !== editing?.id)
 
   const save = async () => {
-    if (!form.name.trim()) return Alert.alert('Enter a name')
-    if (isDebitCard && !form.linked_account_id) return Alert.alert('Choose the bank account this card draws from')
+    if (!form.name.trim()) return dialog.alert('Enter a name')
+    if (isDebitCard && !form.linked_account_id) return dialog.alert('Choose the bank account this card draws from')
+    if (!isDebitCard && !Number.isFinite(Number(form.opening_balance || 0))) return dialog.alert('Enter a valid opening balance', 'Use digits, with a minus sign for an overdrawn balance (e.g. -2500).')
     setBusy(true)
     try {
       const payload = isDebitCard
         ? { name: form.name, type: 'debit_card', linked_account_id: form.linked_account_id, account_number_last4: form.account_number_last4 || null, opening_balance: 0 }
         : { name: form.name, type: form.type, bank_name: form.bank_name || null, account_number_last4: form.account_number_last4 || null, opening_balance: Number(form.opening_balance || 0), opening_balance_date: form.opening_balance_date, color: form.color, icon: form.icon, is_active: form.is_active !== false, linked_account_id: null }
       await api(editing ? `/finance/accounts/${editing.id}` : '/finance/accounts', { method: editing ? 'PATCH' : 'POST', body: payload })
+      toast.push(editing ? 'Account updated' : 'Account added')
       onSaved()
-    } catch (e) { Alert.alert('Could not save', e.message) } finally { setBusy(false) }
+    } catch (e) { dialog.alert('Could not save', e.message) } finally { setBusy(false) }
   }
 
   return (
@@ -53,7 +57,7 @@ export function AccountForm({ open, onClose, onSaved, editing, accounts = [] }) 
             </View>
           )}
           <View className="flex-row gap-3">
-            <Field label="Opening balance" style={{ flex: 1 }}><Input keyboardType="decimal-pad" value={form.opening_balance} onChangeText={(v) => set({ opening_balance: v })} /></Field>
+            <Field label="Opening balance" style={{ flex: 1 }}><Input keyboardType="numeric" value={form.opening_balance} onChangeText={(v) => set({ opening_balance: v })} /></Field>
             <Field label="As of" style={{ flex: 1 }}><DateInput value={form.opening_balance_date} onChange={(v) => set({ opening_balance_date: v })} /></Field>
           </View>
           <Text className="mb-3.5 text-[11px] text-slate-500">This is your real balance on that date. Transactions dated before it are only for your own records — they won't change this account's balance. Anything on or after it does.</Text>

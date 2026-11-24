@@ -30,7 +30,7 @@ function ItemSection({ title, subtotal, items, showMoney, caption, emptyIcon: Em
                   <div className="truncate text-[11px] capitalize text-slate-400 light:text-slate-500">{it.sub}</div>
                 </div>
               </div>
-              <div className={`shrink-0 text-sm font-semibold ${it.debt ? 'text-rose-300 light:text-rose-700' : 'text-white light:text-slate-900'}`}>{showMoney ? `${it.debt ? '−' : ''}${money(it.amount).replace('-', '')}` : '••••'}</div>
+              <div className={`shrink-0 text-sm font-semibold ${it.debt || it.amount < 0 ? 'text-rose-300 light:text-rose-700' : 'text-white light:text-slate-900'}`}>{showMoney ? `${it.debt || it.amount < 0 ? '−' : ''}${money(it.amount).replace('-', '')}` : '••••'}</div>
             </div>
           ))}
         </div>
@@ -45,7 +45,7 @@ export function NetWorthDetailView({
   totalBalance, currentInv, totalOutstanding, creditCardDebt, lendOutstanding, borrowOutstanding, chitFundReceivable, chitFundLiability,
   moneyProfileAssetTotal, moneyProfileLiabilityTotal, scholarshipLiability,
   cashBankItems, investmentItems, loanItems, creditCardItems, lendItems, borrowItems, chitFundAssetItems, chitFundLiabilityItems,
-  moneyProfileItems, scholarshipItems,
+  moneyProfileItems, moneyProfileCount = 0, scholarshipItems,
   investmentsModuleEnabled, creditCardsModuleEnabled,
   onOpenCustomize,
 }) {
@@ -59,7 +59,6 @@ export function NetWorthDetailView({
 
       <div className="flex items-end justify-between gap-3">
         <div>
-          <div className="mb-2 text-xs uppercase tracking-widest text-accent-200/70 light:text-accent-700">How it's calculated</div>
           <h1 className="text-3xl font-semibold tracking-tight text-white light:text-slate-900">Net worth</h1>
           <div className="mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
             <div className={`text-[clamp(2rem,6vw,3rem)] font-semibold leading-[1.1] tracking-[-0.01em] ${netWorth < 0 ? 'text-rose-200 light:text-rose-700' : 'text-white light:text-slate-900'}`}>
@@ -178,7 +177,12 @@ export function NetWorthDetailView({
           <ItemSection
             title="Family & Company" subtotal={moneyProfileAssetTotal - moneyProfileLiabilityTotal} items={moneyProfileItems} showMoney={showMoney}
             caption={moneyProfileItems.length > 0 ? "Only unlinked profiles — a linked profile's balance counts via its linked account instead." : null}
-            emptyIcon={Users} emptyTitle="Nothing unlinked" emptyMessage="An unlinked Family/Company profile's balance will show up here." emptyCta="Add a profile" onEmptyCta={() => setView('family_company')}
+            emptyIcon={Users}
+            // Someone with profiles that are all linked to a bank account has nothing to add here —
+            // those balances already count under Cash & bank — so no "add" button for them.
+            emptyTitle={moneyProfileCount > 0 ? 'Counted under Cash & bank' : 'No profiles yet'}
+            emptyMessage={moneyProfileCount > 0 ? 'Your Family/Company profiles are linked to bank accounts, so their balances already count there.' : "A Family/Company profile that isn't linked to a bank account shows its balance here."}
+            emptyCta={moneyProfileCount > 0 ? undefined : 'Open Family & Company'} onEmptyCta={moneyProfileCount > 0 ? undefined : () => setView('family_company')}
           />
           <ItemSection
             title="Scholarships owed to college" subtotal={scholarshipLiability} items={scholarshipItems} showMoney={showMoney}

@@ -3,6 +3,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { X } from 'lucide-react-native'
 import { Icon } from './Icon'
 import { tw } from '../lib/tw'
+import { ToastHost } from './Dialogs'
 
 // Port of components/shared/BottomSheet.jsx (vaul drawer): grabber, title row with close, scrolling body.
 export function BottomSheet({ open, onOpenChange, title, children }) {
@@ -21,6 +22,7 @@ export function BottomSheet({ open, onOpenChange, title, children }) {
           <ScrollView className="px-5 pt-3" contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}>{children}</ScrollView>
         </View>
       </View>
+      <ToastHost />
     </Modal>
   )
 }

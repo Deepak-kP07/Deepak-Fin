@@ -56,9 +56,9 @@ function AttachmentField({ record, table, onChanged }) {
   )
 }
 
-export function ScholarshipsView({ data, onAdd, onEdit, onDelete, onPay, onRefresh, showMoney, onToggleMoney, onDetailChange }) {
+export function ScholarshipsView({ initialSelectedId, data, onAdd, onEdit, onDelete, onPay, onRefresh, showMoney, onToggleMoney, onDetailChange }) {
   const { scholarships = [], scholarship_payments = [], transactions = [], accounts = [] } = data
-  const [selectedId, setSelectedId] = useState(null)
+  const [selectedId, setSelectedId] = useState(initialSelectedId ?? null)
   const selected = scholarships.find((s) => s.id === selectedId)
   useEffect(() => { onDetailChange?.(selected ? selectedId : null) }, [selectedId, !!selected])
 
@@ -75,7 +75,7 @@ export function ScholarshipsView({ data, onAdd, onEdit, onDelete, onPay, onRefre
   return (
     <View className="gap-5 pb-8">
       <View className="flex-row items-end justify-between gap-3">
-        <PageTitle eyebrow="Scholarship trail" title="Scholarships & fees" />
+        <PageTitle title="Scholarships & fees" />
         <EyeButton showMoney={showMoney} onToggle={onToggleMoney} />
       </View>
 

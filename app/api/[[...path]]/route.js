@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
 import { getRouteClient, applyCookies } from '@/lib/supabase/server'
 import { calcEmi, projectSchedule, totalInterest, accrueInterest, daysBetween, upcomingEmiCovered } from '@/lib/amortization'
@@ -20,7 +21,27 @@ import { listMoneyProfiles, listMoneyProfileEntries } from '@/lib/server/moneyPr
 import { listLendBorrow, listLendRepayments, listLendAdditions } from '@/lib/server/lendBorrowCrud'
 import { createTransaction } from '@/lib/server/services/transactions'
 import { stripProfileSecrets } from '@/lib/server/profileSecrets'
-import { sendWelcomeEmail } from '@/lib/email'
+import { sendWelcomeOnce, welcomeIfNew } from '@/lib/server/services/welcome'
+import { createAdminClient } from '@/lib/supabase/admin'
+
+// The phone app has no website cookie for Kite's callback to recognise, so it asks for a login URL
+// carrying a short-lived signed state (user id + expiry, HMAC'd with a server-only secret). Kite
+// hands `redirect_params` back untouched on its redirect to /kite/callback, which verifies the
+// state and then sends the in-app browser back to the app (personalfin://kite).
+const KITE_STATE_TTL_MS = 10 * 60 * 1000
+const kiteStateKey = () => process.env.KITE_STATE_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+function signKiteState(userId) {
+  const exp = Date.now() + KITE_STATE_TTL_MS
+  const sig = crypto.createHmac('sha256', kiteStateKey()).update(`${userId}.${exp}`).digest('base64url')
+  return `${userId}.${exp}.${sig}`
+}
+function verifyKiteState(state) {
+  const [userId, exp, sig] = String(state || '').split('.')
+  if (!userId || !exp || !sig || !kiteStateKey() || Number(exp) < Date.now()) return null
+  const want = crypto.createHmac('sha256', kiteStateKey()).update(`${userId}.${exp}`).digest('base64url')
+  const a = Buffer.from(sig), b = Buffer.from(want)
+  return a.length === b.length && crypto.timingSafeEqual(a, b) ? userId : null
+}
 
 // Shared by /kite/login and /kite/callback — both are full-page browser navigations (Zerodha's
 // redirect, or window.location from the app), so they render a small standalone page rather than
@@ -70,7 +91,7 @@ async function handleRoute(request, { params }) {
       // second, real confirmation email existed. The confirmed case is instead covered by
       // /auth/oauth_callback below, which already welcomes on confirmation (its own "first sign-in"
       // check), so nothing is dropped — it just moves to when the account is actually usable.
-      if (data.session && data.user?.email) sendWelcomeEmail({ to: data.user.email, name: body.name }).catch(() => {})
+      if (data.session && data.user?.email) sendWelcomeOnce(data.user, body.name).catch(() => {})
       return cors(NextResponse.json({ user: data.user, access_token: data.session?.access_token || null }))
     }
     if (route === '/auth/login' && method === 'POST') {
@@ -90,6 +111,21 @@ async function handleRoute(request, { params }) {
         options: { emailRedirectTo: `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/auth/oauth_callback` },
       })
       if (error) return cors(NextResponse.json({ message: error.message }, { status: error.status || 400 }))
+      return cors(NextResponse.json({ ok: true }))
+    }
+    // Password reset email, for the web sign-in screen and the native app alike. Uses Supabase's
+    // implicit (link) flow on purpose: the emailed link lands on /reset-password with the recovery
+    // session in the URL fragment, so it works whichever device or browser opens it — the PKCE
+    // flow would need the code verifier from the browser that asked. Always answers ok, so this
+    // can't be used to find out which emails have accounts.
+    if (route === '/auth/forgot_password' && method === 'POST') {
+      const body = await request.json().catch(() => ({}))
+      const email = String(body.email || '').trim().toLowerCase()
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return cors(NextResponse.json({ message: 'Enter a valid email address.' }, { status: 400 }))
+      const linkClient = createSupabaseClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY, { auth: { flowType: 'implicit', persistSession: false, autoRefreshToken: false } })
+      const { error } = await linkClient.auth.resetPasswordForEmail(email, { redirectTo: `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/reset-password` })
+      // Rate limiting is the one failure worth surfacing — anything else stays a generic ok.
+      if (error?.status === 429) return cors(NextResponse.json({ message: 'Too many reset requests — wait a minute and try again.' }, { status: 429 }))
       return cors(NextResponse.json({ ok: true }))
     }
     if (route === '/auth/me' && method === 'GET') {
@@ -123,7 +159,7 @@ async function handleRoute(request, { params }) {
         const user = data?.user
         if (user?.email && user.created_at && user.last_sign_in_at) {
           const isFirstSignIn = Math.abs(new Date(user.last_sign_in_at) - new Date(user.created_at)) < 15000
-          if (isFirstSignIn) sendWelcomeEmail({ to: user.email, name: user.user_metadata?.full_name }).catch(() => {})
+          if (isFirstSignIn) sendWelcomeOnce(user).catch(() => {})
         }
       } else {
         const oauthError = url.searchParams.get('error_description') || url.searchParams.get('error')
@@ -135,11 +171,19 @@ async function handleRoute(request, { params }) {
     // AuthScreen.jsx) never hits /auth/oauth_callback above, so it needs its own hook for the
     // same "first sign-in" welcome email. Reads the email/first-sign-in signal from the caller's
     // own session rather than the request body, so this can't be used to spam an arbitrary address.
+    // The native app calls this after every sign-in. It confirms email and signs in outside the
+    // web callbacks above, so this is its only welcome hook — new confirmed accounts only, once.
+    if (route === '/auth/welcome' && method === 'POST') {
+      const user = await currentUser(supabase)
+      if (!user) return cors(NextResponse.json({ error: 'Not authenticated' }, { status: 401 }))
+      const sent = await welcomeIfNew(user).catch(() => false)
+      return cors(NextResponse.json({ ok: true, sent }))
+    }
     if (route === '/auth/google_welcome' && method === 'POST') {
       const user = await currentUser(supabase)
       if (user?.email && user.created_at && user.last_sign_in_at) {
         const isFirstSignIn = Math.abs(new Date(user.last_sign_in_at) - new Date(user.created_at)) < 15000
-        if (isFirstSignIn) sendWelcomeEmail({ to: user.email, name: user.user_metadata?.full_name }).catch(() => {})
+        if (isFirstSignIn) sendWelcomeOnce(user).catch(() => {})
       }
       return cors(NextResponse.json({ ok: true }))
     }
@@ -173,7 +217,7 @@ async function handleRoute(request, { params }) {
         const user = data?.user
         if (user?.email && user.created_at && user.last_sign_in_at) {
           const isFirstSignIn = Math.abs(new Date(user.last_sign_in_at) - new Date(user.created_at)) < 15000
-          if (isFirstSignIn) sendWelcomeEmail({ to: user.email, name: user.user_metadata?.full_name }).catch(() => {})
+          if (isFirstSignIn) sendWelcomeOnce(user).catch(() => {})
         }
       } catch (err) {
         redirectUrl.searchParams.set('auth_error', err.message)
@@ -364,17 +408,36 @@ async function handleRoute(request, { params }) {
       return NextResponse.redirect(`https://kite.zerodha.com/connect/login?api_key=${kiteKey}&v=3`, 302)
     }
 
+    // ---- KITE OAuth from the phone app: a login URL carrying a signed state ----
+    if (route === '/kite/login_url' && method === 'POST') {
+      const user = await currentUser(supabase)
+      if (!user) return cors(NextResponse.json({ error: 'Not authenticated' }, { status: 401 }))
+      const { data: loginProfile } = await supabase.from('profiles').select('kite_api_key').eq('id', user.id).maybeSingle()
+      const kiteKey = loginProfile?.kite_api_key || process.env.KITE_API_KEY
+      if (!kiteKey) return cors(NextResponse.json({ error: 'No Kite Connect app is configured yet — add one in Settings › Kite Connect.' }, { status: 400 }))
+      const redirectParams = new URLSearchParams({ state: signKiteState(user.id), native: '1' }).toString()
+      return cors(NextResponse.json({ url: `https://kite.zerodha.com/connect/login?api_key=${encodeURIComponent(kiteKey)}&v=3&redirect_params=${encodeURIComponent(redirectParams)}` }))
+    }
+
     // ---- KITE OAuth: callback (exchanges request_token for access_token) ----
     if (route === '/kite/callback' && method === 'GET') {
       const url = new URL(request.url)
       const requestToken = url.searchParams.get('request_token')
       const status = url.searchParams.get('status')
+      const native = url.searchParams.get('native') === '1'
       let accessToken = null, exchangeError = null, user_id = null
       const user = await currentUser(supabase)
       user_id = user?.id
+      // From the phone app: no cookie session here, so the signed state names the user. Its
+      // writes go through the admin client, always filtered to that one verified user id.
+      let db = supabase
+      if (!user_id && url.searchParams.get('state')) {
+        user_id = verifyKiteState(url.searchParams.get('state'))
+        if (user_id) db = createAdminClient()
+      }
       let kiteKey = null, kiteSecret = null
       if (user_id) {
-        const { data: credsProfile } = await supabase.from('profiles').select('kite_api_key,kite_api_secret_encrypted').eq('id', user_id).maybeSingle()
+        const { data: credsProfile } = await db.from('profiles').select('kite_api_key,kite_api_secret_encrypted').eq('id', user_id).maybeSingle()
         // Same default-to-owner's-app fallback as /kite/login — must match whichever key/secret
         // pair actually initiated this login there, or the checksum below won't verify.
         kiteKey = credsProfile?.kite_api_key || process.env.KITE_API_KEY || null
@@ -391,17 +454,17 @@ async function handleRoute(request, { params }) {
             if (user_id) {
               // Optimistically cleared on a clean login — if something's still actually wrong,
               // the sync calls right below will re-set it immediately.
-              await supabase.from('profiles').update({ kite_access_token: accessToken, kite_access_token_at: new Date().toISOString(), kite_last_error: null }).eq('id', user_id)
+              await db.from('profiles').update({ kite_access_token: accessToken, kite_access_token_at: new Date().toISOString(), kite_last_error: null }).eq('id', user_id)
               // Best-effort — a stale-token banner on next load is fine if this hiccups, but a
               // successful connect shouldn't need a manual "Sync now" click to feel finished.
               // MF/orders fire regardless of whether a stock portfolio is linked — they're
               // user-level, not tied to one — equity only fires if there's actually a linked
               // portfolio to sync into.
-              const { data: linked } = await supabase.from('portfolios').select('id').eq('user_id', user_id).eq('kite_linked', true).maybeSingle()
+              const { data: linked } = await db.from('portfolios').select('id').eq('user_id', user_id).eq('kite_linked', true).maybeSingle()
               await Promise.all([
-                linked ? syncPortfolioFromKite(supabase, user_id, linked.id).catch(() => {}) : null,
-                syncMutualFundsFromKite(supabase, user_id).catch(() => {}),
-                syncKiteOrders(supabase, user_id).catch(() => {}),
+                linked ? syncPortfolioFromKite(db, user_id, linked.id).catch(() => {}) : null,
+                syncMutualFundsFromKite(db, user_id).catch(() => {}),
+                syncKiteOrders(db, user_id).catch(() => {}),
               ])
             }
           } else {
@@ -419,6 +482,10 @@ async function handleRoute(request, { params }) {
         : notConfigured
         ? `No Kite Connect app is configured yet. Add one in <b>Settings &gt; Kite Connect</b>, or ask the app owner to set KITE_API_KEY/KITE_API_SECRET.`
         : `${exchangeError ? 'Kite said: <code>' + exchangeError.slice(0, 300) + '</code>' : 'No request_token received.'}`
+      if (native) {
+        const back = new URLSearchParams({ status: ok ? 'ok' : 'error', ...(ok ? {} : { message: notConfigured ? 'No Kite Connect app is configured yet.' : !user_id ? 'That Kite login link expired — try again.' : (exchangeError || 'Kite didn’t finish the login.').slice(0, 200) }) })
+        return NextResponse.redirect(`personalfin://kite?${back}`, 302)
+      }
       const html = kitePageHtml(title, body)
       return applyCookies(new NextResponse(html, { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } }), cookiesToSet)
     }

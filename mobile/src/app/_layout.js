@@ -9,6 +9,7 @@ import { ThemeProvider } from '../state/ThemeProvider'
 import { HiddenTxProvider } from '../state/HiddenTx'
 import { Loading } from '../components/ui'
 import { colors } from '../lib/theme'
+import { DialogHost, ToastHost } from '../ui/Dialogs'
 
 // A library still uses RN's deprecated ImageBackground; dev-only warning, not actionable here.
 LogBox.ignoreLogs(['ImageBackground is deprecated'])
@@ -37,6 +38,8 @@ export default function RootLayout() {
           <ThemeProvider>
             <HiddenTxProvider>
               <RootStack />
+              <ToastHost />
+              <DialogHost />
             </HiddenTxProvider>
           </ThemeProvider>
         </DataProvider>

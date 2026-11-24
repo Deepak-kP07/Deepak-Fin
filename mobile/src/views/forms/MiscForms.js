@@ -1,17 +1,19 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ActivityIndicator, Alert, Pressable, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import * as DocumentPicker from 'expo-document-picker'
-import { File } from 'expo-file-system'
 import { Pencil, Plus, Trash2, Upload } from 'lucide-react-native'
 import { Icon } from '../../ui/Icon'
 import { BottomSheet } from '../../ui/BottomSheet'
 import { AccentGradient } from '../../ui/Gradient'
 import { ColorPicker, DateInput, Field, FormSheet, Input, Pills, SubmitButton } from '../../ui/FormKit'
 import { Select } from '../../ui/Select'
+import { CategorySelect } from '../../ui/CategorySelect'
 import { tw } from '../../lib/tw'
 import { api } from '../../lib/api'
 import { MONTH_NAMES, capitalizeFirst, money, todayISO } from '../../lib/format'
-import { parseCsv } from '@/lib/csv'
+import { toast } from '../../lib/toast'
+import { readSpreadsheet, SPREADSHEET_TYPES } from '../../lib/spreadsheet'
+import { dialog } from '../../ui/Dialogs'
 
 const fmtDate = (d) => { if (!d) return ''; const [y, m, dd] = String(d).slice(0, 10).split('-').map(Number); return `${String(dd).padStart(2, '0')}-${MONTH_NAMES[m - 1]?.slice(0, 3)}-${y}` }
 
@@ -25,14 +27,15 @@ export function CreditCardForm({ open, onClose, onSaved, editing }) {
   useEffect(() => { setForm(initial) }, [editing, open])
   const set = (p) => setForm((f) => ({ ...f, ...p }))
   const save = async () => {
-    if (!form.name.trim() || !form.credit_limit) return Alert.alert('Enter the card name and credit limit')
+    if (!form.name.trim() || !form.credit_limit) return dialog.alert('Enter the card name and credit limit')
     const bd = Number(form.billing_date), off = Number(form.due_date_offset)
-    if (!(bd >= 1 && bd <= 28) || !(off >= 1 && off <= 30)) return Alert.alert('Billing day is 1–28 and due offset 1–30 days')
+    if (!(bd >= 1 && bd <= 28) || !(off >= 1 && off <= 30)) return dialog.alert('Billing day is 1–28 and due offset 1–30 days')
     setBusy(true)
     try {
       await api(editing ? `/finance/credit_cards/${editing.id}` : '/finance/credit_cards', { method: editing ? 'PATCH' : 'POST', body: { name: form.name, bank: form.bank || null, last4: form.last4 || null, credit_limit: Number(form.credit_limit), billing_date: bd, due_date_offset: off, color: form.color } })
+      toast.push(editing ? 'Card updated' : 'Card added')
       onSaved()
-    } catch (e) { Alert.alert('Could not save', e.message) } finally { setBusy(false) }
+    } catch (e) { dialog.alert('Could not save', e.message) } finally { setBusy(false) }
   }
   return (
     <FormSheet open={open} onClose={onClose} title={editing ? 'Edit card' : 'Add card'} submitLabel={busy ? 'Saving…' : editing ? 'Update card' : 'Save card'} onSubmit={save} busy={busy}>
@@ -62,12 +65,13 @@ function RecurringForm({ open, onClose, onSaved, editing, accounts, categories }
   const set = (p) => setForm((f) => ({ ...f, ...p }))
   const cats = categories.filter((c) => c.type === form.type && !(c.hidden_in_modules || []).includes('recurring'))
   const save = async () => {
-    if (!form.description.trim() || !(Number(form.amount) > 0) || !form.account_id) return Alert.alert('Fill in description, amount and account')
+    if (!form.description.trim() || !(Number(form.amount) > 0) || !form.account_id) return dialog.alert('Fill in description, amount and account')
     setBusy(true)
     try {
       await api(editing ? `/finance/recurring_transactions/${editing.id}` : '/finance/recurring_transactions', { method: editing ? 'PATCH' : 'POST', body: { account_id: form.account_id, category_id: form.category_id || null, type: form.type, amount: Number(form.amount), description: form.description, notes: form.notes || null, frequency: form.frequency, day_of_month: form.day_of_month ? Number(form.day_of_month) : null, next_due_date: form.next_due_date, is_active: form.is_active !== false } })
+      toast.push(editing ? 'Recurring rule updated' : 'Recurring rule added — it\'ll auto-log from its next due date')
       onSaved()
-    } catch (e) { Alert.alert('Could not save', e.message) } finally { setBusy(false) }
+    } catch (e) { dialog.alert('Could not save', e.message) } finally { setBusy(false) }
   }
   return (
     <FormSheet open={open} onClose={onClose} title={editing ? 'Edit recurring rule' : 'New recurring rule'} submitLabel={busy ? 'Saving…' : editing ? 'Update rule' : 'Save rule'} onSubmit={save} busy={busy}>
@@ -77,7 +81,7 @@ function RecurringForm({ open, onClose, onSaved, editing, accounts, categories }
         <Field label="Amount" style={{ flex: 2 }}><Input keyboardType="decimal-pad" value={form.amount} onChangeText={(v) => set({ amount: v })} /></Field>
       </View>
       <Field label="Account"><View className="mt-2"><Select value={form.account_id} onChange={(v) => set({ account_id: v })} placeholder="Choose account…" options={accounts.filter((a) => a.type !== 'debit_card').map((a) => ({ value: a.id, label: a.name }))} /></View></Field>
-      <Field label="Category"><View className="mt-2"><Select value={form.category_id} onChange={(v) => set({ category_id: v })} placeholder="Uncategorised" options={[{ value: '', label: 'Uncategorised' }, ...cats.map((c) => ({ value: c.id, label: c.name }))]} /></View></Field>
+      <Field label="Category"><View className="mt-2"><CategorySelect value={form.category_id} onChange={(v) => set({ category_id: v })} categories={cats} /></View></Field>
       <View className="flex-row gap-3">
         <Field label="Repeats" style={{ flex: 1 }}><View className="mt-2"><Select value={form.frequency} onChange={(v) => set({ frequency: v })} options={[{ value: 'weekly', label: 'Weekly' }, { value: 'monthly', label: 'Monthly' }, { value: 'yearly', label: 'Yearly' }]} /></View></Field>
         <Field label="Next due" style={{ flex: 1 }}><DateInput value={form.next_due_date} onChange={(v) => set({ next_due_date: v })} /></Field>
@@ -91,8 +95,8 @@ function RecurringForm({ open, onClose, onSaved, editing, accounts, categories }
 export function RecurringManager({ open, onClose, data, refresh, showMoney }) {
   const rules = data.recurring_transactions || []
   const [form, setForm] = useState({ open: false, editing: null })
-  const toggle = async (r) => { try { await api(`/finance/recurring_transactions/${r.id}`, { method: 'PATCH', body: { is_active: !r.is_active } }); await refresh() } catch { Alert.alert('Update failed') } }
-  const remove = (r) => Alert.alert(`Stop "${r.description}"?`, 'Past transactions it already created stay put.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Stop', style: 'destructive', onPress: async () => { try { await api(`/finance/recurring_transactions/${r.id}`, { method: 'DELETE' }); await refresh() } catch { Alert.alert('Delete failed') } } }])
+  const toggle = async (r) => { try { await api(`/finance/recurring_transactions/${r.id}`, { method: 'PATCH', body: { is_active: !r.is_active } }); await refresh() } catch { dialog.alert('Update failed') } }
+  const remove = (r) => dialog.alert(`Stop "${r.description}"?`, 'Past transactions it already created stay put.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Stop', style: 'destructive', onPress: async () => { try { await api(`/finance/recurring_transactions/${r.id}`, { method: 'DELETE' }); await refresh() } catch { dialog.alert('Delete failed') } } }])
   return (
     <>
       <BottomSheet open={open && !form.open} onOpenChange={(v) => !v && onClose()} title="Recurring transactions">
@@ -141,15 +145,14 @@ export function CsvImport({ open, onClose, data, refresh }) {
   const [skipDuplicates, setSkipDuplicates] = useState(true)
   useEffect(() => { if (!open) { setParsed(null); setMapping({}) } }, [open])
   const pick = async () => {
-    const res = await DocumentPicker.getDocumentAsync({ type: ['text/csv', 'text/comma-separated-values', 'text/plain', '*/*'], copyToCacheDirectory: true })
+    const res = await DocumentPicker.getDocumentAsync({ type: SPREADSHEET_TYPES, copyToCacheDirectory: true })
     if (res.canceled || !res.assets?.[0]) return
     try {
-      const text = await new File(res.assets[0].uri).text()
-      const out = parseCsv(text)
-      if (!out.headers.length) return Alert.alert('That file is empty')
+      const out = await readSpreadsheet(res.assets[0])
+      if (!out.headers.length) return dialog.alert('That file is empty')
       setParsed(out)
       setMapping(Object.fromEntries(FIELDS.map((f) => [f.key, out.headers.find((h) => f.guess.test(h)) || ''])))
-    } catch (e) { Alert.alert('Could not read that file', 'Pick a .csv file (Excel files: save as CSV first).') }
+    } catch (e) { dialog.alert('Could not read that file', 'Pick a .csv or Excel (.xlsx) file.') }
   }
   const parseRow = (r) => {
     const rawAmount = String(r[mapping.amount] || '').replace(/[,₹\s]/g, '')
@@ -178,7 +181,7 @@ export function CsvImport({ open, onClose, data, refresh }) {
     }
     setBusy(false)
     await refresh()
-    Alert.alert('Import finished', `${ok} of ${toImport.length} transactions imported.`)
+    dialog.alert('Import finished', `${ok} of ${toImport.length} transactions imported.`)
     onClose()
   }
   return (
@@ -187,7 +190,7 @@ export function CsvImport({ open, onClose, data, refresh }) {
       {!parsed ? (
         <Pressable onPress={pick} className={tw('mt-4 items-center gap-2 rounded-2xl border border-dashed border-white/15 light:border-black/15 py-10')}>
           <Icon as={Upload} size={22} className="text-accent-300 light:text-accent-700" />
-          <Text className={tw('text-sm text-slate-300 light:text-slate-700')}>Choose a CSV file</Text>
+          <Text className={tw('text-sm text-slate-300 light:text-slate-700')}>Choose a CSV or Excel file</Text>
           <Text className="text-[11px] text-slate-500">Bank statement, spreadsheet export — we'll auto-detect columns</Text>
         </Pressable>
       ) : (

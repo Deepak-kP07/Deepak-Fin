@@ -3,6 +3,7 @@ import { Stack, useRouter } from 'expo-router'
 import * as Notifications from 'expo-notifications'
 import { colors } from '../../lib/theme'
 import { routeForUrl } from '../../lib/push'
+import { AppLockProvider } from '../../ui/AppLock'
 
 // Everything behind sign-in. Forms open as modals; module screens push on top of the tabs.
 const MODALS = ['transaction']
@@ -25,9 +26,11 @@ function useNotificationTaps() {
 export default function AppLayout() {
   useNotificationTaps()
   return (
-    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}>
-      <Stack.Screen name="index" />
-      {MODALS.map((name) => <Stack.Screen key={name} name={name} options={{ presentation: 'modal' }} />)}
-    </Stack>
+    <AppLockProvider>
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}>
+        <Stack.Screen name="index" />
+        {MODALS.map((name) => <Stack.Screen key={name} name={name} options={{ presentation: 'modal' }} />)}
+      </Stack>
+    </AppLockProvider>
   )
 }

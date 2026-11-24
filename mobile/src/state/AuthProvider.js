@@ -19,7 +19,9 @@ export function AuthProvider({ children }) {
   // as it does for the web app's /auth/me.
   useEffect(() => {
     if (!session?.access_token) return
-    api('/auth/me').catch(() => {})
+    // Then the welcome email: the server sends it once, only for a new confirmed account (sign-ups
+    // from the app never pass through the web callbacks that welcome web sign-ups).
+    api('/auth/me').catch(() => {}).finally(() => api('/auth/welcome', { method: 'POST' }).catch(() => {}))
     syncPushToken()
   }, [session?.user?.id])
 

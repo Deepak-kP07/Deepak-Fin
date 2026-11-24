@@ -296,6 +296,15 @@ export function AuthScreen({ onAuth, initialError, initialMode = 'landing', init
 
   const submit = async (event) => {
     event.preventDefault(); setBusy(true); setFeedback(null)
+    if (mode === 'forgot') {
+      try {
+        const response = await fetch('/api/auth/forgot_password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) })
+        const data = await response.json().catch(() => ({}))
+        if (!response.ok) throw new Error(data.message || 'Could not send the reset email — try again shortly.')
+        setFeedback({ type: 'notice', message: `If ${email} has an account, a password reset link is on its way. Check your inbox (and spam folder).` })
+      } catch (caught) { setFeedback({ type: 'error', message: caught.message }) } finally { setBusy(false) }
+      return
+    }
     try {
       const response = await fetch(`/api/auth/${mode === 'login' ? 'login' : 'signup'}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -535,8 +544,8 @@ export function AuthScreen({ onAuth, initialError, initialMode = 'landing', init
                 <ArrowLeft size={15} />Back
               </button>
               <div className="mb-8">
-                <h2 className="text-3xl font-semibold tracking-tight text-white">{mode === 'login' ? 'Welcome back' : 'Start your money journey'}</h2>
-                <p className="mt-2 text-sm text-slate-400">{mode === 'login' ? 'Sign in to your private finance space.' : 'Create your secure personal finance space.'}</p>
+                <h2 className="text-3xl font-semibold tracking-tight text-white">{mode === 'login' ? 'Welcome back' : mode === 'forgot' ? 'Reset your password' : 'Start your money journey'}</h2>
+                <p className="mt-2 text-sm text-slate-400">{mode === 'login' ? 'Sign in to your private finance space.' : mode === 'forgot' ? "Enter your account's email and we'll send you a link to choose a new password." : 'Create your secure personal finance space.'}</p>
               </div>
               <form onSubmit={submit} className="space-y-4">
                 {mode === 'signup' && (
@@ -547,9 +556,14 @@ export function AuthScreen({ onAuth, initialError, initialMode = 'landing', init
                 <label className="block text-sm text-slate-300">Email
                   <input required autoFocus type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-4 py-3.5 text-white outline-none transition focus:border-accent-300/60 focus:ring-2 focus:ring-accent-300/30" placeholder="you@example.com" />
                 </label>
-                <label className="block text-sm text-slate-300">Password
-                  <input required minLength={6} type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-4 py-3.5 text-white outline-none transition focus:border-accent-300/60 focus:ring-2 focus:ring-accent-300/30" placeholder="••••••••" />
-                </label>
+                {mode !== 'forgot' && (
+                  <label className="block text-sm text-slate-300">Password
+                    <input required minLength={6} type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] px-4 py-3.5 text-white outline-none transition focus:border-accent-300/60 focus:ring-2 focus:ring-accent-300/30" placeholder="••••••••" />
+                  </label>
+                )}
+                {mode === 'login' && (
+                  <button type="button" onClick={() => { setMode('forgot'); setFeedback(null) }} className="-mt-1 block text-xs font-medium text-slate-400 underline-offset-2 transition hover:text-white hover:underline">Forgot password?</button>
+                )}
                 {feedback && (
                   <div className={`rounded-xl border px-4 py-3 text-sm leading-5 ${feedback.type === 'error' ? 'border-rose-300/20 bg-rose-300/10 text-rose-200' : 'border-amber-300/20 bg-amber-300/10 text-amber-200'}`}>
                     {feedback.message}
@@ -561,7 +575,7 @@ export function AuthScreen({ onAuth, initialError, initialMode = 'landing', init
                   </div>
                 )}
                 <button disabled={busy} className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[.10] px-4 py-3.5 font-semibold text-white transition hover:border-accent-300 hover:bg-accent-300 hover:text-[#07101c] disabled:opacity-60">
-                  {busy ? 'Working…' : mode === 'login' ? 'Sign in securely' : 'Create account'}<ChevronRight size={17} />
+                  {busy ? 'Working…' : mode === 'login' ? 'Sign in securely' : mode === 'forgot' ? 'Send reset link' : 'Create account'}<ChevronRight size={17} />
                 </button>
               </form>
               <div className="my-8 flex items-center gap-3 text-xs text-slate-600"><div className="h-px flex-1 bg-white/10" />OR<div className="h-px flex-1 bg-white/10" /></div>
@@ -582,7 +596,7 @@ export function AuthScreen({ onAuth, initialError, initialMode = 'landing', init
                 </>
               )}
               <button onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setFeedback(null) }} className="mt-3 w-full rounded-xl border border-white/10 px-4 py-3.5 text-sm font-medium text-slate-300 transition hover:bg-white/5">
-                {mode === 'login' ? 'Create a new account' : 'I already have an account'}
+                {mode === 'login' ? 'Create a new account' : mode === 'forgot' ? 'Back to sign in' : 'I already have an account'}
               </button>
               <div className="mt-8 flex items-center justify-center gap-2 text-xs text-slate-500"><ShieldCheck size={14} className="text-emerald-300" />Your data is protected by Supabase Auth</div>
               <p className="mt-3 text-center text-[11px] text-slate-500">
