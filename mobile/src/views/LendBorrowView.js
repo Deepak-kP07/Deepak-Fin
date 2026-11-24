@@ -17,11 +17,11 @@ function Pill({ bg, fg, children }) {
 }
 const statusTone = (status, isClosedGray) => (status === 'returned' ? (isClosedGray ? ['bg-slate-500/15', 'text-slate-400 light:text-slate-500'] : ['bg-emerald-400/15', 'text-emerald-200 light:text-emerald-700']) : status === 'partial' ? ['bg-amber-400/15', 'text-amber-200 light:text-amber-700'] : ['bg-accent-400/15', 'text-accent-200 light:text-accent-700'])
 
-export function LendBorrowView({ data, onAdd, onEdit, onDelete, onDeleteTx, onDeleteTxBulk, onLogRepayment, onAddMore, onEditAdditionNote, onManageAccess, showMoney, onToggleMoney, onDetailChange }) {
+export function LendBorrowView({ initialSelectedId, data, onAdd, onEdit, onDelete, onDeleteTx, onDeleteTxBulk, onLogRepayment, onAddMore, onEditAdditionNote, onManageAccess, showMoney, onToggleMoney, onDetailChange }) {
   const { lend_borrow = [], lend_repayments = [], lend_borrow_additions = [], accounts = [], transactions = [] } = data
   const now = new Date()
   const [showHistory, setShowHistory] = useState(false)
-  const [selectedId, setSelectedId] = useState(null)
+  const [selectedId, setSelectedId] = useState(initialSelectedId ?? null)
   const selected = lend_borrow.find((l) => l.id === selectedId)
   useEffect(() => { onDetailChange?.(selected ? selectedId : null) }, [selectedId, !!selected])
 
@@ -80,7 +80,6 @@ export function LendBorrowView({ data, onAdd, onEdit, onDelete, onDeleteTx, onDe
   return (
     <View className="gap-5 pb-8">
       <View>
-        <Text className={tw('mb-2 text-xs uppercase tracking-widest text-accent-200/70 light:text-accent-700')}>Money between people</Text>
         <Text className={tw('text-3xl font-semibold tracking-tight text-white light:text-slate-900')}>Lend & borrow</Text>
       </View>
       <View className="flex-row gap-2">

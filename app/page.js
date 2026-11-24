@@ -1106,7 +1106,7 @@ function DashboardView({ data, showMoney, onToggleMoney, onOpenTxForm, setView, 
         cashBankItems={cashBankItems} investmentItems={investmentItems} loanItems={loanItems} creditCardItems={creditCardItems}
         lendItems={lendItems} borrowItems={borrowItems}
         chitFundAssetItems={chitFundAssetItems} chitFundLiabilityItems={chitFundLiabilityItems}
-        moneyProfileItems={moneyProfileItems} scholarshipItems={scholarshipItems}
+        moneyProfileItems={moneyProfileItems} moneyProfileCount={money_profiles.length} scholarshipItems={scholarshipItems}
         investmentsModuleEnabled={moduleSettings.investments.enabled}
         creditCardsModuleEnabled={moduleSettings.credit_cards.enabled}
         onOpenCustomize={() => setShowNetWorthCustomize(true)}
@@ -2092,7 +2092,6 @@ function TransactionsView({ data, scheduledDueCount = 0, onOpenScheduledPrompt, 
           lg:flex) instead, but both sit in this same row now, with the eye toggle always last. */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <div className="mb-2 text-xs uppercase tracking-widest text-accent-200/70 light:text-accent-700">Money movement</div>
           <h1 className="text-3xl font-semibold tracking-tight text-white light:text-slate-900">Transactions</h1>
           {scheduledDueCount > 0 && (
             <button type="button" onClick={onOpenScheduledPrompt} className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-amber-300/30 bg-amber-300/10 px-2.5 py-1 text-[11px] font-medium text-amber-200 light:text-amber-700 hover:bg-amber-300/15">

@@ -47,7 +47,6 @@ export function InsightsView({ data, showMoney, onToggleMoney }) {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <div className="mb-2 text-xs uppercase tracking-widest text-accent-200/70 light:text-accent-700">Smart spending</div>
           <h1 className="text-3xl font-semibold tracking-tight text-white light:text-slate-900">Insights · {now.toLocaleString('en-IN', { month: 'long' })}</h1>
         </div>
         <button onClick={onToggleMoney} className="self-end rounded-xl border border-white/10 light:border-black/10 p-2.5 text-slate-400 light:text-slate-500 hover:bg-white/5" title={showMoney ? 'Hide amounts' : 'Show amounts'}>

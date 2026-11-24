@@ -24,6 +24,8 @@ const isOutflow = (t) => t.type === 'expense' || (t.type === 'transfer' && t.tra
 function AccountDetailView({ account, debitCard, transactions, categories, onBack, onEdit, onDelete, onEditTx, onDeleteTxBulk, onSyncBalance, showMoney, onToggleMoney }) {
   const [syncOpen, setSyncOpen] = useState(false)
   const [syncValue, setSyncValue] = useState('')
+  // A lone '-' or '.' while typing isn't a number yet — don't let it sync as NaN.
+  const syncValid = syncValue.trim() !== '' && Number.isFinite(Number(syncValue))
   const [syncBusy, setSyncBusy] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false)
   const activity = transactions.filter((t) => t.account_id === account.id).sort((a, b) => new Date(b.date) - new Date(a.date) || String(b.time || '').localeCompare(String(a.time || '')))
@@ -84,11 +86,11 @@ function AccountDetailView({ account, debitCard, transactions, categories, onBac
           <Text className={tw('text-sm text-slate-300 light:text-slate-700')}>Sync with your bank's real balance</Text>
           <Text className="mt-1 text-[11px] text-slate-500">If your bank's app shows a different number — a fee, interest credit, or a transaction you never logged here — enter the real balance and it'll be reconciled with a labeled adjustment entry.</Text>
           <View className="mt-3 flex-row flex-wrap items-center gap-2">
-            <TextInput keyboardType="decimal-pad" value={syncValue} onChangeText={setSyncValue} placeholder={String(Math.round(account.current_balance))} placeholderTextColor="#64748b" className={tw('w-40 rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-2 text-sm text-white light:text-slate-900')} />
-            <Pressable disabled={syncBusy || !syncValue} onPress={async () => { setSyncBusy(true); await onSyncBalance(account, Number(syncValue)); setSyncBusy(false); setSyncOpen(false); setSyncValue('') }} className={tw((syncBusy || !syncValue) && 'opacity-50')}>
+            <TextInput keyboardType="numeric" value={syncValue} onChangeText={setSyncValue} placeholder={String(Math.round(account.current_balance))} placeholderTextColor="#64748b" className={tw('w-40 rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-2 text-sm text-white light:text-slate-900')} />
+            <Pressable disabled={syncBusy || !syncValid} onPress={async () => { setSyncBusy(true); await onSyncBalance(account, Number(syncValue)); setSyncBusy(false); setSyncOpen(false); setSyncValue('') }} className={tw((syncBusy || !syncValid) && 'opacity-50')}>
               <AccentGradient dir="r" style={{ borderRadius: 12, paddingHorizontal: 16, paddingVertical: 8 }}><Text className="text-sm font-semibold text-[#07101c]">{syncBusy ? 'Syncing…' : 'Sync'}</Text></AccentGradient>
             </Pressable>
-            {syncValue ? <Text className="text-[11px] text-slate-500">{Number(syncValue) < Number(account.current_balance) ? `${money(Number(account.current_balance) - Number(syncValue))} lower than tracked` : Number(syncValue) > Number(account.current_balance) ? `${money(Number(syncValue) - Number(account.current_balance))} higher than tracked` : 'Matches already'}</Text> : null}
+            {syncValid ? <Text className="text-[11px] text-slate-500">{Number(syncValue) < Number(account.current_balance) ? `${money(Number(account.current_balance) - Number(syncValue))} lower than tracked` : Number(syncValue) > Number(account.current_balance) ? `${money(Number(syncValue) - Number(account.current_balance))} higher than tracked` : 'Matches already'}</Text> : null}
           </View>
         </View>
       )}
@@ -153,11 +155,11 @@ function AccountDetailView({ account, debitCard, transactions, categories, onBac
   )
 }
 
-export function AccountsView({ data, onEdit, onDelete, onEditTx, onDeleteTxBulk, onSyncBalance, showMoney, onToggleMoney, onDetailChange }) {
+export function AccountsView({ initialSelectedId, data, onEdit, onDelete, onEditTx, onDeleteTxBulk, onSyncBalance, showMoney, onToggleMoney, onDetailChange }) {
   const { accounts, transactions, categories } = data
   const visibleAccounts = accounts.filter((a) => a.type !== 'debit_card')
   const debitCardFor = (accountId) => accounts.find((d) => d.type === 'debit_card' && d.linked_account_id === accountId)
-  const [selectedAccountId, setSelectedAccountId] = useState(null)
+  const [selectedAccountId, setSelectedAccountId] = useState(initialSelectedId ?? null)
   const selectedAccount = visibleAccounts.find((a) => a.id === selectedAccountId)
   useEffect(() => { onDetailChange?.(selectedAccountId) }, [selectedAccountId])
 
@@ -178,7 +180,6 @@ export function AccountsView({ data, onEdit, onDelete, onEditTx, onDeleteTxBulk,
     <View className="gap-5 pb-16">
       <View className="flex-row items-end justify-between gap-3">
         <View>
-          <Text className={tw('mb-2 text-xs uppercase tracking-widest text-accent-200/70 light:text-accent-700')}>Where the money lives</Text>
           <Text className={tw('text-3xl font-semibold tracking-tight text-white light:text-slate-900')}>Accounts</Text>
         </View>
         <Pressable onPress={onToggleMoney} className={tw('rounded-xl border border-white/10 light:border-black/10 p-2.5')}><Icon as={showMoney ? Eye : EyeOff} size={16} className={tw('text-slate-400 light:text-slate-500')} /></Pressable>

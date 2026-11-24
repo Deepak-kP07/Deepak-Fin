@@ -21,12 +21,16 @@ export function DataProvider({ children }) {
   const [data, setData] = useState(EMPTY)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  // True once a load has succeeded for this user — before that, an error means there's nothing to
+  // show at all (full-screen retry); after it, the last good data stays up with a banner.
+  const [loaded, setLoaded] = useState(false)
 
   const refresh = useCallback(async () => {
     try {
       const summary = await api('/finance/summary')
       setData({ ...EMPTY, ...summary })
       setError(null)
+      setLoaded(true)
     } catch (e) {
       setError(e.message || 'Could not load your data')
     } finally {
@@ -38,15 +42,20 @@ export function DataProvider({ children }) {
   useEffect(() => {
     setData(EMPTY)
     setError(null)
+    setLoaded(false)
     if (!userId) { setLoading(false); return }
     setLoading(true)
     refresh()
   }, [userId, refresh])
 
+  // Optimistic local change — the UI updates on the tap, and the caller's background refresh()
+  // then brings in the server's truth. fn(data) returns the keys to replace.
+  const patch = useCallback((fn) => setData((d) => ({ ...d, ...fn(d) })), [])
+
   const value = useMemo(() => ({
-    data, loading, error, refresh,
+    data, loading, error, loaded, refresh, patch,
     accent: data.profile?.accent_color || DEFAULT_ACCENT,
-  }), [data, loading, error, refresh])
+  }), [data, loading, error, loaded, refresh, patch])
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>
 }

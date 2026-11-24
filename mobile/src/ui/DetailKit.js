@@ -19,10 +19,9 @@ export function BackLink({ label, onPress }) {
   )
 }
 
-export function PageTitle({ eyebrow, title }) {
+export function PageTitle({ title }) {
   return (
     <View className="min-w-0 flex-1">
-      <Text className={tw('mb-2 text-xs uppercase tracking-widest text-accent-200/70 light:text-accent-700')}>{eyebrow}</Text>
       <Text className={tw('text-3xl font-semibold tracking-tight text-white light:text-slate-900')}>{title}</Text>
     </View>
   )

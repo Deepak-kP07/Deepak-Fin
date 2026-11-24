@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Alert, Pressable, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import * as DocumentPicker from 'expo-document-picker'
 import * as Sharing from 'expo-sharing'
 import { File, Paths } from 'expo-file-system'
@@ -13,7 +13,8 @@ import { api } from '../../lib/api'
 import { toast } from '../../lib/toast'
 import { money, todayISO } from '../../lib/format'
 import { BOND_INTEREST_FREQUENCIES, OTHER_INVESTMENT_CATEGORIES, currentValueOf, detectAssetType, money2 } from '../../lib/shared'
-import { parseCsv } from '@/lib/csv'
+import { readSpreadsheet, SPREADSHEET_TYPES } from '../../lib/spreadsheet'
+import { dialog } from '../../ui/Dialogs'
 
 // Ports of features/investments/{PortfolioForm, PortfolioFundsForm, WithdrawFundsForm, SipForm,
 // HoldingForm, OtherInvestmentForm, HoldingsBulkImport}.jsx.
@@ -139,9 +140,9 @@ export function HoldingForm({ open, onClose, onSaved, editing, portfolios, defau
     const cash = Number(portfolio.cash_balance || 0)
     if (newCost - oldCost <= cash + 0.01) return resolve(true)
     if (profile?.block_insufficient_funds === false) {
-      return Alert.alert('Not enough cash', `"${portfolio.name}" only has ${money(cash)} in cash — do you want to confirm this purchase anyway?`, [{ text: 'Cancel', style: 'cancel', onPress: () => resolve(false) }, { text: 'Confirm', onPress: () => resolve(true) }])
+      return dialog.alert('Not enough cash', `"${portfolio.name}" only has ${money(cash)} in cash — do you want to confirm this purchase anyway?`, [{ text: 'Cancel', style: 'cancel', onPress: () => resolve(false) }, { text: 'Confirm', onPress: () => resolve(true) }])
     }
-    Alert.alert('Not enough cash', `"${portfolio.name}" doesn't have enough cash for this purchase. Add funds first, or turn this block off in your Profile settings.`, [{ text: 'OK', onPress: () => resolve(false) }])
+    dialog.alert('Not enough cash', `"${portfolio.name}" doesn't have enough cash for this purchase. Add funds first, or turn this block off in your Profile settings.`, [{ text: 'OK', onPress: () => resolve(false) }])
   })
 
   const save = async () => {
@@ -255,14 +256,14 @@ export function HoldingsBulkImport({ open, onClose, onImported, portfolio }) {
   const [busy, setBusy] = useState(false)
   useEffect(() => { if (!open) { setParsed(null); setMapping({}) } }, [open])
   const pick = async () => {
-    const res = await DocumentPicker.getDocumentAsync({ type: ['text/csv', 'text/comma-separated-values', 'text/plain', '*/*'], copyToCacheDirectory: true })
+    const res = await DocumentPicker.getDocumentAsync({ type: SPREADSHEET_TYPES, copyToCacheDirectory: true })
     if (res.canceled || !res.assets?.[0]) return
     try {
-      const out = parseCsv(await new File(res.assets[0].uri).text())
-      if (!out.headers.length) return Alert.alert('That file is empty')
+      const out = await readSpreadsheet(res.assets[0])
+      if (!out.headers.length) return dialog.alert('That file is empty')
       setParsed(out)
       setMapping(Object.fromEntries(HOLDING_FIELDS.map((f) => [f.key, out.headers.find((h) => f.guess.test(h)) || ''])))
-    } catch { Alert.alert('Could not read that file', 'Pick a .csv file (Excel files: save as CSV first).') }
+    } catch { dialog.alert('Could not read that file', 'Pick a .csv or Excel (.xlsx) file.') }
   }
   const downloadTemplate = async () => {
     try {
@@ -270,7 +271,7 @@ export function HoldingsBulkImport({ open, onClose, onImported, portfolio }) {
       if (file.exists) file.delete()
       await file.write('symbol,exchange,qty,avg_buy_price,current_price,company_name\nRELIANCE,NSE,10,2450.50,2610.00,Reliance Industries\nHDFCBANK,NSE,25,1520.00,1548.75,HDFC Bank\n')
       await Sharing.shareAsync(file.uri, { mimeType: 'text/csv' })
-    } catch (e) { Alert.alert('Could not create the template', e.message) }
+    } catch (e) { dialog.alert('Could not create the template', e.message) }
   }
   const rows = useMemo(() => {
     if (!parsed || !mapping.symbol || !mapping.qty || !mapping.avg_buy_price) return []
@@ -295,7 +296,7 @@ export function HoldingsBulkImport({ open, onClose, onImported, portfolio }) {
       try { await api('/finance/holdings', { method: 'POST', body: { ...payload, portfolio_id: portfolio.id, source: 'import', last_price_updated_at: new Date().toISOString() } }); ok++ } catch { /* counted below */ }
     }
     setBusy(false)
-    Alert.alert('Import finished', `${ok} of ${toImport.length} holdings imported.`)
+    dialog.alert('Import finished', `${ok} of ${toImport.length} holdings imported.`)
     onImported()
   }
   if (!portfolio) return null
@@ -306,7 +307,7 @@ export function HoldingsBulkImport({ open, onClose, onImported, portfolio }) {
         <View className="mt-4 gap-3 pb-4">
           <Pressable onPress={pick} className={tw('items-center gap-2 rounded-2xl border border-dashed border-white/15 light:border-black/15 px-4 py-10')}>
             <Icon as={Upload} size={22} className="text-accent-300 light:text-accent-700" />
-            <Text className={tw('text-sm text-slate-300 light:text-slate-700')}>Choose a CSV file</Text>
+            <Text className={tw('text-sm text-slate-300 light:text-slate-700')}>Choose a CSV or Excel file</Text>
             <Text className="text-center text-[11px] text-slate-500">Columns: symbol, exchange, qty, avg buy price, current price (optional), company name (optional)</Text>
           </Pressable>
           <Pressable onPress={downloadTemplate} className="self-center"><Text className={tw('text-xs text-accent-200 light:text-accent-700')}>Download a template</Text></Pressable>

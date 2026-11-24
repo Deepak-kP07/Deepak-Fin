@@ -1,12 +1,12 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, Pressable, Text, TextInput, View } from 'react-native'
+import { Animated, Easing, PanResponder, Pressable, Text, TextInput, View } from 'react-native'
 import * as Print from 'expo-print'
 import * as Sharing from 'expo-sharing'
 import { File, Paths } from 'expo-file-system'
 import * as WebBrowser from 'expo-web-browser'
 import {
   ArrowDownRight, ArrowLeftRight, ArrowUpRight, CheckCircle2, ChevronLeft, ChevronRight, Eye, EyeOff, ListChecks, Lock,
-  LockOpen, Paperclip, PieChart, Repeat, Search, Tag, Trash2, Wallet, X,
+  Clock, LockOpen, Paperclip, PieChart, Repeat, Search, Tag, Trash2, Wallet, X,
 } from 'lucide-react-native'
 import { Icon } from '../ui/Icon'
 import { Select } from '../ui/Select'
@@ -23,6 +23,7 @@ import { MONTH_NAMES, capitalizeFirst, money } from '../lib/format'
 import { getTransactionIcon } from '../lib/categoryIcons'
 import { hiddenTransferGroups, isHiddenTx, useHiddenTx } from '../state/HiddenTx'
 import { useTheme } from '../state/ThemeProvider'
+import { dialog } from '../ui/Dialogs'
 
 // Native port of TransactionsView (app/page.js), phone layout: month pill (tap the month for a
 // custom range), hidden-transactions lock, amounts toggle, search + Filters sheet (type, account,
@@ -47,7 +48,7 @@ function rotateHue(hex, deg) {
   return `#${[f(0), f(8), f(4)].map((v) => v.toString(16).padStart(2, '0')).join('')}`
 }
 
-export function TransactionsView({ data, showMoney, onToggleMoney, onOpenTxForm, onEditTx, onDeleteTxBulk, onPayCardBill, onImport, onOpenRecurring }) {
+export function TransactionsView({ data, scheduledDueCount = 0, onOpenScheduledPrompt, showMoney, onToggleMoney, onOpenTxForm, onEditTx, onDeleteTxBulk, onPayCardBill, onImport, onOpenRecurring }) {
   const { accentColor } = useTheme()
   const { transactions, accounts, categories, credit_cards: creditCards = [] } = data
   const [query, setQuery] = useState('')
@@ -57,6 +58,34 @@ export function TransactionsView({ data, showMoney, onToggleMoney, onOpenTxForm,
   const [accountId, setAccountId] = useState('all')
   const [categoryId, setCategoryId] = useState('all')
   const [chartView, setChartView] = useState(false)
+  // List ⇄ chart: the outgoing view slides out one way while the new one slides in from the other.
+  const swipeAnim = useRef(new Animated.Value(0)).current
+  const switchView = (toChart) => {
+    if (toChart === chartView) return
+    const dir = toChart ? 1 : -1
+    Animated.timing(swipeAnim, { toValue: -dir, duration: 130, easing: Easing.in(Easing.quad), useNativeDriver: true }).start(() => {
+      setChartView(toChart)
+      swipeAnim.setValue(dir)
+      Animated.timing(swipeAnim, { toValue: 0, duration: 130, easing: Easing.out(Easing.quad), useNativeDriver: true }).start()
+    })
+  }
+  // A real pan responder rather than raw touch start/end: Android's ScrollView cancels a child's
+  // touches as soon as the finger drifts a few pixels vertically, which silently dropped most
+  // swipes. Claiming the gesture once it's clearly horizontal also stops the page scrolling under it.
+  const chartViewRef = useRef(chartView)
+  chartViewRef.current = chartView
+  const switchViewRef = useRef(switchView)
+  switchViewRef.current = switchView
+  const swipe = useRef(PanResponder.create({
+    onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 14 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
+    onMoveShouldSetPanResponderCapture: (_, g) => Math.abs(g.dx) > 24 && Math.abs(g.dx) > Math.abs(g.dy) * 2,
+    onPanResponderTerminationRequest: () => false,
+    onPanResponderRelease: (_, g) => {
+      if (Math.abs(g.dx) < 48 && Math.abs(g.vx) < 0.4) return
+      if (g.dx < 0 && !chartViewRef.current) switchViewRef.current(true)
+      else if (g.dx > 0 && chartViewRef.current) switchViewRef.current(false)
+    },
+  })).current
   const [catView, setCatView] = useState('all')
   const [activeSliceIndex, setActiveSliceIndex] = useState(-1)
   const [monthCursor, setMonthCursor] = useState(() => { const d = new Date(); return { year: d.getFullYear(), month: d.getMonth() } })
@@ -144,7 +173,7 @@ export function TransactionsView({ data, showMoney, onToggleMoney, onOpenTxForm,
       if (file.exists) file.delete()
       await write(file)
       await Sharing.shareAsync(file.uri, { mimeType, dialogTitle: name })
-    } catch (e) { Alert.alert('Export failed', e.message) }
+    } catch (e) { dialog.alert('Export failed', e.message) }
   }
   const exportCsv = async () => {
     const csv = ['Date,Description,Type,Amount,Category,Account,Notes', ...sorted.map((r) => [r.date, JSON.stringify(r.description || ''), r.type, r.amount, JSON.stringify(categories.find((c) => c.id === r.category_id)?.name || ''), JSON.stringify(resolveSource(r)?.name || ''), JSON.stringify(r.notes || '')].join(','))].join('\n')
@@ -162,7 +191,7 @@ export function TransactionsView({ data, showMoney, onToggleMoney, onOpenTxForm,
     try {
       const { uri } = await Print.printToFileAsync({ html })
       await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'personal-finance-transactions.pdf' })
-    } catch (e) { Alert.alert('Export failed', e.message) }
+    } catch (e) { dialog.alert('Export failed', e.message) }
   }
   const openAttachment = async (t) => {
     try { const { url } = await api(`/finance/transactions/${t.id}/attachment`); if (url) await WebBrowser.openBrowserAsync(url) } catch { /* the row stays as-is */ }
@@ -181,8 +210,13 @@ export function TransactionsView({ data, showMoney, onToggleMoney, onOpenTxForm,
 
       <View className="flex-row flex-wrap items-end justify-between gap-3">
         <View>
-          <Text className={tw('mb-2 text-xs uppercase tracking-widest text-accent-200/70 light:text-accent-700')}>Money movement</Text>
           <Text className={tw('text-3xl font-semibold tracking-tight text-white light:text-slate-900')}>Transactions</Text>
+          {scheduledDueCount > 0 && (
+            <Pressable onPress={onOpenScheduledPrompt} className={tw('mt-2 flex-row items-center gap-1.5 self-start rounded-full border border-amber-300/30 bg-amber-300/10 px-2.5 py-1')}>
+              <Icon as={Clock} size={12} className="text-amber-200 light:text-amber-700" />
+              <Text className={tw('text-[11px] font-medium text-amber-200 light:text-amber-700')}>{scheduledDueCount} scheduled transaction{scheduledDueCount === 1 ? '' : 's'} to confirm</Text>
+            </Pressable>
+          )}
         </View>
         <View className="flex-row flex-wrap items-center justify-end gap-2">
           <View className={tw('flex-row items-center rounded-xl border', customRange ? 'border-accent-300/40 bg-accent-400/10' : 'border-white/10 light:border-black/10')}>
@@ -228,9 +262,9 @@ export function TransactionsView({ data, showMoney, onToggleMoney, onOpenTxForm,
           <View><Text className={tw('text-sm text-slate-300 light:text-slate-700')}>Type</Text><Select value={type} onChange={setType} options={typeOptions} className={filterSelect} textClassName="text-slate-300 light:text-slate-700" title="Type" /></View>
           <View><Text className={tw('text-sm text-slate-300 light:text-slate-700')}>Account</Text><Select value={accountId} onChange={setAccountId} options={accountOptions} className={filterSelect} textClassName="text-slate-300 light:text-slate-700" title="Account" /></View>
           <View><Text className={tw('text-sm text-slate-300 light:text-slate-700')}>Category</Text><Select value={categoryId} onChange={setCategoryId} options={categoryOptions} className={filterSelect} textClassName="text-slate-300 light:text-slate-700" title="Category" /></View>
-          <Pressable onPress={() => setChartView((v) => !v)} className={tw('flex-row items-center justify-between rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-4 py-3')}>
+          <Pressable onPress={() => switchView(!chartView)} className={tw('flex-row items-center justify-between rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-4 py-3')}>
             <View className="flex-row items-center gap-2"><Icon as={PieChart} size={15} className={tw('text-slate-300 light:text-slate-700')} /><Text className={tw('text-sm text-slate-300 light:text-slate-700')}>Chart view</Text></View>
-            <ToggleSwitch checked={chartView} onChange={() => setChartView((v) => !v)} />
+            <ToggleSwitch checked={chartView} onChange={() => switchView(!chartView)} />
           </Pressable>
           <View className={tw('border-t border-white/10 light:border-black/10 pt-2')}>
             <Pressable onPress={() => { setMobileFiltersOpen(false); onImport() }} className="rounded-lg px-1 py-2.5"><Text className={tw('text-sm text-slate-300 light:text-slate-700')}>Import CSV</Text></Pressable>
@@ -257,6 +291,10 @@ export function TransactionsView({ data, showMoney, onToggleMoney, onOpenTxForm,
         </View>
       </BottomSheet>
 
+      {/* Swipe left for the chart, right for the list — same as the PWA (threshold on release, so
+          it never fights the page's vertical scroll), with the same short slide-and-fade. */}
+      <View {...swipe.panHandlers} style={{ minHeight: 360 }}>
+      <Animated.View style={{ opacity: swipeAnim.interpolate({ inputRange: [-1, 0, 1], outputRange: [0, 1, 0] }), transform: [{ translateX: swipeAnim.interpolate({ inputRange: [-1, 1], outputRange: [-36, 36] }) }] }}>
       {chartView ? (
         <View className={tw('rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] p-4 glassy:glass-card')}>
           <View className="mb-1 gap-3">
@@ -364,6 +402,8 @@ export function TransactionsView({ data, showMoney, onToggleMoney, onOpenTxForm,
           )}
         </View>
       )}
+      </Animated.View>
+      </View>
     </View>
   )
 }

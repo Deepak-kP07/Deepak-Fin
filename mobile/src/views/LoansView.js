@@ -24,9 +24,9 @@ function StatusPill({ status }) {
   return <View className={tw('rounded-full px-2 py-0.5', bg)}><Text className={tw('text-[10px] uppercase tracking-widest', text)}>{status}</Text></View>
 }
 
-export function LoansView({ data, onAdd, onEdit, onDelete, onPay, onDeletePayment, onDeletePaymentBulk, onSync, showMoney, onToggleMoney, onDetailChange }) {
+export function LoansView({ initialSelectedId, data, onAdd, onEdit, onDelete, onPay, onDeletePayment, onDeletePaymentBulk, onSync, showMoney, onToggleMoney, onDetailChange }) {
   const { loans = [], loan_payments = [], accounts = [] } = data
-  const [selectedLoanId, setSelectedLoanId] = useState(null)
+  const [selectedLoanId, setSelectedLoanId] = useState(initialSelectedId ?? null)
   const selectedLoan = loans.find((l) => l.id === selectedLoanId)
   useEffect(() => { onDetailChange?.(selectedLoan ? selectedLoanId : null) }, [selectedLoanId, !!selectedLoan])
 
@@ -47,7 +47,6 @@ export function LoansView({ data, onAdd, onEdit, onDelete, onPay, onDeletePaymen
     <View className="gap-5 pb-8">
       <View className="flex-row items-end justify-between gap-3">
         <View>
-          <Text className={tw('mb-2 text-xs uppercase tracking-widest text-accent-200/70 light:text-accent-700')}>Debt clarity</Text>
           <Text className={tw('text-3xl font-semibold tracking-tight text-white light:text-slate-900')}>Loans</Text>
         </View>
         <Pressable onPress={onToggleMoney} className={tw(ICON_BTN)}><Icon as={showMoney ? Eye : EyeOff} size={16} className={tw('text-slate-400 light:text-slate-500')} /></Pressable>

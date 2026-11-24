@@ -73,8 +73,16 @@ export function routeForView(view) {
   if (!view || view === 'dashboard') return '/'
   return { pathname: '/', params: { view: VIEW_ALIASES[view] || view } }
 }
+// Share invites link to "/invite/<token>" or "/invite/lend/<token>" (relative, or the full website
+// URL in emails) — the app has the same routes, so those open the in-app invite screen.
+export function inviteRouteFor(url) {
+  const m = String(url || '').match(/^(?:https?:\/\/[^/]+)?\/invite\/(lend\/)?([A-Za-z0-9_-]+)\/?(?:[?#].*)?$/)
+  return m ? `/invite/${m[1] ? 'lend/' : ''}${m[2]}` : null
+}
 export function routeForUrl(url) {
   if (!url) return null
+  const invite = inviteRouteFor(url)
+  if (invite) return invite
   const view = (String(url).match(/[?&]view=([a-z_]+)/) || [])[1]
   return routeForView(view)
 }

@@ -12,7 +12,6 @@ export function MoneyRulesView({ data, onAdd, onToggle, onEdit, onDelete }) {
   return (
     <div className="space-y-5">
       <div>
-        <div className="mb-2 text-xs uppercase tracking-widest text-accent-200/70 light:text-accent-700">Your compass</div>
         <h1 className="text-3xl font-semibold tracking-tight text-white light:text-slate-900">Money rules</h1>
       </div>
       <form onSubmit={submit} className="flex gap-2">

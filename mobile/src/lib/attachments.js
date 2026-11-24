@@ -1,14 +1,15 @@
-import { Alert } from 'react-native'
+import {  } from 'react-native'
 import * as ImagePicker from 'expo-image-picker'
 import * as DocumentPicker from 'expo-document-picker'
 import * as WebBrowser from 'expo-web-browser'
 import { supabase } from './supabase'
 import { api } from './api'
+import { dialog } from '../ui/Dialogs'
 
 // Port of lib/attachments.js (web). Same storage layout: attachments/<userId>/<recordId>/<time>-<name>.
 // `endpoint` is the record's API path without /api, e.g. /finance/scholarships/<id>.
 export const pickAttachmentFile = () => new Promise((resolve) => {
-  Alert.alert('Attach receipt', '', [
+  dialog.alert('Attach receipt', '', [
     { text: 'Photo', onPress: async () => { const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 }); resolve(!r.canceled && r.assets?.[0] ? { uri: r.assets[0].uri, name: r.assets[0].fileName || `receipt-${Date.now()}.jpg`, mimeType: r.assets[0].mimeType || 'image/jpeg' } : null) } },
     { text: 'Camera', onPress: async () => { const p = await ImagePicker.requestCameraPermissionsAsync(); if (!p.granted) return resolve(null); const r = await ImagePicker.launchCameraAsync({ quality: 0.8 }); resolve(!r.canceled && r.assets?.[0] ? { uri: r.assets[0].uri, name: `receipt-${Date.now()}.jpg`, mimeType: 'image/jpeg' } : null) } },
     { text: 'PDF', onPress: async () => { const r = await DocumentPicker.getDocumentAsync({ type: 'application/pdf', copyToCacheDirectory: true }); resolve(!r.canceled && r.assets?.[0] ? { uri: r.assets[0].uri, name: r.assets[0].name, mimeType: 'application/pdf' } : null) } },

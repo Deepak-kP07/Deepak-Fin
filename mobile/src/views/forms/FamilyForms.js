@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Alert, Pressable, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import * as DocumentPicker from 'expo-document-picker'
 import * as Sharing from 'expo-sharing'
 import { File, Paths } from 'expo-file-system'
@@ -10,13 +10,15 @@ import { AccentGradient } from '../../ui/Gradient'
 import { ToggleSwitch } from '../../ui/ToggleSwitch'
 import { DateInput, Field, FormSheet, Input, SubmitButton } from '../../ui/FormKit'
 import { Select } from '../../ui/Select'
+import { CategorySelect } from '../../ui/CategorySelect'
 import { tw } from '../../lib/tw'
 import { api } from '../../lib/api'
 import { toast } from '../../lib/toast'
 import { capitalizeFirst, formatDate, money, todayISO } from '../../lib/format'
 import { ENTRY_TYPES, ENTRY_TYPE_STYLE, PROFILE_TYPES } from '../../lib/shared'
 import { EntryTypeChip } from '../FamilyCompanyView'
-import { parseCsv } from '@/lib/csv'
+import { readSpreadsheet, SPREADSHEET_TYPES } from '../../lib/spreadsheet'
+import { dialog } from '../../ui/Dialogs'
 
 // Ports of features/familyCompany/{MoneyProfileForm, MoneyProfileEntryForm, RecurringEntryManager,
 // RecurringEntryForm, MoneyProfileBulkImport}.jsx.
@@ -26,7 +28,6 @@ const bankOptions = (accounts, creditCards) => [
   ...accounts.filter((a) => a.type !== 'debit_card').map((a) => ({ value: a.id, label: a.name })),
   ...creditCards.map((c) => ({ value: `cc:${c.id}`, label: `${c.name} (card)` })),
 ]
-const catOptions = (cats) => [{ value: '', label: 'No category' }, ...cats.map((c) => ({ value: c.id, label: c.name }))]
 const catsForType = (categories, entryType) => categories.filter((c) => c.type === (entryType === 'expense' ? 'expense' : 'income') && !(c.hidden_in_modules || []).includes('family_company'))
 
 function EntryTypePills({ value, onChange }) {
@@ -56,6 +57,7 @@ export function MoneyProfileForm({ open, onClose, onSaved, editing, accounts }) 
 
   const save = async () => {
     if (!form.name.trim()) { toast.push('Enter a name.', 'error'); return }
+    if (!editing && !Number.isFinite(Number(form.opening_balance || 0))) { toast.push('Enter a valid opening balance (e.g. -2500 if it starts in debt).', 'error'); return }
     setBusy(true)
     try {
       const payload = editing
@@ -74,7 +76,7 @@ export function MoneyProfileForm({ open, onClose, onSaved, editing, accounts }) 
     <FormSheet open={open} onClose={onClose} title={editing ? 'Edit profile' : 'New Family / Company profile'} onSubmit={save} busy={busy} submitLabel={busy ? 'Saving…' : editing ? 'Update profile' : 'Create profile'}>
       <Field label="Name"><Input value={form.name} onChangeText={set('name')} placeholder="Home / Dad's finances / Acme Pvt Ltd…" /></Field>
       <Field label="Type"><View className="mt-2"><Select value={form.profile_type} onChange={set('profile_type')} options={PROFILE_TYPES} title="Type" /></View></Field>
-      {!editing && <Field label="Opening balance"><Input keyboardType="numbers-and-punctuation" value={form.opening_balance} onChangeText={(v) => set('opening_balance')(num(v))} placeholder="0" /></Field>}
+      {!editing && <Field label="Opening balance"><Input keyboardType="numeric" value={form.opening_balance} onChangeText={(v) => set('opening_balance')(num(v))} placeholder="0" /></Field>}
       <Field label="Opening balance date"><DateInput value={form.opening_balance_date} onChange={set('opening_balance_date')} /></Field>
       <Text className="mb-3.5 text-[11px] text-slate-500">The current balance is always opening balance plus every entry logged here, regardless of date — so if you're backfilling old entries, add the real total as of before your earliest entry here to avoid double-counting.</Text>
       <Field label="Link to a bank account" optional hint={linkHint}>
@@ -117,7 +119,7 @@ export function MoneyProfileEntryForm({ open, onClose, onSaved, editing, profile
       <Field label="Amount"><Input keyboardType="decimal-pad" value={form.amount} onChangeText={(v) => set('amount')(v.replace(/[^0-9.]/g, ''))} /></Field>
       <Field label="Date"><DateInput value={form.date} onChange={set('date')} /></Field>
       <Field label="Description"><Input value={form.description} onChangeText={set('description')} placeholder="Rent, groceries, salary…" /></Field>
-      <Field label="Category" optional><View className="mt-2"><Select value={form.category_id || ''} onChange={set('category_id')} options={catOptions(catsForType(categories, form.entry_type))} title="Category" /></View></Field>
+      <Field label="Category" optional><View className="mt-2"><CategorySelect value={form.category_id || ''} onChange={set('category_id')} categories={catsForType(categories, form.entry_type)} placeholder="No category" /></View></Field>
       <Field label="Paid to / Received from" optional><Input value={form.paid_party} onChangeText={set('paid_party')} /></Field>
       <Field label="Notes" optional><Input value={form.notes} onChangeText={set('notes')} /></Field>
       <Field label="Bank account or card" optional hint={form.account_id ? 'This entry will also post as a transaction on this account or card.' : "This entry won't show up anywhere outside this module."}>
@@ -210,7 +212,7 @@ function RecurringEntryForm({ open, onClose, onSaved, editing, profile, accounts
       <View className="mb-4"><EntryTypePills value={form.entry_type} onChange={(v) => setForm((f) => ({ ...f, entry_type: v, category_id: '' }))} /></View>
       <Field label="Description"><Input value={form.description} onChangeText={set('description')} placeholder="e.g. Salary, Rent, Netflix" /></Field>
       <Field label="Amount"><Input keyboardType="decimal-pad" value={form.amount} onChangeText={(v) => set('amount')(v.replace(/[^0-9.]/g, ''))} /></Field>
-      <Field label="Category" optional><View className="mt-2"><Select value={form.category_id || ''} onChange={set('category_id')} options={catOptions(catsForType(categories, form.entry_type))} title="Category" /></View></Field>
+      <Field label="Category" optional><View className="mt-2"><CategorySelect value={form.category_id || ''} onChange={set('category_id')} categories={catsForType(categories, form.entry_type)} placeholder="No category" /></View></Field>
       <Field label="Bank account or card" optional><View className="mt-2"><Select value={form.account_id} onChange={set('account_id')} options={bankOptions(accounts, creditCards)} title="Bank account or card" /></View></Field>
       <Field label="Paid to / Received from" optional><Input value={form.paid_party} onChangeText={set('paid_party')} /></Field>
       <View className="flex-row gap-3">
@@ -239,14 +241,14 @@ export function MoneyProfileBulkImport({ open, onClose, onImported, profile, cat
   const [busy, setBusy] = useState(false)
   useEffect(() => { if (!open) { setParsed(null); setMapping({}) } }, [open])
   const pick = async () => {
-    const res = await DocumentPicker.getDocumentAsync({ type: ['text/csv', 'text/comma-separated-values', 'text/plain', '*/*'], copyToCacheDirectory: true })
+    const res = await DocumentPicker.getDocumentAsync({ type: SPREADSHEET_TYPES, copyToCacheDirectory: true })
     if (res.canceled || !res.assets?.[0]) return
     try {
-      const out = parseCsv(await new File(res.assets[0].uri).text())
-      if (!out.headers.length) return Alert.alert('That file is empty')
+      const out = await readSpreadsheet(res.assets[0])
+      if (!out.headers.length) return dialog.alert('That file is empty')
       setParsed(out)
       setMapping(Object.fromEntries(IMPORT_FIELDS.map((f) => [f.key, out.headers.find((h) => f.guess.test(h)) || ''])))
-    } catch { Alert.alert('Could not read that file', 'Pick a .csv file (Excel files: save as CSV first).') }
+    } catch { dialog.alert('Could not read that file', 'Pick a .csv or Excel (.xlsx) file.') }
   }
   const downloadTemplate = async () => {
     try {
@@ -254,7 +256,7 @@ export function MoneyProfileBulkImport({ open, onClose, onImported, profile, cat
       if (file.exists) file.delete()
       await file.write('date,category,description,amount,paid_party,notes\n15/01/2026,income,January salary,50000,Acme Pvt Ltd,\n18/01/2026,expense,Weekly groceries,2400,BigBasket,\n')
       await Sharing.shareAsync(file.uri, { mimeType: 'text/csv' })
-    } catch (e) { Alert.alert('Could not create the template', e.message) }
+    } catch (e) { dialog.alert('Could not create the template', e.message) }
   }
   const rows = useMemo(() => {
     if (!parsed || !mapping.date || !mapping.amount || !mapping.description) return []
@@ -283,7 +285,7 @@ export function MoneyProfileBulkImport({ open, onClose, onImported, profile, cat
       try { await api('/finance/money_profile_entries', { method: 'POST', body: { ...payload, profile_id: profile.id } }); ok++ } catch { /* counted below */ }
     }
     setBusy(false)
-    Alert.alert('Import finished', `${ok} of ${toImport.length} entries imported.`)
+    dialog.alert('Import finished', `${ok} of ${toImport.length} entries imported.`)
     onImported()
   }
   if (!profile) return null
@@ -294,7 +296,7 @@ export function MoneyProfileBulkImport({ open, onClose, onImported, profile, cat
         <View className="mt-4 gap-3 pb-4">
           <Pressable onPress={pick} className={tw('items-center gap-2 rounded-2xl border border-dashed border-white/15 light:border-black/15 px-4 py-10')}>
             <Icon as={Upload} size={22} className="text-accent-300 light:text-accent-700" />
-            <Text className={tw('text-sm text-slate-300 light:text-slate-700')}>Choose a CSV file</Text>
+            <Text className={tw('text-sm text-slate-300 light:text-slate-700')}>Choose a CSV or Excel file</Text>
             <Text className="text-center text-[11px] text-slate-500">Columns: date, category (or type — income/capital/expense), description, amount, paid to / received from</Text>
           </Pressable>
           <Pressable onPress={downloadTemplate} className="self-center"><Text className={tw('text-xs text-accent-200 light:text-accent-700')}>Download a template</Text></Pressable>

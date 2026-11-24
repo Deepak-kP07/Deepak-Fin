@@ -52,6 +52,11 @@ export function LoanForm({ open, onClose, onSaved, editing, accounts }) {
     if (!form.name.trim() || !(Number(form.principal) >= 0) || form.principal === '' || form.interest_rate === '' || !(Number(form.tenure_months) >= 1) || form.emi_amount === '') {
       toast.push('Fill in name, principal, interest rate, tenure and EMI.', 'error'); return
     }
+    // Same 1–31 range as the PWA's input (the server doesn't check it, and 0 or 32+ breaks the
+    // next-due banner and the EMI calendar).
+    if (form.emi_due_day !== '' && form.emi_due_day != null && !(Number(form.emi_due_day) >= 1 && Number(form.emi_due_day) <= 31)) {
+      toast.push('EMI due day must be between 1 and 31.', 'error'); return
+    }
     setBusy(true)
     try {
       const payload = {
@@ -67,10 +72,12 @@ export function LoanForm({ open, onClose, onSaved, editing, accounts }) {
       const saved = await api(editing ? `/finance/loans/${editing.id}` : '/finance/loans', { method: editing ? 'PATCH' : 'POST', body: payload })
       if (!editing && monthsAlreadyPaid > 0) {
         toast.push(`Backfilling ${monthsAlreadyPaid} past EMI${monthsAlreadyPaid === 1 ? '' : 's'}…`)
+        let failed = 0
         for (let i = 1; i <= monthsAlreadyPaid; i++) {
-          await api('/finance/loan_payments', { method: 'POST', body: { loan_id: saved.id, amount: payload.emi_amount, type: 'emi', payment_date: addMonthsToDate(payload.start_date, i), account_id: payload.paid_from_account_id || undefined } }).catch(() => null)
+          await api('/finance/loan_payments', { method: 'POST', body: { loan_id: saved.id, amount: payload.emi_amount, type: 'emi', payment_date: addMonthsToDate(payload.start_date, i), account_id: payload.paid_from_account_id || undefined } }).catch(() => { failed++ })
         }
-        toast.push('Backfill complete')
+        if (failed) toast.push(`Loan saved, but ${failed} of ${monthsAlreadyPaid} past EMIs couldn't be logged — add them from the loan's page.`, 'error')
+        else toast.push('Backfill complete')
       }
       toast.push(editing ? 'Loan updated' : 'Loan added')
       onSaved()

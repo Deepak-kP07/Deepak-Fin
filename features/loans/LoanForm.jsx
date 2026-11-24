@@ -131,13 +131,16 @@ export function LoanForm({ open, onClose, onSaved, editing, accounts, toast }) {
 
       if (!editing && monthsAlreadyPaid > 0) {
         toast.push(`Backfilling ${monthsAlreadyPaid} past EMI${monthsAlreadyPaid === 1 ? '' : 's'}…`)
+        let failed = 0
         for (let i = 1; i <= monthsAlreadyPaid; i++) {
-          await fetch('/api/finance/loan_payments', {
+          const r = await fetch('/api/finance/loan_payments', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ loan_id: data.id, amount: payload.emi_amount, type: 'emi', payment_date: addMonthsToDate(payload.start_date, i), account_id: payload.paid_from_account_id || undefined }),
-          })
+          }).catch(() => null)
+          if (!r?.ok) failed++
         }
-        toast.push('Backfill complete')
+        if (failed) toast.push(`Loan saved, but ${failed} of ${monthsAlreadyPaid} past EMIs couldn't be logged — add them from the loan's page.`, 'error')
+        else toast.push('Backfill complete')
       }
 
       toast.push(editing ? 'Loan updated' : 'Loan added'); onSaved()

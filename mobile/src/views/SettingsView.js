@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
-import { ActivityIndicator, Alert, Linking, Pressable, Text, TextInput, View } from 'react-native'
+import { ActivityIndicator, Linking, Pressable, Text, TextInput, View } from 'react-native'
 import * as ImagePicker from 'expo-image-picker'
 import * as WebBrowser from 'expo-web-browser'
+import { LinearGradient } from 'expo-linear-gradient'
 import * as Lucide from 'lucide-react-native'
 import {
   ArrowDown, ArrowUp, Bell, BookOpen, Camera, CheckCircle2, ChevronDown, Circle, ExternalLink, Eye, EyeOff, KeyRound, Landmark, LayoutDashboard,
-  LayoutGrid, Link2, Lock, LogOut, Menu, Moon, Palette, Pencil, Plus, RefreshCw, ShieldAlert, Smartphone, Sparkles, Star, Sun, Tag, Trash2, User,
+  Fingerprint, LayoutGrid, Link2, Lock, LogOut, Menu, Moon, Palette, Pencil, Play, Plus, RefreshCw, ShieldAlert, Smartphone, Sparkles, Star, Sun, Tag, Trash2, User,
 } from 'lucide-react-native'
 import { Icon } from '../ui/Icon'
 import { Avatar } from '../ui/Avatar'
@@ -19,12 +20,16 @@ import { tw } from '../lib/tw'
 import { api, API_URL, WEB_URL } from '../lib/api'
 import { supabase } from '../lib/supabase'
 import { capitalizeFirst } from '../lib/format'
+import { toast } from '../lib/toast'
 import { getCategoryIcon } from '../lib/categoryIcons'
 import { disablePush, enablePush, pushPermissionStatus } from '../lib/push'
+import { biometricReady } from '../lib/biometric'
+import { useAppLock } from '../ui/AppLock'
 import { orderedEnabledKeys, resolveDashboardWidgets, resolveMobileNavSlots, resolveModuleSettings, resolveQuickActionSlots } from '../lib/shared'
 import { ADD_ACTION_META, MOBILE_MANDATORY_META, NAV_META } from '../lib/navMeta'
 import { CHANGELOG } from '@/lib/changelog'
 import { GUIDE } from '@/lib/userGuide'
+import { dialog } from '../ui/Dialogs'
 
 // Native port of features/settings/* (SettingsShell and every panel). Drag-to-reorder lists on
 // the web use ↑/↓ buttons here; the Mobile nav phone preview uses tap-to-pick instead of drag.
@@ -49,7 +54,32 @@ const OrderButtons = ({ onUp, onDown }) => (
 )
 const move = (arr, i, d) => { const next = [...arr]; const [x] = next.splice(i, 1); next.splice(i + d, 0, x); return next }
 
-function ProfilePanel({ data, user, onSaveProfile, onDeleteAccount }) {
+// Per-phone fingerprint lock (see ui/AppLock). Hidden on phones without a fingerprint set up.
+function FingerprintLockRow() {
+  const { enabled, setEnabled } = useAppLock()
+  const [available, setAvailable] = useState(false)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => { biometricReady().then(setAvailable) }, [])
+  if (!available) return null
+  const toggle = async () => {
+    setBusy(true)
+    const ok = await setEnabled(!enabled)
+    setBusy(false)
+    if (ok) toast.push(enabled ? 'Fingerprint lock turned off' : 'Fingerprint lock is on')
+  }
+  return (
+    <Pressable disabled={busy} onPress={toggle} className={tw('mt-8 flex-row items-center gap-3 rounded-xl border border-white/10 light:border-black/10 bg-white/[.02] light:bg-black/[.02] px-4 py-3.5')}>
+      <Icon as={Fingerprint} size={20} className={tw('text-accent-300 light:text-accent-700')} />
+      <View className="flex-1">
+        <Text className={tw('text-sm font-medium text-white light:text-slate-900')}>Fingerprint lock</Text>
+        <Text className="text-[11px] text-slate-500">Ask for your fingerprint when the app opens</Text>
+      </View>
+      <ToggleSwitch checked={enabled} onChange={toggle} disabled={busy} />
+    </Pressable>
+  )
+}
+
+function ProfilePanel({ data, user, onSaveProfile, onDeleteAccount, onSignOut }) {
   const { profile } = data
   const [form, setForm] = useState({ full_name: '', age: '' })
   const [busy, setBusy] = useState(false)
@@ -61,7 +91,7 @@ function ProfilePanel({ data, user, onSaveProfile, onDeleteAccount }) {
     const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.8 })
     if (res.canceled || !res.assets?.[0]) return
     const asset = res.assets[0]
-    if (asset.fileSize && asset.fileSize > 5 * 1024 * 1024) return Alert.alert('Image is too large', 'Please pick one under 5MB.')
+    if (asset.fileSize && asset.fileSize > 5 * 1024 * 1024) return dialog.alert('Image is too large', 'Please pick one under 5MB.')
     setAvatarBusy(true)
     try {
       const body = await (await fetch(asset.uri)).arrayBuffer()
@@ -71,7 +101,7 @@ function ProfilePanel({ data, user, onSaveProfile, onDeleteAccount }) {
       if (error) throw error
       const { data: pub } = supabase.storage.from('avatars').getPublicUrl(path)
       await onSaveProfile({ avatar_url: pub.publicUrl })
-    } catch (e) { Alert.alert('Photo failed to upload', e.message) } finally { setAvatarBusy(false) }
+    } catch (e) { dialog.alert('Photo failed to upload', e.message) } finally { setAvatarBusy(false) }
   }
   return (
     <View className={tw(CARD, 'p-5')}>
@@ -91,19 +121,58 @@ function ProfilePanel({ data, user, onSaveProfile, onDeleteAccount }) {
         <Field label="Age" style={{ flex: 1 }}><Input keyboardType="number-pad" value={form.age} onChangeText={(v) => setForm((f) => ({ ...f, age: v }))} /></Field>
       </View>
       <SubmitButton className="mt-2" label={busy ? 'Saving…' : 'Save profile'} busy={busy} onPress={async () => { setBusy(true); try { await onSaveProfile({ full_name: form.full_name, age: form.age === '' ? null : Number(form.age) }) } finally { setBusy(false) } }} />
-      <View className={tw('mt-10 border-t border-white/10 light:border-black/10 pt-6')}>
-        <Text className={tw(T.title)}>Delete account</Text>
-        <Text className="mt-1 text-xs leading-5 text-slate-500">Permanently deletes your login, every record across the app, and every file you uploaded. This can't be undone.</Text>
-        <Pressable onPress={onDeleteAccount} className="mt-3 flex-row items-center gap-2 self-start rounded-xl border border-rose-400/20 bg-rose-400/10 px-3.5 py-2.5"><Icon as={Trash2} size={14} className={tw('text-rose-300 light:text-rose-700')} /><Text className={tw('text-xs font-medium text-rose-300 light:text-rose-700')}>Delete my account</Text></Pressable>
-        <Pressable onPress={() => WebBrowser.openBrowserAsync(`${WEB_URL}/privacy`)} className="mt-4"><Text className="text-[11px] text-slate-500 underline">Privacy policy</Text></Pressable>
+      <FingerprintLockRow />
+      <Pressable onPress={onSignOut} className={tw('mt-6 flex-row items-center justify-center gap-2 rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] py-3.5 active:opacity-70')}>
+        <Icon as={LogOut} size={16} className={tw('text-slate-200 light:text-slate-700')} />
+        <Text className={tw('text-sm font-semibold text-slate-100 light:text-slate-800')}>Sign out</Text>
+      </Pressable>
+      {/* Deliberately quiet: a small text link, far from everything else, behind a typed DELETE confirmation. */}
+      <View className="mt-10 flex-row items-center justify-between">
+        <Pressable onPress={() => WebBrowser.openBrowserAsync(`${WEB_URL}/privacy`)} hitSlop={6}><Text className="text-[11px] text-slate-500 underline">Privacy policy</Text></Pressable>
+        <Pressable onPress={onDeleteAccount} hitSlop={6}><Text className="text-[11px] text-slate-500">Delete account…</Text></Pressable>
       </View>
     </View>
+  )
+}
+
+// Custom accent: the PWA uses the browser's colour input; native gets a sheet with a hex field, a
+// live preview, and a grid of shades around the colour wheel.
+const hslToHex = (h, s, l) => {
+  s /= 100; l /= 100
+  const k = (n) => (n + h / 30) % 12
+  const a = s * Math.min(l, 1 - l)
+  const f = (n) => Math.round(255 * (l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1))))).toString(16).padStart(2, '0')
+  return `#${f(0)}${f(8)}${f(4)}`
+}
+const CUSTOM_GRID = [62, 52, 42].flatMap((l) => Array.from({ length: 12 }, (_, i) => hslToHex(i * 30, 78, l)))
+const HEX_RE = /^#[0-9a-f]{6}$/i
+
+function CustomAccentSheet({ open, initial, onClose, onSave }) {
+  const [hex, setHex] = useState(initial)
+  useEffect(() => { if (open) setHex(initial) }, [open, initial])
+  const valid = HEX_RE.test(hex)
+  return (
+    <FormSheet open={open} onClose={onClose} title="Custom color" submitLabel="Use this color" onSubmit={() => (valid ? onSave(hex.toLowerCase()) : dialog.alert('Enter a color like #3b82f6'))}>
+      <View className="mb-4 flex-row items-center gap-3">
+        <View className="h-14 w-14 rounded-full border border-white/20 light:border-black/15" style={{ backgroundColor: valid ? hex : 'transparent' }} />
+        <View className="flex-1"><Field label="Hex code"><Input value={hex} autoCapitalize="none" autoCorrect={false} maxLength={7} onChangeText={(v) => setHex(v.startsWith('#') ? v : `#${v}`)} placeholder="#3b82f6" /></Field></View>
+      </View>
+      <View className="flex-row flex-wrap" style={{ gap: 8 }}>
+        {CUSTOM_GRID.map((c) => (
+          <Pressable key={c} onPress={() => setHex(c)} className={tw('items-center justify-center rounded-full border-2', hex.toLowerCase() === c ? 'border-white light:border-slate-900' : 'border-transparent')} style={{ width: 40, height: 40 }}>
+            <View className="rounded-full" style={{ width: 30, height: 30, backgroundColor: c }} />
+          </Pressable>
+        ))}
+      </View>
+    </FormSheet>
   )
 }
 
 function AppearancePanel({ data, onSaveProfile }) {
   const current = (data.profile?.accent_color || '#d4af37').toLowerCase()
   const theme = data.profile?.theme || 'dark'
+  const isPreset = ACCENT_PRESETS.some((p) => p.hex.toLowerCase() === current)
+  const [customOpen, setCustomOpen] = useState(false)
   return (
     <View className="gap-4">
       <View className={tw(CARD)}>
@@ -115,8 +184,14 @@ function AppearancePanel({ data, onSaveProfile }) {
               <View className="h-9 w-9 rounded-full" style={{ backgroundColor: p.hex }} />
             </Pressable>
           ))}
+          <Pressable onPress={() => setCustomOpen(true)} accessibilityLabel="Custom color" className={tw('h-12 w-12 items-center justify-center rounded-full border-2', !isPreset ? 'border-white light:border-slate-900' : 'border-transparent')}>
+            {isPreset
+              ? <LinearGradient colors={['#f87171', '#fbbf24', '#34d399', '#38bdf8', '#a78bfa', '#f87171']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ width: 36, height: 36, borderRadius: 18 }} />
+              : <View className="h-9 w-9 rounded-full border border-white/20 light:border-black/15" style={{ backgroundColor: current }} />}
+          </Pressable>
         </View>
       </View>
+      <CustomAccentSheet open={customOpen} initial={current} onClose={() => setCustomOpen(false)} onSave={async (hex) => { setCustomOpen(false); await onSaveProfile({ accent_color: hex }); toast.push('Accent color updated') }} />
       <View className={tw(CARD)}>
         <Text className={tw(T.title)}>Theme</Text>
         <View className="mt-3 flex-row gap-3">
@@ -151,10 +226,10 @@ function NotificationsPanel({ data, onSaveProfile }) {
   const toggle = async (v) => {
     setBusy(true)
     try {
-      if (v) { if (!(await enablePush())) Alert.alert('Notifications are off', 'Allow notifications for Personal Fin in Android settings.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Open settings', onPress: () => Linking.openSettings() }]) }
+      if (v) { if (!(await enablePush())) dialog.alert('Notifications are off', 'Allow notifications for Personal Fin in Android settings.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Open settings', onPress: () => Linking.openSettings() }]) }
       else await disablePush({ optOut: true })
       setStatus(await pushPermissionStatus())
-    } catch (e) { Alert.alert('Could not update notifications', e.message) } finally { setBusy(false) }
+    } catch (e) { dialog.alert('Could not update notifications', e.message) } finally { setBusy(false) }
   }
   return (
     <View className="gap-4">
@@ -218,7 +293,7 @@ function MobileNavPanel({ data, onSaveProfile }) {
     const existing = arr.indexOf(key)
     if (existing >= 0) arr[existing] = arr[picking.index] // swap if already placed in this group
     arr[picking.index] = key
-    if (picking.group === 'nav' && !nav.includes('dashboard')) return Alert.alert('Home stays in the bottom nav', 'You can move it to any of the 3 positions.')
+    if (picking.group === 'nav' && !nav.includes('dashboard')) return dialog.alert('Home stays in the bottom nav', 'You can move it to any of the 3 positions.')
     onSaveProfile({ mobile_nav_settings: { slots: nav, quick_actions: act } })
     setPicking(null)
   }
@@ -287,9 +362,9 @@ function CategoriesPanel({ data, refresh }) {
   const [type, setType] = useState('expense')
   const [editing, setEditing] = useState(undefined) // undefined = closed, null = new
   const cats = [...data.categories].filter((c) => c.type === type).sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0))
-  const patch = async (c, body) => { try { await api(`/finance/categories/${c.id}`, { method: 'PATCH', body }); await refresh() } catch (e) { Alert.alert('Update failed', e.message) } }
-  const reorder = async (next) => { try { await Promise.all(next.map((c, i) => ((c.order_index ?? 0) !== i ? api(`/finance/categories/${c.id}`, { method: 'PATCH', body: { order_index: i } }) : null))); await refresh() } catch { Alert.alert('Reorder failed') } }
-  const remove = (c) => Alert.alert(`Delete category "${c.name}"?`, '', [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: async () => { try { await api(`/finance/categories/${c.id}`, { method: 'DELETE' }); await refresh() } catch (e) { Alert.alert('Delete failed', e.message) } } }])
+  const patch = async (c, body) => { try { await api(`/finance/categories/${c.id}`, { method: 'PATCH', body }); await refresh() } catch (e) { dialog.alert('Update failed', e.message) } }
+  const reorder = async (next) => { try { await Promise.all(next.map((c, i) => ((c.order_index ?? 0) !== i ? api(`/finance/categories/${c.id}`, { method: 'PATCH', body: { order_index: i } }) : null))); await refresh() } catch { dialog.alert('Reorder failed') } }
+  const remove = (c) => dialog.alert(`Delete category "${c.name}"?`, '', [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: async () => { try { await api(`/finance/categories/${c.id}`, { method: 'DELETE' }); await refresh() } catch (e) { dialog.alert('Delete failed', e.message) } } }])
   return (
     <View className={tw(CARD)}>
       <View className="flex-row items-center justify-between gap-2">
@@ -335,9 +410,9 @@ function CategoryForm({ open, editing, defaultType, onClose, onSaved }) {
   const [busy, setBusy] = useState(false)
   useEffect(() => { setForm(editing ? { name: editing.name, type: editing.type, color: editing.color || '#fb7185' } : { name: '', type: defaultType, color: '#fb7185', icon: 'tag' }) }, [editing, open])
   const save = async () => {
-    if (!form.name.trim()) return Alert.alert('Enter a name')
+    if (!form.name.trim()) return dialog.alert('Enter a name')
     setBusy(true)
-    try { await api(editing ? `/finance/categories/${editing.id}` : '/finance/categories', { method: editing ? 'PATCH' : 'POST', body: form }); onSaved() } catch (e) { Alert.alert('Could not save', e.message) } finally { setBusy(false) }
+    try { await api(editing ? `/finance/categories/${editing.id}` : '/finance/categories', { method: editing ? 'PATCH' : 'POST', body: form }); onSaved() } catch (e) { dialog.alert('Could not save', e.message) } finally { setBusy(false) }
   }
   return (
     <FormSheet open={open} onClose={onClose} title={editing ? 'Edit category' : 'Add category'} submitLabel={busy ? 'Saving…' : editing ? 'Update category' : 'Save category'} onSubmit={save} busy={busy}>
@@ -350,8 +425,8 @@ function CategoryForm({ open, editing, defaultType, onClose, onSaved }) {
 
 function AccountsPanel({ data, refresh }) {
   const accounts = [...data.accounts].sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0))
-  const reorder = async (next) => { try { await Promise.all(next.map((a, i) => ((a.order_index ?? 0) !== i ? api(`/finance/accounts/${a.id}`, { method: 'PATCH', body: { order_index: i } }) : null))); await refresh() } catch { Alert.alert('Reorder failed') } }
-  const toggle = async (a) => { try { await api(`/finance/accounts/${a.id}`, { method: 'PATCH', body: { is_active: a.is_active === false } }); await refresh() } catch { Alert.alert('Update failed') } }
+  const reorder = async (next) => { try { await Promise.all(next.map((a, i) => ((a.order_index ?? 0) !== i ? api(`/finance/accounts/${a.id}`, { method: 'PATCH', body: { order_index: i } }) : null))); await refresh() } catch { dialog.alert('Reorder failed') } }
+  const toggle = async (a) => { try { await api(`/finance/accounts/${a.id}`, { method: 'PATCH', body: { is_active: a.is_active === false } }); await refresh() } catch { dialog.alert('Update failed') } }
   return (
     <View className={tw(CARD)}>
       <Text className={tw(T.title)}>Accounts</Text>
@@ -382,9 +457,9 @@ function HiddenPanel({ data, onHiddenPinChanged, onSignOut }) {
     if (hasPin && !(await pinDialog.ask({ title: 'Enter your current PIN', confirmLabel: 'Next', submit: async (p) => { current = p; return post('/verify', { pin: p }) } }))) return
     let first
     if (!(await pinDialog.ask({ title: hasPin ? 'Choose a new PIN' : 'Create a PIN', message: "4 to 6 digits. You'll need it to see hidden transactions.", confirmLabel: 'Next', submit: async (p) => { first = p; return { ok: true } } }))) return
-    if (await pinDialog.ask({ title: 'Confirm your PIN', confirmLabel: 'Save PIN', submit: async (p) => (p === first ? post('', { pin: p, current_pin: current }) : { ok: false, error: "PINs don't match — try again." }) })) { onHiddenPinChanged(true); Alert.alert(hasPin ? 'PIN changed' : 'PIN set') }
+    if (await pinDialog.ask({ title: 'Confirm your PIN', confirmLabel: 'Save PIN', submit: async (p) => (p === first ? post('', { pin: p, current_pin: current }) : { ok: false, error: "PINs don't match — try again." }) })) { onHiddenPinChanged(true); dialog.alert(hasPin ? 'PIN changed' : 'PIN set') }
   }
-  const forgot = async () => { const r = await post('/reset'); if (r.ok) { onHiddenPinChanged(false); Alert.alert('PIN cleared — set a new one') } else Alert.alert(r.error) }
+  const forgot = async () => { const r = await post('/reset'); if (r.ok) { onHiddenPinChanged(false); dialog.alert('PIN cleared — set a new one') } else dialog.alert(r.error) }
   return (
     <View className={tw(CARD)}>
       <View className="flex-row items-center gap-2"><Icon as={Lock} size={15} className={tw('text-accent-300 light:text-accent-700')} /><Text className={tw(T.title)}>Hidden transactions</Text></View>
@@ -406,11 +481,11 @@ function MoneyRulesPanel({ data, refresh }) {
   const rules = data.money_rules || []
   const add = async () => {
     if (!text.trim()) return
-    try { await api('/finance/money_rules', { method: 'POST', body: { rule_text: text.trim(), order_index: (rules[rules.length - 1]?.order_index ?? 0) + 1, is_active: true } }); setText(''); await refresh() } catch { Alert.alert('Could not add') }
+    try { await api('/finance/money_rules', { method: 'POST', body: { rule_text: text.trim(), order_index: (rules[rules.length - 1]?.order_index ?? 0) + 1, is_active: true } }); setText(''); toast.push('Rule added'); await refresh() } catch (e) { toast.push(e.message || 'Could not add', 'error') }
   }
   return (
     <View className="gap-5">
-      <View><Text className={tw('mb-2 text-xs uppercase tracking-widest text-accent-200/70 light:text-accent-700')}>Your compass</Text><Text className={tw('text-3xl font-semibold tracking-tight text-white light:text-slate-900')}>Money rules</Text></View>
+      <View><Text className={tw('text-3xl font-semibold tracking-tight text-white light:text-slate-900')}>Money rules</Text></View>
       <View className="flex-row gap-2">
         <TextInput value={text} onChangeText={setText} onSubmitEditing={add} placeholder="e.g. Save 30% of every paycheck before spending" placeholderTextColor="#64748b" className={tw('flex-1 rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-4 py-3 text-white light:text-slate-900')} />
         <Pressable onPress={add} className="justify-center rounded-xl bg-accent-400 px-5"><Text className="text-sm font-semibold text-[#07101c]">+ Add</Text></Pressable>
@@ -421,10 +496,10 @@ function MoneyRulesPanel({ data, refresh }) {
             <View key={r.id} className={tw('flex-row items-center gap-3 rounded-2xl border border-white/10 light:border-black/10 bg-[#0e121c] light:bg-black/[.025] px-4 py-3 glassy:glass-card')}>
               <View className="h-8 w-8 items-center justify-center rounded-xl bg-accent-400/15"><Text className={tw('text-xs font-semibold text-accent-200 light:text-accent-700')}>{i + 1}</Text></View>
               <Text className={tw('flex-1 text-sm', r.is_active ? 'text-white light:text-slate-900' : 'text-slate-500 line-through')}>{capitalizeFirst(r.rule_text)}</Text>
-              <Pressable onPress={async () => { await api(`/finance/money_rules/${r.id}`, { method: 'PATCH', body: { is_active: !r.is_active } }).catch(() => {}); await refresh() }} className={tw('rounded-lg px-3 py-1.5', r.is_active ? 'bg-emerald-400/15' : 'bg-white/[.06] light:bg-black/[.04]')}>
+              <Pressable onPress={async () => { try { await api(`/finance/money_rules/${r.id}`, { method: 'PATCH', body: { is_active: !r.is_active } }); await refresh() } catch (e) { toast.push(e.message || 'Could not update the rule', 'error') } }} className={tw('rounded-lg px-3 py-1.5', r.is_active ? 'bg-emerald-400/15' : 'bg-white/[.06] light:bg-black/[.04]')}>
                 <Text className={tw('text-xs font-medium', r.is_active ? 'text-emerald-200 light:text-emerald-700' : 'text-slate-400 light:text-slate-500')}>{r.is_active ? 'Active' : 'Off'}</Text>
               </Pressable>
-              <Pressable onPress={() => Alert.alert(`Delete rule "${r.rule_text}"?`, '', [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: async () => { await api(`/finance/money_rules/${r.id}`, { method: 'DELETE' }).catch(() => {}); await refresh() } }])} className="rounded-lg p-1.5"><Icon as={Trash2} size={13} className={tw('text-rose-300/70 light:text-rose-700')} /></Pressable>
+              <Pressable onPress={() => dialog.alert(`Delete rule "${r.rule_text}"?`, '', [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: async () => { try { await api(`/finance/money_rules/${r.id}`, { method: 'DELETE' }); toast.push('Rule deleted'); await refresh() } catch (e) { toast.push(e.message || 'Delete failed', 'error') } } }])} className="rounded-lg p-1.5"><Icon as={Trash2} size={13} className={tw('text-rose-300/70 light:text-rose-700')} /></Pressable>
             </View>
           ))}
         </View>
@@ -439,8 +514,8 @@ function KitePanel({ data, refresh }) {
   const [apiSecret, setApiSecret] = useState('')
   const [busy, setBusy] = useState(false)
   const redirectUrl = `${WEB_URL.replace('www.', '')}/api/kite/callback`
-  const save = async () => { setBusy(true); try { await api('/kite/credentials', { method: 'POST', body: { api_key: apiKey, api_secret: apiSecret } }); setApiSecret(''); await refresh(); Alert.alert('Kite app saved') } catch (e) { Alert.alert('Could not save Kite app', e.message) } finally { setBusy(false) } }
-  const remove = async () => { try { await api('/kite/credentials', { method: 'DELETE' }); setApiKey(''); await refresh(); Alert.alert('Kite app disconnected') } catch { Alert.alert('Could not disconnect') } }
+  const save = async () => { setBusy(true); try { await api('/kite/credentials', { method: 'POST', body: { api_key: apiKey, api_secret: apiSecret } }); setApiSecret(''); await refresh(); dialog.alert('Kite app saved') } catch (e) { dialog.alert('Could not save Kite app', e.message) } finally { setBusy(false) } }
+  const remove = async () => { try { await api('/kite/credentials', { method: 'DELETE' }); setApiKey(''); await refresh(); dialog.alert('Kite app disconnected') } catch { dialog.alert('Could not disconnect') } }
   return (
     <View className={tw(CARD)}>
       <View className="mb-1 flex-row flex-wrap items-center justify-between gap-2">
@@ -465,12 +540,19 @@ function KitePanel({ data, refresh }) {
   )
 }
 
-function GuidePanel({ onClearAllData }) {
+function GuidePanel({ onClearAllData, onReplayTour }) {
   const [openKey, setOpenKey] = useState(null)
   return (
     <View className="gap-4">
       <View className={tw(CARD)}>
-        <Text className={tw(T.title)}>User guide</Text>
+        <View className="flex-row flex-wrap items-center justify-between gap-2">
+          <Text className={tw(T.title)}>User guide</Text>
+          {onReplayTour ? (
+            <Pressable onPress={onReplayTour} className={tw('flex-row items-center gap-1.5 rounded-xl border border-white/10 light:border-black/10 px-3 py-1.5')}>
+              <Icon as={Play} size={13} className={tw('text-slate-400 light:text-slate-500')} /><Text className={tw('text-xs text-slate-400 light:text-slate-500')}>Replay tour</Text>
+            </Pressable>
+          ) : null}
+        </View>
         <Text className="mt-1 text-[11px] text-slate-500">What each part of the app does, and how to use it. Tap a section to expand it.</Text>
         <View className="mt-3 gap-2">
           {GUIDE.map((item) => {
@@ -522,14 +604,13 @@ function UpdatesPanel() {
   )
 }
 
-export function SettingsView({ data, user, refresh, onSaveProfile, onDeleteAccount, onClearAllData, onSignOut, onHiddenPinChanged, renderVault, section, onSectionChange }) {
+export function SettingsView({ data, user, refresh, onSaveProfile, onDeleteAccount, onClearAllData, onSignOut, onHiddenPinChanged, onReplayTour, pickerRef, renderVault, section, onSectionChange }) {
   const [menuOpen, setMenuOpen] = useState(false)
-  const props = { data, user, refresh, onSaveProfile, onDeleteAccount, onClearAllData, onSignOut, onHiddenPinChanged }
+  const props = { data, user, refresh, onSaveProfile, onDeleteAccount, onClearAllData, onSignOut, onHiddenPinChanged, onReplayTour }
   const SECTIONS = [
     { key: 'profile', label: 'Profile', icon: User, render: () => <ProfilePanel {...props} /> },
     { key: 'appearance', label: 'Appearance', icon: Palette, render: () => <AppearancePanel {...props} /> },
-    { key: 'guardrails', label: 'Guardrails', icon: ShieldAlert, render: () => <GuardrailsPanel {...props} /> },
-    { key: 'notifications', label: 'Notifications', icon: Bell, render: () => <NotificationsPanel {...props} /> },
+    { key: 'notifications', label: 'Notifications & guardrails', icon: Bell, render: () => <View className="gap-4"><NotificationsPanel {...props} /><GuardrailsPanel {...props} /></View> },
     { key: 'modules', label: 'Modules', icon: LayoutGrid, render: () => <ModulesPanel {...props} /> },
     { key: 'mobile_nav', label: 'Mobile nav', icon: Smartphone, render: () => <MobileNavPanel {...props} /> },
     { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, render: () => <DashboardPanel {...props} /> },
@@ -542,17 +623,16 @@ export function SettingsView({ data, user, refresh, onSaveProfile, onDeleteAccou
     { key: 'guide', label: 'User guide', icon: BookOpen, render: () => <GuidePanel {...props} /> },
     { key: 'updates', label: 'Updates', icon: RefreshCw, render: () => <UpdatesPanel /> },
   ]
-  const active = SECTIONS.find((s) => s.key === section) || SECTIONS[0]
+  const active = SECTIONS.find((s) => s.key === (section === 'guardrails' ? 'notifications' : section)) || SECTIONS[0]
   return (
     <View className="gap-4">
       <View className="flex-row items-start justify-between gap-4">
         <View>
-          <Text className={tw('mb-1 text-xs uppercase tracking-widest text-accent-200/70 light:text-accent-700')}>Your space</Text>
           <Text className={tw('text-2xl font-semibold tracking-tight text-white light:text-slate-900')}>Settings</Text>
         </View>
         <Pressable onPress={onSignOut} className={tw('flex-row items-center gap-2 rounded-xl border border-white/10 light:border-black/10 px-3 py-2')}><Icon as={LogOut} size={13} className={tw('text-slate-400 light:text-slate-500')} /><Text className={tw('text-xs text-slate-400 light:text-slate-500')}>Sign out</Text></Pressable>
       </View>
-      <Pressable onPress={() => setMenuOpen(true)} className={tw('flex-row items-center gap-2.5 rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3.5 py-3')}>
+      <Pressable ref={pickerRef} onPress={() => setMenuOpen(true)} className={tw('flex-row items-center gap-2.5 rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3.5 py-3')}>
         <Icon as={Menu} size={16} className={tw('text-slate-400 light:text-slate-500')} />
         <Icon as={active.icon} size={16} className={tw('text-accent-300 light:text-accent-700')} />
         <Text className={tw('flex-1 text-sm font-medium text-white light:text-slate-900')}>{active.label}</Text>

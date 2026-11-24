@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native'
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as ImagePicker from 'expo-image-picker'
 import * as DocumentPicker from 'expo-document-picker'
 import * as WebBrowser from 'expo-web-browser'
-import { ChevronRight, Clock, History, Landmark, Paperclip, Trash2, X } from 'lucide-react-native'
+import { AlertTriangle, ChevronRight, Clock, History, Landmark, Paperclip, Trash2, X } from 'lucide-react-native'
 import { Icon } from '../../ui/Icon'
 import { Select } from '../../ui/Select'
+import { CategorySelect } from '../../ui/CategorySelect'
 import { ToggleSwitch } from '../../ui/ToggleSwitch'
 import { DateInput, INPUT } from '../../ui/FormKit'
 import { AccentGradient } from '../../ui/Gradient'
@@ -15,10 +16,11 @@ import { usePinDialog } from '../../ui/PinDialog'
 import { tw } from '../../lib/tw'
 import { api } from '../../lib/api'
 import { supabase } from '../../lib/supabase'
-import { MONTH_NAMES, money, nowTime, todayISO } from '../../lib/format'
-import { getCategoryIcon } from '../../lib/categoryIcons'
+import { MONTH_NAMES, formatDate, money, nowTime, todayISO } from '../../lib/format'
+import { toast } from '../../lib/toast'
 import { useData } from '../../state/DataProvider'
 import { useAuth } from '../../state/AuthProvider'
+import { dialog } from '../../ui/Dialogs'
 
 // Native port of TransactionForm (app/page.js): same fields, rules, and save routing (card bill
 // payoff → /pay_bill, loan EMI → /loan_payments, lend repayment link, scheduled + "owes me" link,
@@ -32,7 +34,7 @@ export default function TransactionScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { user } = useAuth()
-  const { data, refresh } = useData()
+  const { data, refresh, patch } = useData()
   const { categories, credit_cards: creditCards = [], lend_borrow: lendBorrow = [], loans = [], transactions, profile } = data
   const accounts = data.accounts.filter((a) => a.is_active !== false)
   const editing = params.id ? [...transactions, ...(data.scheduled_transactions || [])].find((t) => t.id === params.id) : null
@@ -101,8 +103,8 @@ export default function TransactionScreen() {
     set({ is_hidden: true })
   }
 
-  const confirmAsk = (msg, label) => new Promise((resolve) => Alert.alert('Please confirm', msg, [{ text: 'Cancel', style: 'cancel', onPress: () => resolve(false) }, { text: label, onPress: () => resolve(true) }]))
-  const blockMsg = (msg) => new Promise((resolve) => Alert.alert('Not allowed', msg, [{ text: 'OK', onPress: () => resolve(false) }]))
+  const confirmAsk = (msg, label, title = 'Please confirm') => dialog.confirm({ title, message: msg, confirmLabel: label, icon: AlertTriangle })
+  const blockMsg = (msg, title = 'Not allowed') => new Promise((resolve) => dialog.alert(title, msg, [{ text: 'Okay', onPress: () => resolve(false) }]))
   // Port of warnIfRisky(): cards never past their limit, warn above 30%; bank/cash blocked when short
   // unless the guardrail is off (then "confirm anyway").
   const warnIfRisky = async () => {
@@ -120,21 +122,21 @@ export default function TransactionScreen() {
       const limit = Number(card.credit_limit || 0)
       if (limit > 0) {
         const pct = ((outstanding + amount) / limit) * 100
-        if (pct >= 100) return blockMsg(`"${card.name}" only has ${money(Math.max(0, limit - outstanding))} of headroom left — this would go over its credit limit.`)
-        if (pct > 30) return confirmAsk(`This puts "${card.name}" at ${Math.round(pct)}% of its limit — best practice is staying under 30–40%. Do you want to confirm this payment anyway?`, 'Confirm')
+        if (pct >= 100) return blockMsg(`"${card.name}" only has ${money(Math.max(0, limit - outstanding))} of headroom left — this would go over its credit limit.`, 'Over the credit limit')
+        if (pct > 30) return confirmAsk(`This puts "${card.name}" at ${Math.round(pct)}% of its limit — best practice is staying under 30–40%. Do you want to confirm this payment anyway?`, 'Confirm anyway', 'High card usage')
       }
       return true
     }
     const account = accounts.find((a) => a.id === resolveId(form.account_id))
     const already = account && editing?.linked_module !== 'credit_card' && resolveId(editing?.account_id) === account.id ? originalOut : 0
     if (account && amount > already && amount > Number(account.current_balance || 0) + already) {
-      if (profile?.block_insufficient_funds === false) return confirmAsk(`You don't have that much money in "${account.name}" — do you want to confirm this payment anyway?`, 'Confirm')
-      return blockMsg(`"${account.name}" doesn't have that much balance, so this is blocked. You may have missed logging some income — add it first to keep your accounting accurate, or turn this block off in your Profile settings.`)
+      if (profile?.block_insufficient_funds === false) return confirmAsk(`You don't have that much money in "${account.name}" — do you want to confirm this payment anyway?`, 'Confirm anyway', 'Not enough balance')
+      return blockMsg(`"${account.name}" doesn't have that much balance, so this is blocked. You may have missed logging some income — add it first to keep your accounting accurate, or turn this block off in your Profile settings.`, 'Not enough balance')
     }
     return true
   }
 
-  const pickAttachment = () => Alert.alert('Receipt / attachment', '', [
+  const pickAttachment = () => dialog.alert('Receipt / attachment', '', [
     { text: 'Photo', onPress: async () => { const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 }); if (!r.canceled && r.assets?.[0]) setAttachment({ uri: r.assets[0].uri, name: r.assets[0].fileName || `receipt-${Date.now()}.jpg`, mimeType: r.assets[0].mimeType || 'image/jpeg' }) } },
     { text: 'Camera', onPress: async () => { const p = await ImagePicker.requestCameraPermissionsAsync(); if (!p.granted) return; const r = await ImagePicker.launchCameraAsync({ quality: 0.8 }); if (!r.canceled && r.assets?.[0]) setAttachment({ uri: r.assets[0].uri, name: `receipt-${Date.now()}.jpg`, mimeType: 'image/jpeg' }) } },
     { text: 'PDF', onPress: async () => { const r = await DocumentPicker.getDocumentAsync({ type: 'application/pdf', copyToCacheDirectory: true }); if (!r.canceled && r.assets?.[0]) setAttachment({ uri: r.assets[0].uri, name: r.assets[0].name, mimeType: 'application/pdf' }) } },
@@ -156,17 +158,17 @@ export default function TransactionScreen() {
   }
 
   const save = async () => {
-    if (!(Number(form.amount) > 0)) return Alert.alert('Enter an amount')
-    if (!form.account_id) return Alert.alert('Choose an account')
-    if (form.type === 'transfer' && !form.to_account_id) return Alert.alert('Choose the account it went to')
-    if (!form.description.trim()) return Alert.alert('Enter a description')
-    if (purposeMode === 'repayment' && !form.repay_value) return Alert.alert('Choose what this repays')
+    if (!(Number(form.amount) > 0)) return dialog.alert('Enter an amount')
+    if (!form.account_id) return dialog.alert('Choose an account')
+    if (form.type === 'transfer' && !form.to_account_id) return dialog.alert('Choose the account it went to')
+    if (!form.description.trim()) return dialog.alert('Enter a description')
+    if (purposeMode === 'repayment' && !form.repay_value) return dialog.alert('Choose what this repays')
     if (isFuture) {
       const [kind] = purposeMode === 'repayment' ? (form.repay_value || '').split(':') : []
-      if ((form.type === 'transfer' && String(form.to_account_id).startsWith('cc:')) || kind === 'loan') return Alert.alert('Not yet', 'Card bill payments and loan EMIs can’t be scheduled yet — log them on the day you pay.')
-      if (oweLink && !String(form.owe_person || '').trim()) return Alert.alert('Enter who owes the money (or turn the option off).')
+      if ((form.type === 'transfer' && String(form.to_account_id).startsWith('cc:')) || kind === 'loan') return dialog.alert('Not yet', 'Card bill payments and loan EMIs can’t be scheduled yet — log them on the day you pay.')
+      if (oweLink && !String(form.owe_person || '').trim()) return dialog.alert('Enter who owes the money (or turn the option off).')
     } else if (!(await warnIfRisky())) return
-    if (purposeMode === 'repayment' && String(form.account_id).startsWith('cc:')) return Alert.alert('Choose a bank, cash, or debit account to pay a repayment from — credit cards aren’t supported for this yet.')
+    if (purposeMode === 'repayment' && String(form.account_id).startsWith('cc:')) return dialog.alert('Choose a bank, cash, or debit account to pay a repayment from — credit cards aren’t supported for this yet.')
     setBusy(true)
     try {
       const [repayKind, repayId] = purposeMode === 'repayment' ? (form.repay_value || '').split(':') : []
@@ -174,11 +176,11 @@ export default function TransactionScreen() {
       const payingAccountId = debitCard ? debitCard.linked_account_id : form.account_id
       if (form.type === 'transfer' && String(form.to_account_id).startsWith('cc:')) {
         await api(`/finance/credit_cards/${form.to_account_id.slice(3)}/pay_bill`, { method: 'POST', body: { account_id: payingAccountId, amount: Number(form.amount), date: form.date, notes: form.notes || form.description || null } })
-        await refresh(); return router.back()
+        toast.push('Credit card bill paid'); router.back(); refresh(); return
       }
       if (repayKind === 'loan' && repayId) {
         await api('/finance/loan_payments', { method: 'POST', body: { loan_id: repayId, amount: Number(form.amount), type: 'emi', payment_date: form.date, account_id: payingAccountId, notes: form.notes || form.description || null } })
-        await refresh(); return router.back()
+        toast.push('EMI payment logged'); router.back(); refresh(); return
       }
       const payload = {
         type: form.type, amount: Number(form.amount), description: form.description, date: form.date, time: form.time || nowTime(), notes: form.notes || null,
@@ -200,17 +202,28 @@ export default function TransactionScreen() {
       const saved = await api(editing ? `/finance/transactions/${editing.id}` : '/finance/transactions', { method: editing ? 'PATCH' : 'POST', body: payload })
       const txId = (Array.isArray(saved) ? saved[0] : saved)?.id || editing?.id
       if (attachmentRemoved && editing?.attachment_path) await api(`/finance/transactions/${editing.id}/attachment`, { method: 'DELETE' }).catch(() => {})
-      if (attachment && txId) await uploadAttachment(txId).catch(() => Alert.alert('Saved', 'The transaction was saved, but the attachment failed to upload.'))
-      await refresh()
+      let attachmentFailed = false
+      if (attachment && txId) await uploadAttachment(txId).catch(() => { attachmentFailed = true })
+      // Same wording as the PWA's transaction form.
+      const hiddenNote = payload.is_hidden ? ' — hidden from lists' : ''
+      if (attachmentFailed) toast.push('Transaction saved, but the attachment failed to upload', 'error')
+      else if (payload.status === 'scheduled') toast.push(`Scheduled for ${formatDate(form.date)} — it won’t count in your balance until you confirm it${hiddenNote}`)
+      else toast.push(`Transaction ${editing ? 'updated' : 'added'}${hiddenNote}`)
+      // Show the saved row in the list at once and close; the refresh (balances etc.) follows.
+      const rows = (Array.isArray(saved) ? saved : [saved]).filter((r) => r?.id)
+      if (rows.length) {
+        const key = payload.status === 'scheduled' ? 'scheduled_transactions' : 'transactions'
+        const ids = new Set(rows.map((r) => r.id))
+        patch((d) => ({ [key]: [...rows, ...(d[key] || []).filter((t) => !ids.has(t.id))] }))
+      }
       router.back()
-    } catch (e) { Alert.alert('Could not save', e.message) } finally { setBusy(false) }
+      refresh()
+    } catch (e) { dialog.alert('Could not save', e.message) } finally { setBusy(false) }
   }
-  const remove = () => Alert.alert('Delete this transaction?', editing?.type === 'transfer' ? 'Both sides of the transfer are removed.' : 'The account balance is restored.', [
+  const remove = () => dialog.alert('Delete this transaction?', editing?.type === 'transfer' ? 'Both sides of the transfer are removed.' : 'The account balance is restored.', [
     { text: 'Cancel', style: 'cancel' },
-    { text: 'Delete', style: 'destructive', onPress: async () => { try { await api(`/finance/transactions/${editing.id}`, { method: 'DELETE' }); await refresh(); router.back() } catch (e) { Alert.alert('Could not delete', e.message) } } },
+    { text: 'Delete', style: 'destructive', onPress: async () => { try { await api(`/finance/transactions/${editing.id}`, { method: 'DELETE' }); toast.push('Transaction deleted'); router.back(); refresh() } catch (e) { dialog.alert('Could not delete', e.message) } } },
   ])
-  const CatIcon = getCategoryIcon(catsForType.find((c) => c.id === form.category_id)?.name)
-  const catColor = catsForType.find((c) => c.id === form.category_id)?.color || '#94a3b8'
   const TYPE_TONE = { expense: 'bg-rose-400/15 border-rose-400/30', income: 'bg-emerald-400/15 border-emerald-400/30', transfer: 'bg-accent-400/15 border-accent-400/30' }
   const TYPE_TEXT = { expense: 'text-rose-200 light:text-rose-700', income: 'text-emerald-200 light:text-emerald-700', transfer: 'text-accent-200 light:text-accent-700' }
 
@@ -278,7 +291,6 @@ export default function TransactionScreen() {
             <View className="mt-3.5">
               <View className="flex-row items-center justify-between">
                 <View className="flex-row items-center gap-2">
-                  {purposeMode !== 'repayment' && form.category_id ? <View className="h-[26px] w-[26px] items-center justify-center rounded-lg" style={{ backgroundColor: `${catColor}33` }}><CatIcon size={14} color={catColor} /></View> : null}
                   <Text className={tw(LABEL)}>{purposeMode === 'repayment' ? (form.type === 'income' ? 'Repayment from' : 'Repaying') : 'Category'}</Text>
                 </View>
                 {canRepay && (
@@ -292,7 +304,7 @@ export default function TransactionScreen() {
               <View className="mt-2">
                 {purposeMode === 'repayment' && canRepay
                   ? <><Select value={form.repay_value} onChange={(v) => set({ repay_value: v })} placeholder="Choose…" options={repayOptions} title={form.type === 'income' ? 'Repayment from' : 'Repaying'} /><Text className="mt-1 text-[11px] text-slate-500">Auto-marks the debt as partially/fully repaid.</Text></>
-                  : <Select value={form.category_id || ''} onChange={(v) => set({ category_id: v })} placeholder="Uncategorised" options={[{ value: '', label: 'Uncategorised' }, ...catsForType.map((c) => ({ value: c.id, label: c.name }))]} title="Category" />}
+                  : <CategorySelect value={form.category_id || ''} onChange={(v) => set({ category_id: v })} categories={catsForType} />}
               </View>
             </View>
           )}

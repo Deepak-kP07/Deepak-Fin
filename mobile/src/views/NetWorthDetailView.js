@@ -104,7 +104,7 @@ export function NetWorthDetailView({ data, showMoney, onBack, setView, onToggle,
     ['Borrowed', m.borrowOutstanding, borrowItems, borrowItems.length ? 'Only the still-outstanding portion of each record.' : null, Heart, 'Nothing borrowed', "Money you've borrowed that's still owed will show up here.", 'Add a lend/borrow record', 'lend'],
     ['Chit funds (receivable)', m.chitFundReceivable, chitAssetItems, chitAssetItems.length ? 'Contributions paid so far, before taking the payout.' : null, Coins, 'Nothing pending', "A chit fund you haven't taken the payout for will show up here.", 'Add chit fund', 'chitfunds'],
     ['Chit fund dues', m.chitFundLiability, chitLiabilityItems, chitLiabilityItems.length ? 'Months still owed after taking the payout.' : null, Coins, 'Nothing owed', "A chit fund whose payout you've already taken will show up here.", 'Add chit fund', 'chitfunds'],
-    ['Family & Company', m.moneyProfileAssetTotal - m.moneyProfileLiabilityTotal, moneyProfileItems, moneyProfileItems.length ? "Only unlinked profiles — a linked profile's balance counts via its linked account instead." : null, Users, 'Nothing unlinked', "An unlinked Family/Company profile's balance will show up here.", 'Add a profile', 'family_company'],
+    ['Family & Company', m.moneyProfileAssetTotal - m.moneyProfileLiabilityTotal, moneyProfileItems, moneyProfileItems.length ? "Only unlinked profiles — a linked profile's balance counts via its linked account instead." : null, Users, money_profiles.length ? 'Counted under Cash & bank' : 'No profiles yet', money_profiles.length ? 'Your Family/Company profiles are linked to bank accounts, so their balances already count there.' : "A Family/Company profile that isn't linked to a bank account shows its balance here.", money_profiles.length ? undefined : 'Open Family & Company', 'family_company'],
     ['Scholarships owed to college', m.scholarshipLiability, scholarshipItems, scholarshipItems.length ? 'Received but not yet paid to the college — counted as a debt until you pay it.' : null, GraduationCap, 'Nothing owed', "A scholarship you've received but not yet paid to the college will show up here.", 'Add scholarship', 'scholarships'],
   ]
   const togglable = (table, rows) => ({ table, rows })
@@ -124,7 +124,6 @@ export function NetWorthDetailView({ data, showMoney, onBack, setView, onToggle,
       <Pressable onPress={onBack} className="flex-row items-center gap-1.5"><Icon as={ChevronLeft} size={14} className="text-slate-400 light:text-slate-500" /><Text className={tw('text-sm text-slate-400 light:text-slate-500')}>Back to dashboard</Text></Pressable>
       <View className="flex-row items-end justify-between gap-3">
         <View className="flex-1">
-          <Text className={tw('mb-2 text-xs uppercase tracking-widest text-accent-200/70 light:text-accent-700')}>How it's calculated</Text>
           <Text className={tw('text-3xl font-semibold tracking-tight text-white light:text-slate-900')}>Net worth</Text>
           <View className="mt-3 flex-row flex-wrap items-baseline gap-x-3 gap-y-1">
             <Text className={tw('text-[32px] font-semibold leading-[36px]', netWorth < 0 ? 'text-rose-200 light:text-rose-700' : 'text-white light:text-slate-900')}>{showMoney ? `${netWorth < 0 ? '−' : ''}${money(netWorth).replace('-', '')}` : '••••••••'}</Text>
@@ -156,7 +155,7 @@ export function NetWorthDetailView({ data, showMoney, onBack, setView, onToggle,
             </View>
           </View>
           {sections.map(([title, subtotal, items, caption, emptyIcon, emptyTitle, emptyMessage, emptyCta, target]) => (
-            <ItemSection key={title} title={title} subtotal={subtotal} items={items} showMoney={showMoney} caption={caption} emptyIcon={emptyIcon} emptyTitle={emptyTitle} emptyMessage={emptyMessage} emptyCta={emptyCta} onEmptyCta={() => setView(target)} />
+            <ItemSection key={title} title={title} subtotal={subtotal} items={items} showMoney={showMoney} caption={caption} emptyIcon={emptyIcon} emptyTitle={emptyTitle} emptyMessage={emptyMessage} emptyCta={emptyCta} onEmptyCta={emptyCta ? () => setView(target) : undefined} />
           ))}
         </>
       )}

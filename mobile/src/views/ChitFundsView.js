@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Alert, Pressable, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import { CheckCircle2, Clock, Coins, History, Pencil, RefreshCw, Trash2, TrendingDown, TrendingUp } from 'lucide-react-native'
 import { Icon } from '../ui/Icon'
 import { EmptyState } from '../ui/EmptyState'
@@ -9,15 +9,16 @@ import { BackLink, CARD, CollapsibleCard, EyeButton, HERO, MoreMenu, PageTitle, 
 import { tw } from '../lib/tw'
 import { dateToLocalISO, formatDate, money } from '../lib/format'
 import { monthAbbr, nextChitFundDueDate, ordinal } from '../lib/shared'
+import { dialog } from '../ui/Dialogs'
 
 // Port of features/chit-funds/ChitFundsView.jsx + ChitFundDetailView.jsx (mobile layout).
 const netPaidOf = (payments, fundId) => payments.filter((p) => p.chit_fund_id === fundId).reduce((s, p) => s + Number(p.amount) - Number(p.dividend_received || 0), 0)
 const payoutPill = (isCompleted, isTaken) => (isCompleted ? ['bg-slate-500/15', 'text-slate-400 light:text-slate-500'] : isTaken ? ['bg-amber-400/15', 'text-amber-200 light:text-amber-700'] : ['bg-accent-400/15', 'text-accent-200 light:text-accent-700'])
 
-export function ChitFundsView({ data, onAdd, onEdit, onDelete, onLogPayment, onEditPayment, onTakePayout, onUndoPayout, onComplete, onReopen, onDeletePayment, showMoney, onToggleMoney, onDetailChange }) {
+export function ChitFundsView({ initialSelectedId, data, onAdd, onEdit, onDelete, onLogPayment, onEditPayment, onTakePayout, onUndoPayout, onComplete, onReopen, onDeletePayment, onDeletePaymentBulk, showMoney, onToggleMoney, onDetailChange }) {
   const { chit_funds = [], chit_fund_payments = [], accounts = [] } = data
   const [showHistory, setShowHistory] = useState(false)
-  const [selectedId, setSelectedId] = useState(null)
+  const [selectedId, setSelectedId] = useState(initialSelectedId ?? null)
   const selected = chit_funds.find((c) => c.id === selectedId)
   useEffect(() => { onDetailChange?.(selected ? selectedId : null) }, [selectedId, !!selected])
 
@@ -25,7 +26,7 @@ export function ChitFundsView({ data, onAdd, onEdit, onDelete, onLogPayment, onE
     return (
       <ChitFundDetailView fund={selected} payments={chit_fund_payments} accounts={accounts} onBack={() => setSelectedId(null)}
         onEdit={onEdit} onDelete={(c) => onDelete(c, () => setSelectedId(null))} onLogPayment={onLogPayment} onEditPayment={onEditPayment}
-        onTakePayout={onTakePayout} onUndoPayout={onUndoPayout} onComplete={onComplete} onReopen={onReopen} onDeletePayment={onDeletePayment}
+        onTakePayout={onTakePayout} onUndoPayout={onUndoPayout} onComplete={onComplete} onReopen={onReopen} onDeletePayment={onDeletePayment} onDeletePaymentBulk={onDeletePaymentBulk}
         showMoney={showMoney} onToggleMoney={onToggleMoney} />
     )
   }
@@ -73,7 +74,7 @@ export function ChitFundsView({ data, onAdd, onEdit, onDelete, onLogPayment, onE
 
   return (
     <View className="gap-5 pb-8">
-      <PageTitle eyebrow="Rotating savings" title="Chit funds" />
+      <PageTitle title="Chit funds" />
       <View className="flex-row gap-2">
         <Pressable onPress={() => setShowHistory((v) => !v)} className={tw('flex-1 flex-row items-center justify-center gap-2 rounded-xl border px-4 py-2.5', showHistory ? 'border-accent-300/50 bg-accent-400/10' : 'border-white/10 light:border-black/10')}>
           <Icon as={History} size={15} className={showHistory ? 'text-accent-200 light:text-accent-700' : 'text-slate-400 light:text-slate-500'} />
@@ -102,7 +103,7 @@ export function ChitFundsView({ data, onAdd, onEdit, onDelete, onLogPayment, onE
   )
 }
 
-function ChitFundDetailView({ fund, payments, accounts, onBack, onEdit, onDelete, onLogPayment, onEditPayment, onTakePayout, onUndoPayout, onComplete, onReopen, onDeletePayment, showMoney, onToggleMoney }) {
+function ChitFundDetailView({ fund, payments, accounts, onBack, onEdit, onDelete, onLogPayment, onEditPayment, onTakePayout, onUndoPayout, onComplete, onReopen, onDeletePayment, onDeletePaymentBulk, showMoney, onToggleMoney }) {
   const isTaken = fund.payout_status === 'taken'
   const isCompleted = fund.status === 'completed'
   const account = accounts.find((a) => a.id === fund.account_id)
@@ -134,9 +135,9 @@ function ChitFundDetailView({ fund, payments, accounts, onBack, onEdit, onDelete
   const handleBulkDelete = () => {
     const ids = [...sel.selectedIds]
     if (ids.length === 0) return
-    Alert.alert(`Delete ${ids.length} payment${ids.length === 1 ? '' : 's'}?`, 'Linked transactions (if any) will be removed too.', [
+    dialog.alert(`Delete ${ids.length} payment${ids.length === 1 ? '' : 's'}?`, 'Linked transactions (if any) will be removed too.', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => { for (const id of ids) await onDeletePayment(id, true); sel.exit() } },
+      { text: 'Delete', style: 'destructive', onPress: async () => { if (onDeletePaymentBulk) await onDeletePaymentBulk(ids); else for (const id of ids) await onDeletePayment(id, true); sel.exit() } },
     ])
   }
   const [pbg, pfg] = payoutPill(isCompleted, isTaken)

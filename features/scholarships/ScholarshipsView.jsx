@@ -42,7 +42,6 @@ export function ScholarshipsView({ data, onAdd, onEdit, onDelete, onPay, onRefre
     <div className="space-y-5">
       <div className="flex items-end justify-between gap-3">
         <div>
-          <div className="mb-2 text-xs uppercase tracking-widest text-accent-200/70 light:text-accent-700">Scholarship trail</div>
           <h1 className="text-3xl font-semibold tracking-tight text-white light:text-slate-900">Scholarships &amp; fees</h1>
         </div>
         <div className="flex gap-2">

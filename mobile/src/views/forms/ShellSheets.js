@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Alert, Linking, Pressable, Text, View } from 'react-native'
+import { Linking, Pressable, Text, View } from 'react-native'
 import { Bell, CheckCheck, Coins, CreditCard, Landmark, Mail, RefreshCw, Repeat, Target, UserPlus, Users } from 'lucide-react-native'
 import { BottomSheet } from '../../ui/BottomSheet'
 import { EmptyState } from '../../ui/EmptyState'
@@ -12,7 +12,9 @@ import { api } from '../../lib/api'
 import { toast } from '../../lib/toast'
 import { money, todayISO } from '../../lib/format'
 import { relativeTime } from '../../lib/shared'
-import { disablePush, enablePush, pushPermissionStatus } from '../../lib/push'
+import { disablePush, enablePush, inviteRouteFor, pushPermissionStatus } from '../../lib/push'
+import { useRouter } from 'expo-router'
+import { dialog } from '../../ui/Dialogs'
 
 // Port of features/notifications/NotificationBell.jsx's mobile sheet, plus this phone's push
 // on/off switch (the native app's own setting).
@@ -23,6 +25,7 @@ const TYPE_ICON = {
 }
 
 export function NotificationsSheet({ open, onClose, onNavigate, onUnreadChange }) {
+  const router = useRouter()
   const [items, setItems] = useState([])
   const [loaded, setLoaded] = useState(false)
   const [push, setPush] = useState(null)
@@ -40,7 +43,7 @@ export function NotificationsSheet({ open, onClose, onNavigate, onUnreadChange }
     try {
       if (push !== 'on') {
         const ok = await enablePush()
-        if (!ok) Alert.alert('Notifications are off', 'Allow notifications for Personal Fin in Android settings to get reminders.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Open settings', onPress: () => Linking.openSettings() }])
+        if (!ok) dialog.alert('Notifications are off', 'Allow notifications for Personal Fin in Android settings to get reminders.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Open settings', onPress: () => Linking.openSettings() }])
       } else await disablePush({ optOut: true })
       setPush(await pushPermissionStatus())
     } catch (e) { toast.push(e.message, 'error') } finally { setBusy(false) }
@@ -49,8 +52,12 @@ export function NotificationsSheet({ open, onClose, onNavigate, onUnreadChange }
     if (!n.read_at) api('/finance/notifications/read', { method: 'POST', body: { ids: [n.id] } }).catch(() => {})
     setItems((list) => list.map((x) => (x.id === n.id ? { ...x, read_at: new Date().toISOString() } : x)))
     onClose()
-    if (n.link) Linking.openURL(n.link).catch(() => {})
+    // In-app links (share invites) open their native screen; a full web URL opens the browser.
+    const invite = inviteRouteFor(n.link)
+    if (invite) router.push(invite)
+    else if (/^https?:\/\//.test(n.link || '')) Linking.openURL(n.link).catch(() => toast.push("Couldn't open that link", 'error'))
     else if (n.view) onNavigate(n.view)
+    else if (n.link) onNavigate((String(n.link).match(/[?&]view=([a-z_]+)/) || [])[1] || 'dashboard')
   }
   const markAll = () => {
     api('/finance/notifications/read', { method: 'POST', body: { all: true } }).catch(() => {})
@@ -59,13 +66,14 @@ export function NotificationsSheet({ open, onClose, onNavigate, onUnreadChange }
 
   return (
     <BottomSheet open={open} onOpenChange={(v) => { if (!v) onClose() }} title="Notifications">
-      <Pressable disabled={busy || push === null} onPress={togglePush} className={tw('mb-3 flex-row items-center justify-between gap-3 rounded-xl border border-white/10 light:border-black/10 bg-white/[.02] light:bg-black/[.02] px-4 py-3')}>
+      {/* Only a nudge while push is off — once it's on, it's managed from Settings › Notifications. */}
+      {push !== null && push !== 'on' && <Pressable disabled={busy} onPress={togglePush} className={tw('mb-3 flex-row items-center justify-between gap-3 rounded-xl border border-white/10 light:border-black/10 bg-white/[.02] light:bg-black/[.02] px-4 py-3')}>
         <View className="flex-1">
           <Text className={tw('text-sm text-slate-300 light:text-slate-700')}>Push reminders on this phone</Text>
           <Text className="text-[11px] text-slate-500">Bills, EMIs, chit fund dues and budget alerts.</Text>
         </View>
-        <ToggleSwitch checked={push === 'on'} onChange={togglePush} disabled={busy} />
-      </Pressable>
+        <ToggleSwitch checked={false} onChange={togglePush} disabled={busy} />
+      </Pressable>}
       {unread > 0 && (
         <Pressable onPress={markAll} className="-mt-1 mb-2 flex-row items-center justify-end gap-1.5">
           <Icon as={CheckCheck} size={14} className={tw('text-accent-300 light:text-accent-700')} />

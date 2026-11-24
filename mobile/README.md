@@ -49,8 +49,17 @@ the project root), put `EXPO_PUBLIC_API_URL=http://10.0.2.2:3000` (emulator) or 
 
 Calculations come from the web project's own `lib/` files (loans, budgets, credit card cycles,
 Family/Company totals, module settings) through `src/lib/shared.js` and `metro.config.js`, so both
-apps show the same numbers. Still web-only: creating/editing accounts, cards, loans, profiles and
-portfolios, scheduled/hidden transactions, attachments, sharing, and Settings.
+apps show the same numbers. Every module is native, including create/edit, scheduled and hidden
+transactions (with the due-scheduled confirm prompt), attachments, sharing and invites
+(`/invite/<token>`, `/invite/lend/<token>`), CSV/Excel import, Settings, the first-run tour, and
+forgot password (emails a link to the website's `/reset-password`). Web-only by design: the admin
+panel and the marketing landing page.
+
+Deep links (`personalfin:///?…`, also used by notification taps): `view=<module>`,
+`section=<settings section>` with `view=profile`, `tour=1` (replay the tour), and the invite paths.
+
+Dev-only: `EXPO_PUBLIC_ALLOW_SCREENSHOTS=1` in `.env.local` lets you screenshot the Vault screen in
+a dev build; release builds always block it.
 
 ## One-time setup only you can do
 

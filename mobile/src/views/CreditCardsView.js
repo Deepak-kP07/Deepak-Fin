@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, Animated, Pressable, Text, TextInput, View } from 'react-native'
+import { Animated, Pressable, Text, TextInput, View } from 'react-native'
 import {
-  ArrowDownRight, ArrowRight, ArrowUpRight, CheckCircle2, ChevronLeft, ChevronRight, CreditCard, Eye, EyeOff, Landmark, Lock,
+  ArrowDownRight, ArrowUpRight, CheckCircle2, ChevronLeft, ChevronRight, CreditCard, Eye, EyeOff, Landmark, Lock,
   MoreVertical, Pencil, RefreshCw, RotateCcw, Target, Trash2, X,
 } from 'lucide-react-native'
 import { Icon } from '../ui/Icon'
@@ -12,6 +12,7 @@ import { MonthCursor } from '../ui/MonthCursor'
 import { BarChart } from '../ui/BarChart'
 import { AccentGradient } from '../ui/Gradient'
 import { tw } from '../lib/tw'
+import { getTransactionIcon } from '../lib/categoryIcons'
 import { MONTH_NAMES, capitalizeFirst, dateToLocalISO, money, timeLabel } from '../lib/format'
 import { currentSpendingCycle, nextBillDue, utilisationSeverity } from '../lib/shared'
 import { hiddenTransferGroups, isHiddenTx, useHiddenTx } from '../state/HiddenTx'
@@ -40,40 +41,42 @@ function CreditCardFlip({ card, showMoney, onSpend, onPay, onViewDetails }) {
   const util = Number(card.credit_limit) > 0 ? Math.min(100, Math.round((Number(card.current_outstanding) / Number(card.credit_limit)) * 100)) : 0
   const sev = utilisationSeverity(util)
   const nd = nextBillDue(card)
+  // Both faces fill the same fixed card box (85:54) and share the same radius and shadow, so a flip
+  // never changes the card's size; the far perspective keeps it from "zooming" mid-turn.
+  const faceStyle = { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 16, backfaceVisibility: 'hidden' }
+  const owes = Number(card.current_outstanding) > 0
   return (
     <Pressable onPress={() => setFlipped((f) => !f)} className="w-full self-center" style={{ maxWidth: 340, aspectRatio: 85 / 54 }}>
-      <Animated.View style={{ position: 'absolute', width: '100%', height: '100%', backfaceVisibility: 'hidden', transform: [{ perspective: 1500 }, { rotateY: front }] }}>
-        <BankCardFace name={card.name} subtitle={card.bank || 'Credit card'} last4={card.last4} color={card.color || '#a78bfa'} style={{ height: '100%' }} />
+      <Animated.View pointerEvents={flipped ? 'none' : 'auto'} style={[faceStyle, { transform: [{ perspective: 4000 }, { rotateY: front }] }]}>
+        <BankCardFace name={card.name} subtitle={card.bank || 'Credit card'} last4={card.last4} color={card.color || '#a78bfa'} style={{ height: '100%', aspectRatio: undefined }} />
       </Animated.View>
-      <Animated.View style={{ position: 'absolute', width: '100%', height: '100%', backfaceVisibility: 'hidden', transform: [{ perspective: 1500 }, { rotateY: back }] }}
-        className={tw('justify-between overflow-hidden rounded-2xl border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white p-3.5')}>
-        <View>
-          <View className="flex-row items-start justify-between gap-2">
-            <View className="min-w-0 flex-1">
-              <Text numberOfLines={1} className={tw('text-sm font-semibold text-white light:text-slate-900')}>{card.name}</Text>
-              <Text className="mt-0.5 text-[11px] text-slate-500">Bill on {card.billing_date} · Due in {nd.days > 0 ? `${nd.days}d` : nd.days === 0 ? 'today' : 'overdue'}</Text>
-            </View>
-            <Pressable onPress={() => setFlipped(false)} hitSlop={8} className="rounded-lg p-1"><Icon as={RotateCcw} size={13} className="text-slate-500" /></Pressable>
+      <Animated.View pointerEvents={flipped ? 'auto' : 'none'} style={[faceStyle, { elevation: 6, transform: [{ perspective: 4000 }, { rotateY: back }] }]}
+        className={tw('overflow-hidden border border-white/10 light:border-black/10 bg-[#141a28] light:bg-white px-4 pb-3.5 pt-3')}>
+        <View className="flex-row items-start justify-between gap-2">
+          <View className="min-w-0 flex-1">
+            <Text numberOfLines={1} className={tw('text-sm font-semibold text-white light:text-slate-900')}>{card.name}</Text>
+            <Text numberOfLines={1} className="mt-0.5 text-[11px] text-slate-500">Bill on {card.billing_date} · Due {nd.days > 0 ? `in ${nd.days}d` : nd.days === 0 ? 'today' : 'overdue'}</Text>
           </View>
-          <View className="-mx-3.5 mt-1 h-1.5 bg-black/70" />
-          <View className="mt-1.5 flex-row items-end justify-between">
-            <View><Text className="text-[10px] text-slate-500">Outstanding</Text><Text className={tw('text-base font-semibold text-white light:text-slate-900')}>{showMoney ? money(card.current_outstanding) : '••••'}</Text></View>
-            <View className="items-end"><Text className="text-[10px] text-slate-500">Limit</Text><Text className={tw('text-xs text-slate-300 light:text-slate-700')}>{showMoney ? money(card.credit_limit) : '••••'}</Text></View>
-          </View>
-          <View className="mt-1 flex-row items-center gap-2">
-            <View className={tw('h-1.5 flex-1 overflow-hidden rounded-full border border-white/10 light:border-black/10 bg-white/[.08] light:bg-black/[.08]')}><View className={tw('h-full rounded-full', SEVERITY_BAR[sev.label])} style={{ width: `${util}%` }} /></View>
-            <Text className={tw('text-[10px]', SEVERITY_TONE[sev.label])}>{util}%</Text>
-          </View>
+          <Pressable onPress={() => setFlipped(false)} hitSlop={10} accessibilityLabel="Flip back" className="rounded-lg p-1.5 active:bg-white/10"><Icon as={RotateCcw} size={14} className="text-slate-500" /></Pressable>
         </View>
-        <View className="gap-1">
-          <View className="flex-row gap-1.5">
-            <Pressable onPress={() => onSpend(card)} className={tw('flex-1 items-center rounded-lg bg-white/[.06] light:bg-black/[.04] py-1')}><Text className={tw('text-[11px] font-semibold text-white light:text-slate-900')}>+ Log spend</Text></Pressable>
-            <Pressable disabled={Number(card.current_outstanding) <= 0} onPress={() => onPay(card)} className={tw('flex-1', Number(card.current_outstanding) <= 0 && 'opacity-50')}>
-              <AccentGradient dir="r" style={{ borderRadius: 8, paddingVertical: 4, alignItems: 'center' }}><Text className="text-[11px] font-semibold text-[#07101c]">Pay bill</Text></AccentGradient>
-            </Pressable>
-          </View>
-          <Pressable onPress={() => onViewDetails(card)} className={tw('flex-row items-center justify-center gap-1.5 rounded-lg border border-white/10 light:border-black/10 py-1')}>
-            <Text className={tw('text-[11px] font-medium text-accent-200 light:text-accent-700')}>View full details</Text><Icon as={ArrowRight} size={12} className={tw('text-accent-200 light:text-accent-700')} />
+        <View className="mt-2.5 flex-row items-end justify-between">
+          <View><Text className="text-[10px] uppercase tracking-wider text-slate-500">Outstanding</Text><Text className={tw('text-lg font-semibold text-white light:text-slate-900')}>{showMoney ? money(card.current_outstanding) : '••••'}</Text></View>
+          <View className="items-end"><Text className="text-[10px] uppercase tracking-wider text-slate-500">Limit</Text><Text className={tw('text-xs text-slate-300 light:text-slate-700')}>{showMoney ? money(card.credit_limit) : '••••'}</Text></View>
+        </View>
+        <View className="mt-1.5 flex-row items-center gap-2">
+          <View className={tw('h-1.5 flex-1 overflow-hidden rounded-full bg-white/[.08] light:bg-black/[.08]')}><View className={tw('h-full rounded-full', SEVERITY_BAR[sev.label])} style={{ width: `${util}%` }} /></View>
+          <Text className={tw('text-[10px] font-medium', SEVERITY_TONE[sev.label])}>{util}%</Text>
+        </View>
+        <View className="flex-1" />
+        <View className="flex-row gap-2">
+          <Pressable onPress={() => onSpend(card)} className={tw('flex-1 items-center justify-center rounded-xl bg-white/[.08] light:bg-black/[.05] py-2.5 active:opacity-70')}>
+            <Text className={tw('text-xs font-semibold text-white light:text-slate-900')}>+ Log spend</Text>
+          </Pressable>
+          <Pressable disabled={!owes} onPress={() => onPay(card)} className={tw('flex-1 active:opacity-80', !owes && 'opacity-50')}>
+            <AccentGradient dir="r" style={{ borderRadius: 12, paddingVertical: 10, alignItems: 'center' }}><Text className="text-xs font-semibold text-[#07101c]">Pay bill</Text></AccentGradient>
+          </Pressable>
+          <Pressable onPress={() => onViewDetails(card)} className={tw('flex-1 flex-row items-center justify-center gap-1 rounded-xl border border-white/10 light:border-black/10 py-2.5 active:opacity-70')}>
+            <Text numberOfLines={1} className={tw('text-xs font-semibold text-accent-200 light:text-accent-700')}>View details</Text>
           </Pressable>
         </View>
       </Animated.View>
@@ -84,6 +87,8 @@ function CreditCardFlip({ card, showMoney, onSpend, onPay, onViewDetails }) {
 function CreditCardDetailView({ card, cardTransactions, allTransactions, categories, onBack, onSpend, onPay, onEditTx, onDeleteActivityBulk, onDeleteTxBulk, onSyncOutstanding, onDelete, onEdit, showMoney, onToggleMoney }) {
   const [syncOpen, setSyncOpen] = useState(false)
   const [syncValue, setSyncValue] = useState('')
+  // A lone '-' or '.' while typing isn't a number yet — don't let it sync as NaN.
+  const syncValid = syncValue.trim() !== '' && Number.isFinite(Number(syncValue))
   const [syncBusy, setSyncBusy] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false)
   const util = Number(card.credit_limit) > 0 ? Math.min(100, Math.round((Number(card.current_outstanding) / Number(card.credit_limit)) * 100)) : 0
@@ -164,11 +169,11 @@ function CreditCardDetailView({ card, cardTransactions, allTransactions, categor
           <Text className={tw('text-sm text-slate-300 light:text-slate-700')}>Sync with your card's real statement</Text>
           <Text className="mt-1 text-[11px] text-slate-500">If your card statement shows a different outstanding — a fee, forex markup, or a spend you never logged here — enter the real number and the difference is recorded as a "Balance sync" entry in this card's activity.</Text>
           <View className="mt-3 flex-row flex-wrap items-center gap-2">
-            <TextInput keyboardType="decimal-pad" value={syncValue} onChangeText={setSyncValue} placeholder={String(Math.round(card.current_outstanding))} placeholderTextColor="#64748b" className={tw('w-40 rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-2 text-sm text-white light:text-slate-900')} />
-            <Pressable disabled={syncBusy || !syncValue} onPress={async () => { setSyncBusy(true); await onSyncOutstanding(card, Number(syncValue)); setSyncBusy(false); setSyncOpen(false); setSyncValue('') }} className={tw((syncBusy || !syncValue) && 'opacity-50')}>
+            <TextInput keyboardType="numeric" value={syncValue} onChangeText={setSyncValue} placeholder={String(Math.round(card.current_outstanding))} placeholderTextColor="#64748b" className={tw('w-40 rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-2 text-sm text-white light:text-slate-900')} />
+            <Pressable disabled={syncBusy || !syncValid} onPress={async () => { setSyncBusy(true); await onSyncOutstanding(card, Number(syncValue)); setSyncBusy(false); setSyncOpen(false); setSyncValue('') }} className={tw((syncBusy || !syncValid) && 'opacity-50')}>
               <AccentGradient dir="r" style={{ borderRadius: 12, paddingHorizontal: 16, paddingVertical: 8 }}><Text className="text-sm font-semibold text-[#07101c]">{syncBusy ? 'Syncing…' : 'Sync'}</Text></AccentGradient>
             </Pressable>
-            {syncValue ? <Text className="text-[11px] text-slate-500">{Number(syncValue) < Number(card.current_outstanding) ? `${money(Number(card.current_outstanding) - Number(syncValue))} lower than tracked` : Number(syncValue) > Number(card.current_outstanding) ? `${money(Number(syncValue) - Number(card.current_outstanding))} higher than tracked` : 'Matches already'}</Text> : null}
+            {syncValid ? <Text className="text-[11px] text-slate-500">{Number(syncValue) < Number(card.current_outstanding) ? `${money(Number(card.current_outstanding) - Number(syncValue))} lower than tracked` : Number(syncValue) > Number(card.current_outstanding) ? `${money(Number(syncValue) - Number(card.current_outstanding))} higher than tracked` : 'Matches already'}</Text> : null}
           </View>
         </View>
       )}
@@ -218,7 +223,7 @@ function CreditCardDetailView({ card, cardTransactions, allTransactions, categor
           return (
             <Pressable key={`${a.source}-${a.id}`} onPress={() => activityTap(a)} onLongPress={() => longPress('activity', a.id)} delayLongPress={500} className={tw('flex-row items-center gap-3 px-5 py-3', i > 0 && 'border-t border-white/5 light:border-black/5')}>
               {selectSection === 'activity' ? check(selectedIds.has(a.id)) : (
-                <View className={tw('h-9 w-9 items-center justify-center rounded-xl bg-white/[.05] light:bg-black/[.035]')}>{isDebit ? <ArrowDownRight size={16} color={cat?.color || '#94a3b8'} /> : <ArrowUpRight size={16} color={cat?.color || '#94a3b8'} />}</View>
+                <View className={tw('h-10 w-10 items-center justify-center rounded-xl bg-white/[.05] light:bg-black/[.035]')}>{(() => { const I = getTransactionIcon(a.description, cat?.name) || (isDebit ? ArrowDownRight : ArrowUpRight); return <I size={16} color={cat?.color || '#94a3b8'} /> })()}</View>
               )}
               <View className="min-w-0 flex-1">
                 <View className="flex-row items-center gap-1.5"><Text numberOfLines={1} className={tw('shrink text-sm font-medium text-white light:text-slate-900')}>{capitalizeFirst(a.description)}</Text>{rowHidden(a) ? <Icon as={Lock} size={11} className="text-slate-500" /> : null}</View>
@@ -264,9 +269,9 @@ function CreditCardDetailView({ card, cardTransactions, allTransactions, categor
   )
 }
 
-export function CreditCardsView({ data, onSpend, onPay, onEditTx, onDeleteActivityBulk, onDeleteTxBulk, onSyncOutstanding, onDelete, onEdit, showMoney, onToggleMoney, onDetailChange }) {
+export function CreditCardsView({ initialSelectedId, data, onSpend, onPay, onEditTx, onDeleteActivityBulk, onDeleteTxBulk, onSyncOutstanding, onDelete, onEdit, showMoney, onToggleMoney, onDetailChange }) {
   const { credit_cards = [], credit_card_transactions = [], categories, transactions } = data
-  const [selectedCardId, setSelectedCardId] = useState(null)
+  const [selectedCardId, setSelectedCardId] = useState(initialSelectedId ?? null)
   const selectedCard = credit_cards.find((c) => c.id === selectedCardId)
   useEffect(() => { onDetailChange?.(selectedCardId) }, [selectedCardId])
 
@@ -289,7 +294,6 @@ export function CreditCardsView({ data, onSpend, onPay, onEditTx, onDeleteActivi
     <View className="gap-5">
       <View className="flex-row items-end justify-between gap-3">
         <View>
-          <Text className={tw('mb-2 text-xs uppercase tracking-widest text-accent-200/70 light:text-accent-700')}>Plastic tracker</Text>
           <Text className={tw('text-3xl font-semibold tracking-tight text-white light:text-slate-900')}>Credit cards</Text>
         </View>
         <Pressable onPress={onToggleMoney} className={tw('rounded-xl border border-white/10 light:border-black/10 p-2.5')}><Icon as={showMoney ? Eye : EyeOff} size={16} className={tw('text-slate-400 light:text-slate-500')} /></Pressable>

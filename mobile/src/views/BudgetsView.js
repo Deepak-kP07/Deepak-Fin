@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Alert, Pressable, Text, TextInput, View } from 'react-native'
+import { Pressable, Text, TextInput, View } from 'react-native'
 import * as SecureStore from 'expo-secure-store'
 import * as Sharing from 'expo-sharing'
 import { File, Paths } from 'expo-file-system'
@@ -17,6 +17,7 @@ import { toast } from '../lib/toast'
 import { money, todayISO } from '../lib/format'
 import { getCategoryIcon } from '../lib/categoryIcons'
 import { budgetInsights, buildBudgetsExportCsv, categoryBreakdown, monthLabel, planTotals } from '../lib/shared'
+import { dialog } from '../ui/Dialogs'
 
 // Port of features/budgets/* (BudgetsView, BudgetMonthDetailView, BudgetMonthForm, BudgetForm).
 const DISMISS_KEY = 'dismissedBudgetInsights'
@@ -30,7 +31,7 @@ async function exportBudgets(payload) {
     if (file.exists) file.delete()
     await file.write(buildBudgetsExportCsv(payload))
     await Sharing.shareAsync(file.uri, { mimeType: 'text/csv', dialogTitle: name })
-  } catch (e) { Alert.alert('Export failed', e.message) }
+  } catch (e) { dialog.alert('Export failed', e.message) }
 }
 
 function Donut({ title, mix, showMoney }) {
@@ -88,7 +89,7 @@ export function BudgetsView({ data, onSetMonth, onCloseMonth, onReopenMonth, onD
   return (
     <View className="gap-5 pb-8">
       <View className="flex-row items-end justify-between gap-3">
-        <PageTitle eyebrow="Guardrails" title="Budgets" />
+        <PageTitle title="Budgets" />
         <EyeButton showMoney={showMoney} onToggle={onToggleMoney} />
       </View>
 

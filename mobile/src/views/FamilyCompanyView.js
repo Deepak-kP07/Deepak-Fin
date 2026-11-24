@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Alert, Pressable, Text, TextInput, View } from 'react-native'
+import { Pressable, Text, TextInput, View } from 'react-native'
 import * as Sharing from 'expo-sharing'
 import { File, Paths } from 'expo-file-system'
-import { Download, Landmark, Link2, Lock, Pencil, RefreshCw, Repeat, Trash2, Unlock, Upload, UserPlus, Users, Wallet } from 'lucide-react-native'
+import { ArrowDownRight, ArrowUpRight, Download, Landmark, Link2, Lock, Pencil, RefreshCw, Repeat, Trash2, Unlock, Upload, UserPlus, Users, Wallet } from 'lucide-react-native'
 import { Icon } from '../ui/Icon'
 import { EmptyState } from '../ui/EmptyState'
 import { HeroStatTile } from '../ui/HeroStatTile'
@@ -11,8 +11,10 @@ import { DismissibleBanner } from '../ui/DismissibleBanner'
 import { AccentGradient } from '../ui/Gradient'
 import { BackLink, CARD, EyeButton, HERO, MoreMenu, PageTitle, SelectBar, SelectMark, useSelection } from '../ui/DetailKit'
 import { tw } from '../lib/tw'
+import { getTransactionIcon } from '../lib/categoryIcons'
 import { MONTH_NAMES, capitalizeFirst, formatDate, money, todayISO } from '../lib/format'
 import { ENTRY_TYPE_STYLE, buildFamilyCompanyExportCsv, canDeleteEntries, canDeleteProfile, canEditProfile, canManageProfileShares, canWriteEntries, categoriesFor, moneyProfileRole, profileTotals } from '../lib/shared'
+import { dialog } from '../ui/Dialogs'
 
 // Port of features/familyCompany/FamilyCompanyView.jsx + MoneyProfileDetailView.jsx (mobile layout).
 export async function exportFamilyCompany(payload, filenameBase) {
@@ -23,7 +25,7 @@ export async function exportFamilyCompany(payload, filenameBase) {
     if (file.exists) file.delete()
     await file.write(buildFamilyCompanyExportCsv(payload))
     await Sharing.shareAsync(file.uri, { mimeType: 'text/csv', dialogTitle: name })
-  } catch (e) { Alert.alert('Export failed', e.message) }
+  } catch (e) { dialog.alert('Export failed', e.message) }
 }
 
 // ENTRY_TYPE_STYLE is "bg-… text-… light:text-…" — split into the chip and its text.
@@ -48,9 +50,9 @@ function ClosedPill({ small }) {
   return <View className="rounded-full bg-slate-500/20 px-1.5 py-0.5"><Text className={tw(small ? 'text-[9px]' : 'text-[10px]', 'font-semibold uppercase tracking-widest text-slate-300 light:text-slate-700')}>Closed</Text></View>
 }
 
-export function FamilyCompanyView({ data, onAddProfile, onEditProfile, onDeleteProfile, onAddEntry, onEditEntry, onDeleteEntryBulk, onBulkImport, onToggleStatus, onManageAccess, onSyncBalance, onOpenRecurring, onDetailChange, showMoney, onToggleMoney }) {
+export function FamilyCompanyView({ initialSelectedId, data, onAddProfile, onEditProfile, onDeleteProfile, onAddEntry, onEditEntry, onDeleteEntryBulk, onBulkImport, onToggleStatus, onManageAccess, onSyncBalance, onOpenRecurring, onDetailChange, showMoney, onToggleMoney }) {
   const { money_profiles: profiles = [], money_profile_entries: entries = [], accounts = [], credit_cards: creditCards = [], categories = [], transactions = [] } = data
-  const [selectedProfileId, setSelectedProfileId] = useState(null)
+  const [selectedProfileId, setSelectedProfileId] = useState(initialSelectedId ?? null)
   const selectedProfile = profiles.find((p) => p.id === selectedProfileId)
   useEffect(() => { onDetailChange?.(selectedProfile ? selectedProfileId : null) }, [selectedProfileId, !!selectedProfile])
 
@@ -67,7 +69,7 @@ export function FamilyCompanyView({ data, onAddProfile, onEditProfile, onDeleteP
 
   return (
     <View className="gap-5 pb-8">
-      <PageTitle eyebrow="Managed on their behalf" title="Family / Company" />
+      <PageTitle title="Family / Company" />
       <View className="flex-row gap-2">
         <Pressable disabled={profiles.length === 0} onPress={() => exportFamilyCompany({ profiles, entries, categories }, 'family-company')}
           className={tw('flex-1 flex-row items-center justify-center gap-2 rounded-xl border border-white/10 light:border-black/10 px-4 py-2.5', profiles.length === 0 && 'opacity-50')}>
@@ -133,6 +135,8 @@ function MoneyProfileDetailView({ profile, entries, accounts, creditCards, categ
   const role = moneyProfileRole(profile)
   const [syncOpen, setSyncOpen] = useState(false)
   const [syncValue, setSyncValue] = useState('')
+  // A lone '-' or '.' while typing isn't a number yet — don't let it sync as NaN.
+  const syncValid = syncValue.trim() !== '' && Number.isFinite(Number(syncValue))
   const [syncBusy, setSyncBusy] = useState(false)
   const { opening, income, expense, balance } = profileTotals(profile, entries)
   const now = new Date()
@@ -186,11 +190,11 @@ function MoneyProfileDetailView({ profile, entries, accounts, creditCards, categ
           <Text className={tw('text-sm text-slate-300 light:text-slate-700')}>Sync with the real balance</Text>
           <Text className="mt-1 text-[11px] text-slate-500">If the real balance (a bank statement, or however you're tracking this outside the app) shows a different number, enter it here and it'll be reconciled with a labeled entry — no need to hunt for what's missing.</Text>
           <View className="mt-3 flex-row flex-wrap items-center gap-2">
-            <TextInput keyboardType="numbers-and-punctuation" value={syncValue} onChangeText={setSyncValue} placeholder={String(Math.round(balance))} placeholderTextColor="#64748b" className={tw('w-40 rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-2 text-sm text-white light:text-slate-900')} />
-            <Pressable disabled={syncBusy || !syncValue} onPress={async () => { setSyncBusy(true); await onSyncBalance(profile, Number(syncValue)); setSyncBusy(false); setSyncOpen(false); setSyncValue('') }} className={tw((syncBusy || !syncValue) && 'opacity-50')}>
+            <TextInput keyboardType="numeric" value={syncValue} onChangeText={setSyncValue} placeholder={String(Math.round(balance))} placeholderTextColor="#64748b" className={tw('w-40 rounded-xl border border-white/10 light:border-black/10 bg-white/[.04] light:bg-black/[.03] px-3 py-2 text-sm text-white light:text-slate-900')} />
+            <Pressable disabled={syncBusy || !syncValid} onPress={async () => { setSyncBusy(true); await onSyncBalance(profile, Number(syncValue)); setSyncBusy(false); setSyncOpen(false); setSyncValue('') }} className={tw((syncBusy || !syncValid) && 'opacity-50')}>
               <AccentGradient dir="r" style={{ borderRadius: 12, paddingHorizontal: 16, paddingVertical: 8 }}><Text className="text-sm font-semibold text-[#07101c]">{syncBusy ? 'Syncing…' : 'Sync'}</Text></AccentGradient>
             </Pressable>
-            {syncValue ? <Text className="text-[11px] text-slate-500">{Number(syncValue) < balance ? `${money(balance - Number(syncValue))} lower than tracked` : Number(syncValue) > balance ? `${money(Number(syncValue) - balance)} higher than tracked` : 'Matches already'}</Text> : null}
+            {syncValid ? <Text className="text-[11px] text-slate-500">{Number(syncValue) < balance ? `${money(balance - Number(syncValue))} lower than tracked` : Number(syncValue) > balance ? `${money(Number(syncValue) - balance)} higher than tracked` : 'Matches already'}</Text> : null}
           </View>
         </View>
       )}
@@ -254,9 +258,11 @@ function MoneyProfileDetailView({ profile, entries, accounts, creditCards, categ
           return (
             <Pressable key={e.id} onPress={() => (sel.selectMode ? sel.toggle(e.id) : writable && onEditEntry(e))} onLongPress={() => canDeleteEntries(role) && sel.start(e.id)} delayLongPress={500}
               className={tw('flex-row items-center gap-3 px-5 py-3', i > 0 && 'border-t border-white/5 light:border-black/5')}>
-              {sel.selectMode ? <SelectMark selected={sel.selectedIds.has(e.id)} /> : <EntryTypeChip type={e.entry_type} />}
+              {sel.selectMode ? <SelectMark selected={sel.selectedIds.has(e.id)} /> : (
+                <View className={tw('h-10 w-10 items-center justify-center rounded-xl bg-white/[.05] light:bg-black/[.035]')}>{(() => { const I = getTransactionIcon(e.description, cat?.name) || (isExpense ? ArrowDownRight : ArrowUpRight); return <I size={16} color={cat?.color || '#94a3b8'} /> })()}</View>
+              )}
               <View className="min-w-0 flex-1">
-                <Text numberOfLines={1} className={tw('text-sm font-medium text-white light:text-slate-900')}>{capitalizeFirst(e.description)}</Text>
+                <View className="flex-row items-center gap-1.5"><Text numberOfLines={1} className={tw('shrink text-sm font-medium text-white light:text-slate-900')}>{capitalizeFirst(e.description)}</Text><EntryTypeChip type={e.entry_type} /></View>
                 <Text numberOfLines={1} className="text-[11px] text-slate-500">{formatDate(e.date)}{cat ? ` · ${cat.name}` : ''}{e.paid_party ? ` · ${capitalizeFirst(e.paid_party)}` : ''}</Text>
               </View>
               <Text className={tw('text-sm font-semibold', isExpense ? 'text-rose-300 light:text-rose-700' : 'text-emerald-300 light:text-emerald-700')}>{showMoney ? `${isExpense ? '−' : '+'}${money(e.amount)}` : '••••'}</Text>

@@ -93,7 +93,6 @@ export function LendBorrowView({ data, onAdd, onEdit, onDelete, onDeleteTx, onDe
     <div className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <div className="mb-2 text-xs uppercase tracking-widest text-accent-200/70 light:text-accent-700">Money between people</div>
           <h1 className="text-3xl font-semibold tracking-tight text-white light:text-slate-900">Lend &amp; borrow</h1>
         </div>
         <div className="flex gap-2">

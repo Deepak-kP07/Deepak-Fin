@@ -25,7 +25,7 @@ export function BucketListView({ data, onAdd, onEdit, onDelete, showMoney, onTog
   return (
     <View className="gap-5 pb-8">
       <View className="flex-row items-end justify-between gap-3">
-        <PageTitle eyebrow="The 30-day rule" title="Bucket list" />
+        <PageTitle title="Bucket list" />
         <EyeButton showMoney={showMoney} onToggle={onToggleMoney} />
       </View>
 

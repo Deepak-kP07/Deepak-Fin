@@ -60,7 +60,6 @@ export function CreditCardsView({ data, onAdd, onEdit, onDelete, onSpend, onPay,
     <div className="space-y-5">
       <div className="flex items-end justify-between gap-3">
         <div>
-          <div className="mb-2 text-xs uppercase tracking-widest text-accent-200/70 light:text-accent-700">Plastic tracker</div>
           <h1 className="text-3xl font-semibold tracking-tight text-white light:text-slate-900">Credit cards</h1>
         </div>
         <div className="flex justify-end gap-2">
