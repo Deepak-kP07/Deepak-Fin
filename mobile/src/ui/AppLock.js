@@ -75,10 +75,10 @@ function LockScreen({ visible, onUnlocked }) {
     return () => loop.stop()
   }, [visible, pulse])
 
-  const unlock = async () => {
+  const unlock = async (usePin = false) => {
     if (busy) return
     setBusy(true); setFailed(false)
-    const ok = await authenticate('Unlock Personal Fin')
+    const ok = await authenticate('Unlock Personal Fin', { usePin })
     setBusy(false)
     if (ok) onUnlocked()
     else setFailed(true)
@@ -86,7 +86,7 @@ function LockScreen({ visible, onUnlocked }) {
   // Ask straight away, like a banking app — the button is there for a retry after a cancel.
   useEffect(() => {
     if (!visible) return
-    const t = setTimeout(unlock, 350)
+    const t = setTimeout(() => unlock(), 350)
     return () => clearTimeout(t)
   }, [visible])
 
@@ -103,7 +103,7 @@ function LockScreen({ visible, onUnlocked }) {
         </View>
 
         <View className="items-center">
-          <Pressable onPress={unlock} accessibilityLabel="Unlock with fingerprint" className="items-center justify-center" style={{ width: 132, height: 132 }}>
+          <Pressable onPress={() => unlock()} accessibilityLabel="Unlock with fingerprint" className="items-center justify-center" style={{ width: 132, height: 132 }}>
             <Animated.View pointerEvents="none" style={{
               position: 'absolute', width: 96, height: 96, borderRadius: 48, borderWidth: 2, borderColor: ring,
               opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.55, 0] }),
@@ -114,8 +114,13 @@ function LockScreen({ visible, onUnlocked }) {
             </View>
           </Pressable>
           <Text className={tw('mt-4 text-sm font-medium', failed ? 'text-rose-300 light:text-rose-700' : 'text-slate-300 light:text-slate-600')}>
-            {busy ? 'Touch the fingerprint sensor' : failed ? "Didn't match — tap to try again" : 'Tap to unlock with your fingerprint'}
+            {busy ? 'Touch the fingerprint sensor' : failed ? 'Tap the fingerprint to try again' : 'Tap to unlock with your fingerprint'}
           </Text>
+          {failed ? (
+            <Pressable onPress={() => unlock(true)} hitSlop={8} className="mt-5 rounded-xl border border-white/10 light:border-black/10 px-4 py-2.5 active:opacity-60">
+              <Text className={tw('text-sm font-medium text-slate-200 light:text-slate-700')}>Use phone PIN instead</Text>
+            </Pressable>
+          ) : null}
         </View>
 
         <Pressable onPress={signOut} hitSlop={10} className="active:opacity-60"><Text className="text-xs text-slate-500">Not you? Sign out</Text></Pressable>

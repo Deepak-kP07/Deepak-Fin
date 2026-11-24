@@ -2,10 +2,13 @@ import { supabase } from './supabase'
 
 // The native app uses the same /api routes as the web app. It has no cookies, so it sends the
 // Supabase access token instead (see lib/supabase/server.js in the web project).
-export const API_URL = (process.env.EXPO_PUBLIC_API_URL || 'https://www.personalfin.site').replace(/\/$/, '')
+// A release build always talks to the live site: .env.local's local-server URL is for dev builds
+// only, and once baked into a release APK it made every request fail when that server was off.
+const LIVE_URL = 'https://www.personalfin.site'
+export const API_URL = (__DEV__ ? process.env.EXPO_PUBLIC_API_URL || LIVE_URL : LIVE_URL).replace(/\/$/, '')
 // Pages people open in a browser (privacy policy, email links) always use the live site — the API
 // URL above may point at a local dev server the browser can't reach.
-export const WEB_URL = 'https://www.personalfin.site'
+export const WEB_URL = LIVE_URL
 
 export class ApiError extends Error {
   constructor(message, status) { super(message); this.status = status }
