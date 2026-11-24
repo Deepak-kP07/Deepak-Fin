@@ -10,13 +10,13 @@
     "backgroundColor": "#080b12",
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.personalfin.app",
+      "bundleIdentifier": "site.personalfin.app",
       "config": {
         "usesNonExemptEncryption": false
       }
     },
     "android": {
-      "package": "com.personalfin.app",
+      "package": "site.personalfin.app",
       "versionCode": 3,
       "allowBackup": false,
       "adaptiveIcon": {
@@ -125,6 +125,17 @@
     ],
     "experiments": {
       "typedRoutes": false
-    }
+    },
+    "extra": {
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "522058d1-c49b-4c86-a5bf-436dc4adcb91"
+      }
+    },
+    "owner": "deepak_kp07"
   }
 }

@@ -33,7 +33,7 @@ module.exports = function withAppShortcuts(config) {
   })
   config = withDangerousMod(config, ['android', (c) => {
     const res = path.join(c.modRequest.platformProjectRoot, 'app/src/main/res')
-    const pkg = c.android?.package || 'com.personalfin.app'
+    const pkg = c.android?.package || 'site.personalfin.app'
     fs.mkdirSync(path.join(res, 'xml'), { recursive: true })
     fs.mkdirSync(path.join(res, 'drawable'), { recursive: true })
     fs.writeFileSync(path.join(res, 'xml/shortcuts.xml'), shortcutsXml(pkg))
