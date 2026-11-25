@@ -73,8 +73,11 @@ a dev build; release builds always block it.
    - `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` in `mobile/.env` is the web client (`NEXT_PUBLIC_GOOGLE_CLIENT_ID`).
 3. **Invite links open the app (Android App Links):** `public/.well-known/assetlinks.json` on the
    website lists which signing keys may open `personalfin.site/invite/…` links in the app: the Play
-   App Signing key and the EAS upload key (SHA-256s from Play Console → Protected with Play → Play
-   app signing). If either key ever changes, update it there and redeploy the website.
+   App Signing key(s) and the EAS upload key. Play now signs with more than one key (a classic RSA
+   key for Android ≤ 16 plus a newer one), and the console may show the newer one first — so read the
+   key Play *actually* used from an installed copy: `adb shell pm path site.personalfin.app`, pull
+   base.apk, then `apksigner verify --print-certs --min-sdk-version 32 --max-sdk-version 36 base.apk`.
+   Every SHA-1 needs its own Android OAuth client (Google sign-in) and every SHA-256 goes in this file.
 4. **Push notifications:** set `FIREBASE_SERVICE_ACCOUNT_JSON` on Vercel (Firebase Console →
    Project settings → Service accounts → Generate new private key, project `personal-fin-f5fce`).
    Until then the server skips FCM sends. `google-services.json` here is the same Firebase app as the old wrapper.
