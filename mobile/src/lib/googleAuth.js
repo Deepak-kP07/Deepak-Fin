@@ -23,6 +23,9 @@ export async function signInWithGoogle() {
     if (isErrorWithCode(e)) {
       if (e.code === statusCodes.SIGN_IN_CANCELLED || e.code === statusCodes.IN_PROGRESS) return { cancelled: true }
       if (e.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) throw new Error('Google Play services is not available on this device.')
+      // Google doesn't recognise this build's signing key for the OAuth client (a setup issue on
+      // our side, never the user's) — say so plainly instead of Google's raw troubleshooting text.
+      if (String(e.code) === 'DEVELOPER_ERROR' || String(e.code) === '10') throw new Error('Google sign-in isn’t available right now. Please sign in with your email and password.')
     }
     throw e
   }
