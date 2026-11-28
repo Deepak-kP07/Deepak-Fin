@@ -8,7 +8,7 @@ import { Icon } from '../../ui/Icon'
 import { Avatar } from '../../ui/Avatar'
 import { AccentGradient } from '../../ui/Gradient'
 import { BottomSheet } from '../../ui/BottomSheet'
-import { LoadError, LoadingSkeleton, RefreshErrorBanner } from '../../ui/LoadState'
+import { isNetworkError, LoadError, LoadingSkeleton } from '../../ui/LoadState'
 import { measureView, SpotlightTour } from '../../ui/SpotlightTour'
 import { TOUR_STEPS } from '../../lib/tourSteps'
 import { useTheme } from '../../state/ThemeProvider'
@@ -84,11 +84,19 @@ function TypeToConfirm({ state, onClose }) {
   )
 }
 
+// Kept outside the component: changing the theme remounts the Shell, and neither the "due
+// scheduled transactions" prompt nor the "couldn't sync" note should come back because of that.
+let duePromptShownFor = null // user id
+let lastRefreshNote = null
+// The screen on show right now, for the same reason: a remount reopens it at once instead of
+// flashing Home and then jumping back when the saved screen has been read from storage.
+let liveNav = null // { userId, view, section, detailId }
+
 export default function Shell() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { user, signOut } = useAuth()
-  const { data, refresh, patch, loading, loaded, error: loadError, fromCache } = useData()
+  const { data, refresh, patch, saveProfile, loading, loaded, error: loadError, fromCache } = useData()
   const { accentColor, theme } = useTheme()
   const [pulling, setPulling] = useState(false)
   // First-login tour (or a replay from Settings → User guide) — spotlights the bottom-nav item or
@@ -96,11 +104,12 @@ export default function Shell() {
   const [forceTour, setForceTour] = useState(false)
   const navRefs = useRef({})
   const settingsPickerRef = useRef(null)
-  const [view, setViewRaw] = useState('dashboard')
+  const resumeNav = liveNav?.userId === user?.id ? liveNav : null
+  const [view, setViewRaw] = useState(resumeNav?.view || 'dashboard')
   // Leaving a view clears its open detail in the same update, so a view mounting straight into a
   // detail (a restored screen) can report it without a parent effect wiping it afterwards.
   const setViewState = (key) => { setActiveDetailId(null); setViewRaw(key) }
-  const [settingsSection, setSettingsSection] = useState('profile')
+  const [settingsSection, setSettingsSection] = useState(resumeNav?.section || 'profile')
   const [moreOpen, setMoreOpen] = useState(false)
   const [showMoney, setShowMoney] = useState(true)
   const [hasGreetedOnce, setHasGreetedOnce] = useState(false)
@@ -156,18 +165,18 @@ export default function Shell() {
   const { revealed: hiddenRevealed } = useHiddenTx()
   const dueScheduled = useMemo(() => dueScheduledOf(data.scheduled_transactions, hiddenRevealed), [data.scheduled_transactions, hiddenRevealed])
   const [duePromptOpen, setDuePromptOpen] = useState(false)
-  const duePromptShown = useRef(false)
   useEffect(() => {
-    if (loading || duePromptShown.current || dueScheduled.length === 0 || !data.profile?.tour_completed_at || !onboarded || !unlocked) return
-    duePromptShown.current = true
+    if (loading || duePromptShownFor === user?.id || dueScheduled.length === 0 || !data.profile?.tour_completed_at || !onboarded || !unlocked) return
+    duePromptShownFor = user?.id
     setDuePromptOpen(true)
-  }, [loading, dueScheduled.length, data.profile?.tour_completed_at, onboarded, unlocked])
+  }, [loading, dueScheduled.length, data.profile?.tour_completed_at, onboarded, unlocked, user?.id])
   // "/?view=loans" (a notification tap, or the notifications list) opens that module.
   // Restore the last screen once — unless this launch came from a link/notification that names a
   // view, which wins. `restoreDetail` is handed to that view as initialSelectedId, then dropped.
-  const [restoreDetail, setRestoreDetail] = useState(null)
-  const navRestored = useRef(false)
+  const [restoreDetail, setRestoreDetail] = useState(resumeNav?.detailId ? { view: resumeNav.view, id: resumeNav.detailId } : null)
+  const navRestored = useRef(!!resumeNav)
   useEffect(() => {
+    if (resumeNav) return
     let alive = true
     SecureStore.getItemAsync(NAV_STATE_KEY).then((raw) => {
       if (!alive || navRestored.current) return
@@ -185,6 +194,7 @@ export default function Shell() {
   }, [])
   useEffect(() => {
     if (!navRestored.current) return
+    liveNav = { userId: user?.id, view, section: settingsSection, detailId: activeDetailId || null }
     SecureStore.setItemAsync(NAV_STATE_KEY, JSON.stringify({ view, section: settingsSection, detailId: activeDetailId || null })).catch(() => {})
   }, [view, settingsSection, activeDetailId])
   useEffect(() => { if (restoreDetail && view !== restoreDetail.view) setRestoreDetail(null) }, [view, restoreDetail])
@@ -196,6 +206,14 @@ export default function Shell() {
   useEffect(() => { if (tourParam) setForceTour(Math.max(1, Number(tourParam) || 1)) }, [tourParam])
 
   useEffect(() => { const t = setTimeout(() => setHasGreetedOnce(true), 2200); return () => clearTimeout(t) }, [])
+  // A background refresh that fails keeps the last data on screen. That's not something to fix,
+  // so it's a calm one-time note rather than a red banner; the next pull or save tries again.
+  useEffect(() => {
+    if (!loaded || !loadError || loadError === lastRefreshNote) return
+    lastRefreshNote = loadError
+    toast.push(fromCache || isNetworkError(loadError) ? "You're offline — showing your saved data" : "Couldn't sync just now — showing your saved data", 'info')
+  }, [loaded, loadError, fromCache])
+  useEffect(() => { if (!loadError) lastRefreshNote = null }, [loadError])
   // Unread count for the bell: after every data load, every 2 minutes while the app is open, and
   // whenever it comes back to the foreground (same cadence as the PWA's useNotifications).
   useEffect(() => { api('/finance/notifications').then((r) => setUnread(r.unread || 0)).catch(() => {}) }, [data])
@@ -239,12 +257,8 @@ export default function Shell() {
     if (view === 'loans') { const loan = data.loans.find((l) => l.id === activeDetailId); return loan ? setLoanPay(loan) : setLoanForm({ open: true, editing: null }) }
     return openTxForm()
   }
-  // Profile settings (theme, accent, modules, nav, widgets, tour…) apply on the tap; the server
-  // save and the refresh follow in the background, and a failure puts the server's value back.
-  const saveProfile = async (body) => {
-    patch((d) => ({ profile: d.profile ? { ...d.profile, ...body } : d.profile }))
-    try { await api('/finance/profile', { method: 'PATCH', body }); refresh() } catch (e) { dialog.alert('Could not save', e.message); refresh() }
-  }
+  // Profile settings (theme, accent, modules, nav, widgets, tour…) apply on the tap; the batched
+  // server save and the refresh follow in the background (DataProvider's saveProfile).
   // Drop deleted transactions from the screen at once (both legs of a transfer); refresh follows.
   const dropTxLocally = (ids) => patch((d) => {
     const all = [...d.transactions, ...(d.scheduled_transactions || [])]
@@ -450,15 +464,19 @@ export default function Shell() {
     return Promise.resolve(null)
   }
   const closeTour = () => { setForceTour(false); setMoreOpen(false); saveProfile({ tour_completed_at: new Date().toISOString() }) }
-  const pullRefresh = async () => { setPulling(true); try { await refresh() } finally { setPulling(false) } }
+  // Android's pull-to-refresh spinner just acknowledges the pull: it tucks away after a moment
+  // and the reload carries on quietly, updating the screen when it lands — no spinner parked at
+  // the top of the screen while the network is slow.
+  const pullRefresh = () => { setPulling(true); setTimeout(() => setPulling(false), 600); return refresh() }
+  const [retrying, setRetrying] = useState(false)
+  const retryLoad = async () => { setRetrying(true); try { await refresh() } finally { setRetrying(false) } }
   // Before the first successful load there's nothing real to show: a skeleton while loading, a
-  // retry screen if it failed. After that, a failed refresh keeps the last data with a banner.
-  const gate = !loaded ? (loading ? <LoadingSkeleton /> : loadError ? <LoadError message={loadError} onRetry={pullRefresh} retrying={pulling} /> : null) : null
+  // retry screen if it failed. After that, a failed refresh keeps the last data on screen.
+  const gate = !loaded ? (loading ? <LoadingSkeleton /> : loadError ? <LoadError message={loadError} onRetry={retryLoad} retrying={retrying} /> : null) : null
   const page = (children, header = null) => (
     <ScrollView key={`${view}-${detailResetNonce}`} contentContainerStyle={{ paddingTop: Math.max(24, insets.top + 24), paddingBottom: 96 + insets.bottom }} className="px-5" keyboardShouldPersistTaps="handled"
       refreshControl={<RefreshControl refreshing={pulling} onRefresh={pullRefresh} colors={[accentColor(300)]} tintColor={accentColor(300)} progressBackgroundColor={theme === 'light' ? '#ffffff' : '#141a28'} />}>
       {header}
-      {loaded && loadError ? <RefreshErrorBanner onRetry={pullRefresh} retrying={pulling} offline={fromCache} savedAt={data.cached_at} /> : null}
       {gate || children}
     </ScrollView>
   )
@@ -566,7 +584,8 @@ export default function Shell() {
           onHiddenPinChanged={() => refresh()} onReplayTour={() => setForceTour(1)} pickerRef={settingsPickerRef} renderVault={() => <VaultView data={data} refresh={refresh} />} />,
       )}
 
-      {selectionDock ? <SelectionDock bottom={84 + insets.bottom} /> : (
+      {/* No add button on Settings or over the More menu — there's nothing to add there. */}
+      {selectionDock ? <SelectionDock bottom={84 + insets.bottom} /> : view === 'profile' || moreOpen ? null : (
         <Pressable onPress={runFabAction} className="absolute right-5 z-30 h-14 w-14 active:scale-95 active:opacity-80" style={{ bottom: 96 + insets.bottom }}>
           <AccentGradient style={{ flex: 1, borderRadius: 28, alignItems: 'center', justifyContent: 'center', elevation: 10, shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 16 }}>
             <Plus size={24} color="#07101c" />
