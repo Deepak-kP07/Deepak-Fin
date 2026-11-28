@@ -15,28 +15,34 @@ const RELOCK_AFTER_MS = 60 * 1000
 const AppLockContext = createContext({ locked: false, ready: false, enabled: false, setEnabled: async () => false })
 export const useAppLock = () => useContext(AppLockContext)
 
+// Kept outside the provider on purpose: changing the theme remounts everything below the theme
+// provider, this included, and a fresh mount used to start locked again — asking for the
+// fingerprint on every theme tap. Whether this run of the app is unlocked, and when it went to
+// the background, belong to the app process, not to one mount.
+let unlockedThisRun = false
+let backgroundedAt = null
+
 export function AppLockProvider({ children }) {
   const [ready, setReady] = useState(false) // false until the saved setting has been read
   const [enabled, setEnabledState] = useState(false)
   const [locked, setLocked] = useState(false)
-  const backgroundedAt = useRef(null)
 
   useEffect(() => {
     ;(async () => {
       const on = (await isAppLockEnabled()) && (await biometricReady())
       setEnabledState(on)
-      setLocked(on)
+      setLocked(on && !unlockedThisRun)
       setReady(true)
     })()
   }, [])
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (s) => {
-      if (s === 'background') backgroundedAt.current = Date.now()
+      if (s === 'background') backgroundedAt = Date.now()
       else if (s === 'active') {
-        const away = backgroundedAt.current ? Date.now() - backgroundedAt.current : 0
-        backgroundedAt.current = null
-        if (enabled && away > RELOCK_AFTER_MS) setLocked(true)
+        const away = backgroundedAt ? Date.now() - backgroundedAt : 0
+        backgroundedAt = null
+        if (enabled && away > RELOCK_AFTER_MS) { unlockedThisRun = false; setLocked(true) }
       }
     })
     return () => sub.remove()
@@ -49,6 +55,7 @@ export function AppLockProvider({ children }) {
       if (!(await authenticate('Confirm your fingerprint'))) return false
     }
     await setAppLockEnabled(on)
+    if (on) unlockedThisRun = true // they just proved it's them
     setEnabledState(on)
     return true
   }, [])
@@ -56,7 +63,7 @@ export function AppLockProvider({ children }) {
   return (
     <AppLockContext.Provider value={{ locked, ready, enabled, setEnabled }}>
       {children}
-      <LockScreen visible={locked} onUnlocked={() => setLocked(false)} />
+      <LockScreen visible={locked} onUnlocked={() => { unlockedThisRun = true; setLocked(false) }} />
     </AppLockContext.Provider>
   )
 }
